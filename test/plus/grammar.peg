@@ -1,0 +1,11 @@
+%% NAME Plus
+
+NumberList: "std.ArrayList(usize)" = Number+ FileEnd { $1 };
+
+Number: usize = NUMBER Space { $1 };
+NUMBER: usize = [0-9]+ {
+    try std.fmt.parseInt(usize, $0, 10)
+};
+
+Space = [ \t]+;
+FileEnd = !.;

@@ -1,0 +1,27 @@
+%% NAME TupleReturn
+
+Grammar: usize = Ones Alternating { $1 + $2 };
+
+Ones: usize = (One One)+ { 
+    blk: {
+        defer $1.deinit();
+        var sum: usize = 0;
+        for ($1.items) |v| sum += v.@"0" + v.@"1";
+        break :blk sum;
+    }
+};
+
+Alternating: usize = (None One)+ {
+    blk: {
+        defer $1.deinit();
+        var sum: usize = 0;
+        for ($1.items) |v| sum += v;
+        
+        break :blk sum;
+    }
+};
+
+
+One: usize = "1" { 1 };
+
+None = "0";

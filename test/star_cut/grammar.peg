@@ -1,0 +1,14 @@
+%% NAME StarCut
+
+// the goal of the grammar is to make it dependent on the
+// controlflow instroduced by the cut operator
+
+Grammar: "[]const u8"
+       = ("Hello" ^ "People")* Ending EOS { $2 }
+       | "Hello World" Ending EOS { $2 }
+       ;
+
+Ending: "[]const u8"
+      = .* { $0 } ;
+
+EOS = !. ;

@@ -1,0 +1,106 @@
+//* This file is part of Zapp, a packrat parser generator.
+//* Copyright (C) 2024  Daniel Grévent
+//* 
+//* This program is free software: you can redistribute it and/or modify
+//* it under the terms of the GNU General Public License as published by
+//* the Free Software Foundation, either version 3 of the License, or
+//* (at your option) any later version.
+//* 
+//* This program is distributed in the hope that it will be useful,
+//* but WITHOUT ANY WARRANTY; without even the implied warranty of
+//* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//* GNU General Public License for more details.
+//* 
+//* You should have received a copy of the GNU General Public License
+//* along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+%% NAME NewCalc
+
+Grammar: isize = Spacing Addition End { $2 };
+
+Addition: isize = Neg (PLUS Neg)* {
+    blk: {
+        var sum = $1;
+        for ($2.items) |val| {
+            sum += val;
+        }
+        $2.deinit();
+        break: blk sum;
+    }
+};
+
+Neg: isize = Mul (MINUS Mul)* {
+    blk: {
+        var neg = $1;
+        for (0..$2.items.len) |i| {
+            const elem = $2.items[$2.items.len - 1 - i];
+            neg -= elem;
+        }
+        $2.deinit();
+        break: blk neg;
+    }
+};
+
+Mul: isize = Div (STAR Div)* {
+    blk: {
+        var prod = $1;
+        for ($2.items) |val| {
+            prod *= val;
+        }
+        $2.deinit();
+        break: blk prod;
+    }
+};
+
+Div: isize = UnaryNeg (SLASH UnaryNeg)* {
+    blk: {
+        var div = $1;
+        for (0..$2.items.len) |i| {
+            const elem = $2.items[$2.items.len - 1 - i];
+            div = @divFloor(div, elem);
+        }
+        $2.deinit();
+        break: blk div;
+    }
+};
+
+UnaryNeg: isize = MINUS Single { -$2 }
+                | Single { $1 }
+                ;
+
+Single: isize = L_PAREN Addition R_PAREN { $2 } 
+              | Number { $1 }
+              ;
+
+// End Tokens
+PLUS = '+' Spacing;
+STAR = '*' Spacing;
+SLASH = '/' Spacing;
+MINUS = '-' Spacing;
+L_PAREN = '(' Spacing;
+R_PAREN = ')' Spacing;
+
+Number: isize = NUMBER Spacing { $1 };
+NUMBER: isize = [0-9]+ {
+    try std.fmt.parseInt(isize, $0, 10)
+};
+
+// Spacing
+Spacing = SpacingInner* ;
+
+SpacingInner = Comment 
+             | Space
+             ;
+
+Comment = '#' (!LineEnd .)* LineEnd ;
+
+Space = [\t ]
+      | LineEnd
+      ;
+
+LineEnd = '\r\n'
+        | '\n'
+        | '\r'
+        ;
+
+End = !. ;

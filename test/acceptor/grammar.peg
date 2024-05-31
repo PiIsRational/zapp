@@ -1,0 +1,54 @@
+%% NAME JsonParser
+
+Json = Element;
+
+Value = Object
+      | Array
+      | String
+      | Number
+      | 'true'
+      | 'false'
+      | 'null'
+      ;
+
+Object = '{' Whitespace '}'
+       | '{' Members '}'
+       ;
+
+Members = Member (',' Member)*;
+Member = Whitespace String Whitespace ':' Element;
+
+Array = '[' Whitespace ']'
+      | '[' Elements ']'
+      ;
+
+Elements = Element (',' Element)*;
+Element = Whitespace Value Whitespace;
+
+String = ["] Char* ["];
+Char = ![\"] . // this would be incorrect, 
+               //control sequences would also be excluded
+     | '\\' ["\\/bfnrt]
+     | '\\u' Hex Hex Hex Hex
+     ;
+
+Hex = Digit
+    | [A-Fa-f]
+    ;
+
+Number = Integer Fraction? Exponent?;
+
+Integer = '-'? Digit
+        | '-'? OneNine Digit+
+        ;
+
+Digit = '0'
+      | OneNine
+      ;
+
+OneNine = [1-9];
+Fraction = "." Digit+;
+Exponent = [Ee] Sign? Digit+;
+Sign = [+-];
+Whitespace = [\x20\x0A\x0D\x09]?;
+

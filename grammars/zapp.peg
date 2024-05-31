@@ -1,0 +1,319 @@
+//* This file is part of Zapp, a packrat parser generator.
+//* Copyright (C) 2024  Daniel Grévent
+//* 
+//* This program is free software: you can redistribute it and/or modify
+//* it under the terms of the GNU General Public License as published by
+//* the Free Software Foundation, either version 3 of the License, or
+//* (at your option) any later version.
+//* 
+//* This program is distributed in the hope that it will be useful,
+//* but WITHOUT ANY WARRANTY; without even the implied warranty of
+//* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//* GNU General Public License for more details.
+//* 
+//* You should have received a copy of the GNU General Public License
+//* along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+%% NAME Zapp
+
+%% TOP
+const ir = @import("peg_ir.zig");
+const PegIr = ir.PegIr;
+const PegGrammar = ir.PegGrammar;
+const Definition = ir.Definition;
+const Sequence = ir.Sequence;
+const Action = ir.Action;
+const ActionVar = ir.ActionVar;
+const Operated = ir.Operated;
+const PrefixOp = ir.PrefixOp;
+const PostfixOp = ir.PostfixOp;
+const Primary = ir.Primary;
+const ReturnType = ir.ReturnType;
+const Class = ir.Class;
+const Range = ir.Range;
+const ActionReturn = ir.ActionReturn;
+%%
+
+%% FIELDS
+ir: PegIr,
+%%
+
+Grammar = Spacing (TopLevelComment Spacing)* Name MetaData Definition+ FileEnd {
+    self.ir.top_level_comment = invert([]const u8, try $*2.toOwnedSlice());
+};
+
+// the metadata
+MetaData = TopHeader FieldHeader
+         | FieldHeader? TopHeader?
+         ;
+
+Name = '%% NAME' Spacing Identifier { self.ir.name = $3; };
+
+TopHeader = TOP_START HeaderInner HEADER_END Spacing { 
+    self.ir.top_header = $2;  
+};
+FieldHeader = FIELD_START HeaderInner HEADER_END Spacing { 
+    self.ir.field_header = $2;  
+};
+
+HeaderInner: "[]const u8" = HeaderContent* { $0 };
+HeaderContent = !HEADER_END .
+              | Literal { self.allocator.free($1); }
+              ;
+
+// the metadata
+Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequence)* SEMICOLON {
+    _ = $0; // to prevent inlining
+    var sequences = $5;
+    try sequences.append($4);
+    const def_cnt = self.ir.defs.items.len;
+    try self.ir.defs.append(.{
+        .id = def_cnt,
+        .identifier = $1,
+        .return_type = $2,
+        .sequences = sequences,
+        .accepts_eps = false,
+        .mid_recurse = false,
+        .right_recurse = false,
+        .regular = true,
+        .finite = true,
+    });
+};
+
+TypeAnnotation: ReturnType
+                = COLON Identifier { ReturnType.init($2, false, false) }
+                | COLON Literal { ReturnType.init($2, true, false) }
+                | @ { ReturnType.empty() }
+                ;
+
+ActionSequence: Sequence 
+          = Sequence '{' Action '}' Spacing {
+    blk: {
+        var seq = $1;
+        seq.action = $3;
+        break: blk seq;
+    }
+}
+          | Sequence { $1 }
+          ;
+
+Sequence: Sequence = Operated+ {.{
+    .operateds = $1,
+    .string = $0,
+    .action = Action.empty(self.ir.allocator),
+}};
+
+// START ACTION
+Action: Action = ActionParts {.{
+    .implicit = false,
+    .bases = blk: {
+        var bases = std.ArrayList(ir.ActionBase).init(self.ir.allocator);
+        try bases.append(.{
+            .data = $0,
+            .owned = false,
+            .action_vars = $1,
+            .return_type = ReturnType.impl(),
+            .id = 0,
+            .mut = false,
+        });
+        break :blk bases;
+    },
+    .use_match = blk: {
+        for ($1.items) |item| {
+            if (!item.isMatchedString()) continue;
+            break :blk true;
+        }
+        break :blk false;
+    },
+    .rets = std.ArrayList(ActionReturn)
+        .init(self.ir.allocator),
+}};
+
+// does not accept epsilon
+ActionParts: "std.ArrayList(ActionVar)"
+            = ActionBlocks '{' ActionParts '}' ActionParts { 
+    blk: {
+        var list = $5;
+        try list.appendSlice($1.items);
+        try list.appendSlice($3.items);
+        $1.deinit();
+        $3.deinit();
+        break: blk list;
+    }
+}
+            | ActionBlocks  { $1 }
+            | @ { std.ArrayList(ActionVar).init(self.ir.allocator) };
+
+ActionBlocks: "std.ArrayList(ActionVar)" = ActionVar ActionBlocks {
+    blk: { var l = $2; try l.append($1); break :blk l;}
+}
+              | !["'{}$] . ActionBlocks { $3 }
+              | Literal ActionBlocks { 
+    blk: { self.allocator.free($1); break: blk $2; } 
+}
+              | @ { std.ArrayList(ActionVar).init(self.ir.allocator) };
+
+ActionVar: ActionVar = '$' [0-9] [0-9]*  // immutable variables
+{
+    blk: {       
+        const num = std.fmt.parseInt(usize, $0[1..], 10) catch |err| switch (err) {
+            error.InvalidCharacter => unreachable,
+            else => {
+                std.debug.print("too large integer: {d}\n", .{$0[1..]});
+                self.fail = true;
+                self.infer_done = true;
+                return;
+            },
+        };
+        break: blk .{
+            .var_decl = $0,
+            .arg_num = if (num == 0) null else num - 1,
+            .escape = false,
+        };
+    }
+}
+           | '$*' [1-9] [0-9]*  // mutable variables
+{
+    blk: {       
+        const num = std.fmt.parseInt(usize, $0[2..], 10) catch |err| switch (err) {
+            error.InvalidCharacter => unreachable,
+            else => {
+                std.debug.print("too large integer: {d}\n", .{$0[2..]});
+                self.fail = true;
+                self.infer_done = true;
+                return;
+            },
+        };
+        break: blk .{
+            .var_decl = $0,
+            .arg_num = num - 1,
+            .escape = true,  // because it is mutable
+        };
+    }
+};
+// END ACTION
+
+Operated: Operated = PrefixOp Primary SuffixOp {.{
+    .prefix_op = $1,
+    .postfix_op = $3,
+    .value = $2,
+    .return_type = switch ($2) {
+        .IDENTIFIER,
+        .SEQ,
+        => ReturnType.impl(),
+        else => ReturnType.empty(),
+    },
+    .string = std.mem.trimRight(u8, $0, " \t\n\r"),
+}};
+
+PrefixOp: PrefixOp 
+         = AND { .AND }
+         | NOT { .NOT }
+         | @ { .NONE }
+         ;
+
+SuffixOp: PostfixOp
+          = STAR { .STAR }
+          | PLUS { .PLUS }
+          | QUESTION { .QUESTION }
+          | @ { .NONE }
+          ;
+
+Primary: Primary
+         = OPEN_PAREN Sequence CLOSE_PAREN { .{ .SEQ = $2 } }
+         | Identifier { .{ .IDENTIFIER = $1 } }
+         | Literal { .{ .LITERAL = $1 } }
+         | Class { .{ .CLASS = $1 } }
+         | DOT { .DOT }
+         | AT { .EPSILON }
+         | CUT_OP { .CUT }
+         ;
+
+// lexical syntax
+Identifier: "[]const u8" = IDENTIFIER Spacing { $1 };
+IDENTIFIER: "[]const u8" = IdentStart IdentCont* { $0 };
+IdentStart = [a-zA-Z_];
+IdentCont = IdentStart
+          | [0-9]
+          ;
+
+Literal: "[]const u8" 
+        = ['] (!['] Char)* ['] Spacing { invert(u8, try $*2.toOwnedSlice()) }
+        | ["] (!["] Char)* ["] Spacing { invert(u8, try $*2.toOwnedSlice()) }
+        ;
+
+Class: Class = '[' (!']' Range)* ']' Spacing { .{ .content = $2 } };
+
+Range: Range = RangeChar '-' RangeChar {.{
+    .from = $1,
+    .to = $3,
+    .backing = $0,
+}}
+       | RangeChar {.{
+    .from = $1,
+    .to = 0,
+    .backing = $0,
+}};
+
+RangeChar: u8 
+           = '\\' [-] { '-' }
+           | !']' Char { $2 }
+           ;
+
+Char: u8 = '\\' [nrt'"\[\]\\] {
+    switch ($0[1]) {
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        else => |c| c, 
+    }
+}
+     // there is no null char allowed 
+     | '\\x' [1-9A-Fa-f] [0-9A-Fa-f] { try std.fmt.parseInt(u8, $0[2..], 16) }
+     | '\\x0' [1-9A-Fa-f] { try std.fmt.parseInt(u8, $0[2..], 16) } 
+     | !'\\' . { $0[0] }
+     ; 
+
+// the terminal Nonterminals
+TOP_START = '%% TOP' LineEnd Spacing;
+FIELD_START = '%% FIELDS' LineEnd Spacing;
+HEADER_END = '%%' LineEnd Spacing;
+AT = '@' Spacing;
+DOT = '.' Spacing;
+OPEN_PAREN = '(' Spacing;
+CLOSE_PAREN = ')' Spacing;
+QUESTION = '?' Spacing;
+STAR = '*' Spacing;
+PLUS = '+' Spacing;
+AND = '&' Spacing;
+NOT = '!' Spacing;
+COLON = ':' Spacing;
+PIPE = '|' Spacing;
+EQUALS = '=' Spacing;
+SEMICOLON = ';' Spacing;
+CUT_OP = '^' Spacing;
+
+// Spacing
+Spacing = SpaceUnit*;
+
+SpaceUnit = Space 
+          | Comment
+          ;
+
+Comment = '//' ![*] (!LineEnd .)* LineEnd ;
+
+TopLevelComment: "[]const u8" = '//*' CommentInner LineEnd { $2 }; 
+
+CommentInner: "[]const u8" = (!LineEnd .)* { $0 };
+
+LineEnd = '\r\n'
+        | '\n'
+        | '\r'
+        ;
+
+Space = ' '
+      | '\t'
+      | LineEnd
+      ;
+
+FileEnd = !.;

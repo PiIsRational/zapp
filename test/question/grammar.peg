@@ -1,0 +1,13 @@
+%% NAME QuestionReturn
+
+Root: usize = One? Zero {
+    blk: {
+    if ($1) |val| {
+        break: blk val;
+    }
+    break: blk 0;
+    }
+};
+
+One: usize = "1" { 1 };
+Zero = "0";

@@ -1,0 +1,20 @@
+%% NAME Cut
+
+// the goal of the grammar is to make it dependent on the
+// controlflow instroduced by the cut operator
+
+Grammar: "[]const u8"
+       = Greeting Ending EOS { $2 }
+       | Hello Ending EOS { $2 }
+       ;
+
+Greeting = "Hello" ^ " There"
+         | "Hello"
+         ;
+
+Hello = "Hello World" ;
+
+Ending: "[]const u8"
+      = .* { $0 } ;
+
+EOS = !. ;
