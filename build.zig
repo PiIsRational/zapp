@@ -103,7 +103,7 @@ pub fn build(b: *std.Build) !void {
     gen_cmd.addArg("gen");
     gen_cmd.addFileArg(b.path(bench_grammar));
     const generated = gen_cmd.addOutputFileArg("out.zig");
-    gen_cmd.addArg("-name=Parser");
+    gen_cmd.addArg("--name=Parser");
 
     const bench = b.addExecutable(.{
         .name = "bench",

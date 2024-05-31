@@ -91,6 +91,7 @@ fn sendHelp(err: bool) !void {
     const stdout = std.io.getStdOut().writer();
     const writer = if (err) stderr else stdout;
     const HelpString =
+        \\
         \\the commands supported by this zapp version are:
         \\
         \\  gen <source> <dest>   generates a new parser takes in the source
@@ -100,11 +101,11 @@ fn sendHelp(err: bool) !void {
         \\
         \\the options are:
         \\
-        \\  -name=[string]       sets the name to the genrated parser 
+        \\  --name=[string]      sets the name to the genrated parser 
         \\                       (default: the grammar name)
-        \\  -verbose-ir=[bool]   prints the peg ir of the source after
+        \\  --verbose-ir=[bool]  prints the peg ir of the source after
         \\                       transformations (default: false)
-        \\  -inline=[bool]       uses inlining for some rules (default: true)
+        \\  --inline=[bool]      uses inlining for some rules (default: true)
         \\
     ;
 
@@ -211,15 +212,15 @@ fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type
 
         pub fn parse(input: []const []const u8) OptionParseError!T {
             for (input) |option| {
-                if (option.len <= 3 + name.len) continue;
+                if (option.len <= 4 + name.len) continue;
 
-                if (option[0] != '-' or option[1 + name.len] != '=' or
-                    !std.mem.eql(u8, option[1 .. name.len + 1], name))
+                if (option[0] != '-' or option[1] != '-' or option[2 + name.len] != '=' or
+                    !std.mem.eql(u8, option[2 .. name.len + 2], name))
                 {
                     continue;
                 }
 
-                const string = option[name.len + 2 ..];
+                const string = option[name.len + 3 ..];
                 return switch (T) {
                     []const u8 => parseString(string, option),
                     bool => parseBool(string, option),
