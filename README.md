@@ -5,7 +5,11 @@ that is written in Zig and generates code written in zig.
 
 ## Documentation
 
-There is no documentation yet, it is currently beeing written.
+The documentation is [here](wiki):
+* the grammar format is described [here](wiki/Grammar-syntax)
+* using actions in the grammar is explained [here](wiki/Actions)
+* informations about using zapp [here](wiki/Zapp-Specifics)
+* the interface of the generated parsers is explained [here](wiki/The-Parser-interface)
 
 ## Installation
 
