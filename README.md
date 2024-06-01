@@ -6,10 +6,10 @@ that is written in Zig and generates code written in zig.
 ## Documentation
 
 The documentation is [here](https://github.com/PiIsRational/zapp/wiki):
-* the grammar format is described [here](https://github.com/PiIsRational/wiki/Grammar-syntax)
-* using actions in the grammar is explained [here](https://github.com/PiIsRational/wiki/Actions)
-* informations about using zapp [here](https://github.com/PiIsRational/wiki/Zapp-Specifics)
-* the interface of the generated parsers is explained [here](https://github.com/PiIsRational/wiki/The-Parser-interface)
+* the grammar format is described [here](https://github.com/PiIsRational/zapp/wiki/Grammar-syntax)
+* using actions in the grammar is explained [here](https://github.com/zapp/PiIsRational/wiki/Actions)
+* informations about using zapp [here](https://github.com/PiIsRational/zapp/wiki/Zapp-Specifics)
+* the interface of the generated parsers is explained [here](https://github.com/PiIsRational/zapp/wiki/The-Parser-interface)
 
 ## Installation
 
