@@ -1,0 +1,164 @@
+%% NAME Json
+
+%% TOP
+const json = std.json;
+const KV = struct{ []const u8, json.Value };
+fn parseInt(s: []const u8) json.Value {
+  const i = std.fmt.parseInt(i64, s, 10) catch
+    return .{ .number_string = s };
+  return .{ .integer = i };
+}
+%%
+
+%% FIELDS
+value: json.Value,
+%%
+
+json = element { self.value = $1; }
+  ;
+
+element: "json.Value" = ws value ws { $2 }
+  ;
+
+value: "json.Value" =
+  object { $1 }
+  | array { $1 }
+  | string { $1 }
+  | float { $1 }
+  | integer { $1 }
+  | true { $1 }
+  | false { $1 }
+  | null { $1 }
+  ;
+
+null: "json.Value" = "null" { .null }
+  ;
+
+true: "json.Value" = "true" { .{ .bool = true } }
+  ;
+
+false: "json.Value" = "false" { .{ .bool = false} }
+  ;
+
+float: "json.Value" = float0 { blk: {
+      const f = std.fmt.parseFloat(f64, $0) catch 
+        break :blk .{ .number_string = $0 };
+      break :blk .{ .float = f };
+    }
+  }
+  ;
+
+float0 = integer0 float1
+  ;
+
+float1 = 
+    fraction exponent
+  | fraction
+  | exponent
+  ;
+
+integer: "json.Value" =
+    onenine digits { parseInt($0) }
+  | digit { .{ .integer = $0[0] - '0' } }
+  | '-' onenine digits { parseInt($0) }
+  | '-' digit { .{ .integer = -@as(i64, $0[1] - '0') } }
+  ;
+
+integer0 =
+    onenine digits
+  | digit
+  | '-' onenine digits
+  | '-' digit
+  ;
+
+digits = digit+
+  ;
+
+digit = [0-9]
+  ;
+
+onenine = [1-9]
+  ;
+
+fraction = '.' digits
+  ;
+
+exponent = 
+    'E' sign digits
+  | 'e' sign digits
+  ;
+
+string: "json.Value" = '"' character* '"' { 
+    blk: {
+      if(!std.unicode.utf8ValidateSlice($0)) return error.InvalidUtf8;
+      break :blk .{ .string = $0 };
+    }
+  }
+  ;
+
+character = 
+    !["\\] .
+  | '\\' escape
+  ;
+
+escape = 
+    ["\\/bfnrt]
+  | 'u' hex hex hex hex
+  ;
+
+hex = [0-9A-Fa-f]
+  ;
+
+array: "json.Value" = '[' ws ']' { 
+    .{ .array = json.Array.init(self.allocator) }
+  }
+  | '[' elements ']' { $2 }
+  ;
+
+elements: "json.Value" = 
+  element (',' element)* { blk: {
+    var acc = json.Array.init(self.allocator);
+    try acc.append($1);
+    // append in reverse order to preserve ordering
+    var iter = std.mem.reverseIterator($2.items);
+    while(iter.next()) |v| try acc.append(v);
+    $2.deinit();
+    break :blk .{ .array = acc };
+  } }
+  ;
+
+sign = sign0?
+  ;
+
+sign0 = '+' | '-'
+  ;
+
+ws = [ \t\n\r]*
+  ;
+
+object: "json.Value" =
+      '{' ws '}' { .{ .object = json.ObjectMap.init(self.allocator) } }
+    | '{' members '}' { $2 }
+    ;
+
+members: "json.Value" = member (',' member)* { blk: {
+      var acc = json.ObjectMap.init(self.allocator);
+      const k0 = $1[0];
+      try acc.put(k0[1..k0.len-1], $1[1]);
+      // append in reverse order to preserve ordering
+      var iter = std.mem.reverseIterator($2.items);
+      while(iter.next()) |kv| {
+        const k2 = kv[0];
+        try acc.put(k2[1..k2.len-1], kv[1]);
+      }
+      $2.deinit();
+      break :blk .{ .object = acc };
+    }
+  }
+  ;
+
+member: "KV" = ws string ws ':' element {
+    .{ $2.string, $5 }
+  }
+  ;
+

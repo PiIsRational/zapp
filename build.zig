@@ -9,6 +9,7 @@ const test_paths = [_][]const u8{
     "cut",
     "star_cut",
     "new_calculator",
+    "json",
 };
 
 const Version = std.SemanticVersion{
