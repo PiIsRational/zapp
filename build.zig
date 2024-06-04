@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const exe = b.addExecutable(.{
         .name = "zapp",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) !void {
 
     // test
     const exe_unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -67,9 +67,16 @@ pub fn build(b: *std.Build) !void {
         gen_cmd.addArg("gen");
         gen_cmd.addFileArg(b.path(grammar_path));
         const generated = gen_cmd.addOutputFileArg(generated_file);
+        // install generated files to zig-out/gen so that newest versions are
+        // always available there
+        const install_gen = b.addInstallFileWithDir(
+            generated,
+            .{ .custom = "gen" },
+            b.fmt("{s}.zig", .{path}),
+        );
 
         const grammar_unit_tests = b.addTest(.{
-            .root_source_file = .{ .path = main_path },
+            .root_source_file = b.path(main_path),
             .target = target,
             .optimize = optimize,
         });
@@ -80,6 +87,7 @@ pub fn build(b: *std.Build) !void {
 
         const run_grammar_unit_tests = b.addRunArtifact(grammar_unit_tests);
         test_step.dependOn(&run_grammar_unit_tests.step);
+        test_step.dependOn(&install_gen.step);
     }
 
     // bench
@@ -108,7 +116,7 @@ pub fn build(b: *std.Build) !void {
 
     const bench = b.addExecutable(.{
         .name = "bench",
-        .root_source_file = .{ .path = "src/bench_main.zig" },
+        .root_source_file = b.path("src/bench_main.zig"),
         .target = target,
         .optimize = optimize,
         .omit_frame_pointer = false,
