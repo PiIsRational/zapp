@@ -131,7 +131,7 @@ Action: Action = ActionParts {.{
 
 // does not accept epsilon
 ActionParts: "std.ArrayList(ActionVar)"
-            = ActionBlocks '{' ActionParts '}' ActionParts { 
+        = ActionBlocks '{' ActionParts '}' ActionParts {
     blk: {
         var list = $5;
         try list.appendSlice($1.items);
@@ -141,17 +141,16 @@ ActionParts: "std.ArrayList(ActionVar)"
         break: blk list;
     }
 }
-            | ActionBlocks  { $1 }
-            | @ { std.ArrayList(ActionVar).init(self.ir.allocator) };
+    | ActionBlocks  { $1 }
+    | @ { std.ArrayList(ActionVar).init(self.ir.allocator) }
+    ;
 
-ActionBlocks: "std.ArrayList(ActionVar)" = ActionVar ActionBlocks {
-    blk: { var l = $2; try l.append($1); break :blk l;}
-}
-              | !["'{}$] . ActionBlocks { $3 }
-              | Literal ActionBlocks { 
-    blk: { self.allocator.free($1); break: blk $2; } 
-}
-              | @ { std.ArrayList(ActionVar).init(self.ir.allocator) };
+ActionBlocks: "std.ArrayList(ActionVar)" 
+    = ActionVar ActionBlocks { blk: { var l = $2; try l.append($1); break :blk l;} }
+    | !["'{}$] . ActionBlocks { $3 }
+    | Literal ActionBlocks { blk: { self.allocator.free($1); break: blk $2; } }
+    | @ { std.ArrayList(ActionVar).init(self.ir.allocator) }
+    ;
 
 ActionVar: ActionVar = '$' [0-9] [0-9]*  // immutable variables
 {
@@ -269,7 +268,7 @@ Char: u8 = '\\' [nrt'"\[\]\\] {
     }
 }
      // there is no null char allowed 
-     | '\\x' [1-9A-Fa-f] [0-9A-Fa-f] { try std.fmt.parseInt(u8, $0[2..], 16) }
+     | '\\x' [1-9A-Fa-f] [0-9A-Fa-f] {  try std.fmt.parseInt(u8, $0[2..], 16) }
      | '\\x0' [1-9A-Fa-f] { try std.fmt.parseInt(u8, $0[2..], 16) } 
      | !'\\' . { $0[0] }
      ; 

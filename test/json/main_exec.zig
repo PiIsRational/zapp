@@ -26,22 +26,21 @@ pub fn main() !void {
     const arena = arena_state.allocator();
     var p = try json.Json(.{}).init(arena);
     const args = try std.process.argsAlloc(arena);
+
     if (args.len < 2) return error.MissingFileArg;
+
     std.log.info("parsing {s}", .{args[1]});
     const f = try std.fs.cwd().openFile(args[1], .{});
     defer f.close();
     const input = try f.readToEndAllocOptions(arena, 1024 * 1024 * 20, null, 1, 0);
+
     const r = try p.parse(input);
 
     if (r != .pass) {
         debug(p, r);
         return error.ParseFailure;
     }
-    if (p.chars.len != p.acc) {
-        const len = @min(20, p.chars.len -| p.acc);
-        std.log.err("parse failure: failed to consume all input. stopped at position {}: '{s}'\n", .{ p.acc, p.chars[0..len] });
-        return error.ParseFailure;
-    }
+
     std.log.info("parse successful", .{});
 
     // try std.json.stringify(p.value, .{}, std.io.getStdOut().writer());

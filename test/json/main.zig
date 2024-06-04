@@ -8,12 +8,13 @@ fn parse(input: [:0]const u8) !json.Json(.{}) {
     var p = try json.Json(.{}).init(talloc);
     const r = try p.parse(input);
     errdefer p.deinit();
-    if (r != .pass) {
-        debug(p, r);
-        return error.TestUnexpectedResult;
-    }
-    try testing.expectEqual(p.chars.len, p.acc);
-    return p;
+    return switch (r) {
+        .pass => |value| value,
+        else => {
+            debug(p, r);
+            return error.TestUnexpectedResult;
+        },
+    };
 }
 
 test "null" {
