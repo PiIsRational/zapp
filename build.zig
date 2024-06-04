@@ -69,7 +69,7 @@ pub fn build(b: *std.Build) !void {
         const generated = gen_cmd.addOutputFileArg(generated_file);
         // install generated files to zig-out/gen so that newest versions are
         // always available there
-        const install_gen = b.addInstallFileWithDir(
+        const test_install_gen = b.addInstallFileWithDir(
             generated,
             .{ .custom = "gen" },
             b.fmt("{s}.zig", .{path}),
@@ -87,7 +87,7 @@ pub fn build(b: *std.Build) !void {
 
         const run_grammar_unit_tests = b.addRunArtifact(grammar_unit_tests);
         test_step.dependOn(&run_grammar_unit_tests.step);
-        test_step.dependOn(&install_gen.step);
+        test_step.dependOn(&test_install_gen.step);
     }
 
     // bench
@@ -114,6 +114,12 @@ pub fn build(b: *std.Build) !void {
     const generated = gen_cmd.addOutputFileArg("out.zig");
     gen_cmd.addArg("--name=Parser");
 
+    const bench_install_gen = b.addInstallFileWithDir(
+        generated,
+        .{ .custom = "gen" },
+        b.fmt("{s}.zig", .{std.fs.path.stem(bench_grammar)}),
+    );
+
     const bench = b.addExecutable(.{
         .name = "bench",
         .root_source_file = b.path("src/bench_main.zig"),
@@ -121,10 +127,12 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .omit_frame_pointer = false,
     });
+
     bench.root_module.addAnonymousImport("parser", .{
         .root_source_file = generated,
     });
     const bench_run = b.addRunArtifact(bench);
     bench_run.addArgs(&.{ bench_dir, if (show_memo_info) "t" else "f" });
     bench_step.dependOn(&bench_run.step);
+    bench_step.dependOn(&bench_install_gen.step);
 }
