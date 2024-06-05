@@ -15,7 +15,7 @@ const test_paths = [_][]const u8{
 const Version = std.SemanticVersion{
     .major = 0,
     .minor = 1,
-    .patch = 0,
+    .patch = 1,
     .pre = null,
     .build = null,
 };
