@@ -49,10 +49,10 @@ MetaData = TopHeader FieldHeader
 
 Name = '%% NAME' Spacing Identifier { self.ir.name = $3; };
 
-TopHeader = TOP_START HeaderInner HEADER_END Spacing { 
+TopHeader = TOP_START HeaderInner HEADER_END { 
     self.ir.top_header = $2;  
 };
-FieldHeader = FIELD_START HeaderInner HEADER_END Spacing { 
+FieldHeader = FIELD_START HeaderInner HEADER_END { 
     self.ir.field_header = $2;  
 };
 

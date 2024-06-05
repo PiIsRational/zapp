@@ -158,7 +158,7 @@ const vars =
     \\acc: usize,
     \\infer_acc: usize,
     \\infer_done: bool,
-    \\fail: bool,
+    \\did_fail: bool,
     \\state: usize,
     \\infer_state: usize,
     \\infer_start: usize,
@@ -226,7 +226,7 @@ const funcs =
     \\    self.acc = 0;
     \\    self.infer_acc = 0;
     \\    self.infer_done = false;
-    \\    self.fail = false;
+    \\    self.did_fail = false;
     \\    self.max_reached = 0;
     \\    self.max_slice = "";
     \\    self.next_expected = 0;
@@ -304,7 +304,7 @@ const funcs =
     \\        comptime memo: bool, 
     \\) Allocator.Error!void {
     \\    const frame = self.stack.popOrNull() orelse blk: {
-    \\        self.fail = failed;
+    \\        self.did_fail = failed;
     \\        break :blk EvalFrame{
     \\            .stack_start = 0,
     \\            .start = self.start,
@@ -418,8 +418,8 @@ const inferFuncs =
     \\    self.stack_start = 0;
     \\}
     \\
-    \\fn fail(self: @This(), msg: []const u8, err: ?anyerror) void {
-    \\    self.fail = true;
+    \\fn fail(self: *@This(), msg: []const u8, err: ?anyerror) void {
+    \\    self.did_fail = true;
     \\    self.infer_fail_err = err;
     \\    self.infer_fail_msg = msg;
     \\}
@@ -442,7 +442,7 @@ const inferFuncs =
     \\        self.infer_done = true;
     \\        break :blk InferFrame{
     \\            .state = self.infer_state,
-    \\            .acc = 0,
+    \\            .acc = self.infer_start,
     \\        };
     \\    };
     \\
@@ -555,7 +555,7 @@ fn genTopLevelComment(self: *CodeGen) !void {
 fn resetMemo(self: *CodeGen) !void {
     const resetMemoRest =
         \\    if (new_begin < self.memo_start) {
-        \\        self.fail = true;
+        \\        self.did_fail = true;
         \\        return;
         \\    }
         \\    if (self.memo.items.len > self.max_memo) {
@@ -738,7 +738,7 @@ fn parse(self: *CodeGen) !void {
         \\        }
         \\    }
         \\
-        \\    return if (!self.fail) blk: {
+        \\    return if (!self.did_fail) blk: {
         \\        const infer_result = self.infer() catch |err| 
         \\            if (err == error.OutOfMemory)
         \\                 return error.OutOfMemory 
@@ -754,7 +754,7 @@ fn parse(self: *CodeGen) !void {
         \\            else => unreachable,
         \\        }
         \\    }
-        \\    return if (!self.fail) 
+        \\    return if (!self.did_fail) 
         \\        .pass
         \\    else 
         \\        .{ .parse_fail = self.getParseError() };
@@ -1023,14 +1023,14 @@ fn infer(self: *CodeGen) !void {
         \\        try self.callAction(instr.state, instr.start, instr.length);
         \\    }}
         \\
-        \\    const output: ParseReturn = if (self.fail) 
+        \\    const output: ParseReturn = if (self.did_fail) 
         \\        .{{ .infer_fail = .{{ 
         \\            .err = self.infer_fail_err, 
         \\            .msg = self.infer_fail_msg, 
         \\    }} }} else
         \\        .{{ .pass = {s} }};
         \\
-        \\    assert(self.fail or self.calc_stack.items.len == 0);
+        \\    assert(self.did_fail or self.calc_stack.items.len == 0);
         \\    return output;
         \\}}
     ;
@@ -1050,6 +1050,7 @@ fn infer(self: *CodeGen) !void {
 fn memoInfer(self: *CodeGen) !void {
     const inferStart =
         \\fn memoInfer(self: *@This(), state: usize, start: usize) Allocator.Error!void {
+        \\self.infer_start = start;
         \\self.infer_acc = start;
         \\self.infer_state = ActionTranslate[state];
         \\self.infer_done = false;
