@@ -1,0 +1,544 @@
+%% NAME Java
+
+// ==================================================================
+
+Identifier = IDENTIFIER ;
+
+QualifiedIdentifier = Identifier (DOT Identifier)* ;
+
+QualifiedIdentifierList = QualifiedIdentifier (SEMICOLON QualifiedIdentifierList) ;
+
+// ==================================================================
+
+CompilationUnit 
+    = (Annotations? PACKAGE QualifiedIdentifier)? ImportDelaration* TypeDeclaration*
+    ;
+
+ImportDeclaration = IMPORT STATIC? Identifier (DOT Identifier)* (DOT STAR)? ;
+
+TypeDeclaration = ClassOrInterfaceDeclaration ;
+
+ClassOrInterfaceDeclaration = Modifier* ClassOrInterfaceDecl ;
+
+ClassOrInterfaceDecl 
+    = ClassDeclaration
+    | InterfaceDeclaration
+    ;
+
+ClassDeclaration 
+    = NormalClassDeclaration
+    | EnumDeclaration
+    ;
+
+InterfaceDeclaration
+    = NormalInterfaceDeclaration
+    | AnnotationTypeDeclaration
+    ;
+
+NormalClassDeclaration 
+    = CLASS Identifier TypeParameters? (EXTENDS Type)? (IMPLEMENTS TypeList) ClassBody 
+    ; 
+
+EnumDeclaration = ENUM Identifier (IMPLEMENTS TypeList)? EnumBody ;
+
+NormalInterfaceDeclaration 
+    = INTERFACE Identifier TypeParameters? (EXTENDS TypeList)? InterfaceBody ;
+
+AnnotationTypeDeclaration = AT INTERFACE Identifier AnnotationTypeBody ;
+
+// ==================================================================
+
+Type 
+    = BasicType (OPEN_BRACKET CLOSE_BRACKET)*
+    | ReferenceType (OPEN_BRACKET CLOSE_BRACKET)*
+    ;
+
+BasicType 
+    = BYTE
+    | SHORT
+    | CHAR
+    | LONG
+    | INT
+    | FLOAT
+    | BOOLEAN
+    | DOUBLE
+    ;
+
+ReferenceType = Identifier TypeArguments? (DOT Identifier TypeArguments?) ;
+
+TypeArguments = OPEN_POINTY TypeArgmuent (COMMA TypeArgument)* CLOSE_POINTY ;
+
+TypeArgument 
+    = ReferenceType
+    | QUESTION (SuperOrExtends ReferenceType) ;
+
+SuperOrExtends 
+    = EXTENDS
+    | SUPER
+    ;
+
+// ==================================================================
+
+NonWildCardTypeArguments = OPEN_POINTY TypeList CLOSE_POINTY ;
+
+TypeList = ReferenceType (',' ReferenceType)* ;
+
+TypeArgumentOrDiamond
+    = OPEN_POINTY CLOSE_POINTY
+    | TypeArguments
+    ;
+
+NonWildCardTypeArgumentsOrDiamond
+    = OPEN_POINTY CLOSE_POINTY
+    | NonWildCardTypeArguments
+    ;
+
+TypeParameters = OPEN_POINTY TypeParameter (COMMA TypeParameter)* CLOSE_POINTY ;
+
+TypeParameter = Identifier (EXTENDS Bound)? ;
+
+Bound = ReferenceType (AND ReferenceType)* ;
+
+// ==================================================================
+
+Modifier
+    = Annotation
+    | PUBLIC 
+    | PROTECTED  
+    | PRIVATE  
+    | STATIC 
+    | ABSTRACT 
+    | FINAL 
+    | NATIVE 
+    | SYNCHRONIZED 
+    | TRANSIENT 
+    | VOLATILE 
+    | STRICTFP 
+    ;
+
+Annotations = Annotation+ ;
+
+Annotation = AT QualifiedIdentifier (OPEN_PAREN AnnotationElement? CLOSE_PAREN)? ;
+
+AnnotationElement 
+    = ElementValuePairs
+    | ElementValue
+    ;
+
+ElementValuePairs 
+    = ELementValuePair (COMMA ElementValuePair)* ;
+
+ElementValuePair = Identifier EQUAL ElementValue ;
+
+ElementValue 
+    = Annotation
+    | Expression1
+    | ElementValueArrayInitializer
+    ;
+
+ElementValueArrayInitializer = (ElementValues? COMMA?)* ;
+
+ElementValues = ElementValue (COMMA ElementValue)* ;
+
+// ==================================================================
+
+ClassBody = OPEN_CURLY ClassBodyDeclaration* CLOSE_CURLY ;
+
+ClassBodyDeclaration 
+    = SEMICOLON
+    | Modifier? MemberDecl
+    | STATIC? Block
+    ;
+
+MemberDecl
+    = MemberOrFieldDecl
+    | VOID Identifier VoidMethodDeclaratorRest
+    | Identifier ConstructorDeclaratorRest
+    | GenericMethodOrConstructorDecl
+    | ClassDeclaration
+    | InterfaceDeclaration
+    ;
+
+MethodOrFieldDecl = Type Indentifier MethodOrFieldRest ;
+
+MethodOrFieldRest 
+    = FieldDeclaratorsRest
+    | MethodDeclaratorRest
+    ;
+
+FieldDelaratorsRest = VariableDeclaratorRest (COMMA VariableDeclerator)* ;
+
+MethodDeclaratorRest 
+    = FormalParameters (OPEN_BRACKET CLOSE_BRACKET)* (THROWS QualifiedIdentifierList)? BlockOrSemi ;
+
+VoidMethodeDeclaratorRest
+    = FormalParameters (THROWS QualifiedIdentifierList)? BlockOrSemi ;
+
+ConstructorDeclaratorRest 
+    = FormalParameters (THROWS QualifiedIdentifierList)? Block ;
+
+BlockOrSemi 
+    = Block 
+    | SEMICOLON 
+    ; 
+
+GenericMethodOrConstructorDecl = TypeParameters GenericMethodOrConstructorRest ;
+
+GenericMethodeConstructorRest 
+    = TypeOrVoid Identifier MethodDeclaratorRest 
+    | Identifier ConstructorDeclaratorRest 
+    ;
+
+TypeOrVoid 
+    = Type 
+    | VOID 
+    ;
+
+// ==================================================================
+
+InterfaceBody = OPEN_CURLY InterfaceBodyDeclaration* CLOSE_CURLY ;
+
+InterfaceBodyDeclaration
+    = SEMICOLON
+    | Modifier* InterfaceMemberDecl
+    ;
+
+InterfaceMemberDecl
+    = InterfaceMethodOrFieldDecl
+    | VOID Identifier VoidInterfaceMethodDeclaratorRest
+    | InterfaceGenericMethodDecl
+    | ClassDeclaration
+    | InterfaceDeclaration
+    ;
+
+InterfaceMethodOrFieldDecl = Type Identifier InterfaceMethodOrFieldRest ;
+
+InterfaceMathodOrFieldRest
+    = ConstantDeclaratorsRest SEMICOLON
+    | InterfaceMethodDeclaratorRets
+    ;
+
+ConstantDeclaratorsRest = ConstantDeclaratorRest (COMMA ConstantDeclarator)* ;
+
+ConstantDeclaratorRest = (OPEN_BRACKET CLOSE_BRACKET)* EQUAL VariableInitializer ;
+
+ConstantDeclarator = Identifier ConstantDeclaratorRest ;
+
+InterfaceMethodDeclaratorRest 
+    = FormalParameters (OPEN_BRACKET CLOSE_BRACKET)* (THROWS QualifiedIdentifierList)? ;
+
+VoidInterfaceMethodDeclaratorRest = FormalParameters (THROWS QualifiedIdentifierList)? ;
+
+InterfaceGenericMethodOrDecl 
+    = TypeParameters TypeOrVoid Identifier InterfaceMethodDeclaratorRest ;
+
+// ==================================================================
+
+FormalParameters = OPEN_PAREN FormalParameterDecls? CLOSE_PAREN ;
+
+FormalParameterDecls = VariableModifier* Type FormalParameterDeclsRest ;
+
+VariableModifier 
+    = FINAL
+    | Annotation
+    ;
+
+FormalParameterDeclsRest 
+    = VariableDeclaratorId (COMMA FormalParameterDecls)?
+    | DOTS_3 VariableDeclaratorId
+    ;
+
+VariableDeclaratorId = Identifier (OPEN_BRACKET CLOSE_BRACKET)* ;
+
+VariableDeclarators = VariableDeclarator (COMMA VariableDeclarator)* ;
+
+VariableDeclarator = Identifier VariableDeclaratorRest ;
+
+VariableDeclaratorRest = (OPEN_BRACKET CLOSE_BRACKET)* (EQUAL VariableInitializer)? ;
+
+VariableInitializer
+    = ArrayInitializer
+    | Expression
+    ;
+
+ArrayInitializer 
+    = OPEN_CURLY (VariableInitializer (COMMA VariableInitializer)* COMMA?) CLOSE_CURLY ;
+
+// ==================================================================
+
+Block = OPEN_CURLY BlockStatements CLOSE_CURLY ;
+
+BlocksStatements = BlockStatement* ;
+
+BlockStatement 
+    = LocalVariableDeclarationStatement
+    | ClassOrInterfaceDeclaration
+    | (Identifier COLON)? Statement
+    ;
+
+LocalVariableDeclarationStatement = VariableModifier* Type VariableDeclarators ;
+
+Statement 
+    = Block
+    | SEMICOLON
+    | Identifier COLON Statement
+    | StatementExpression SEMICOLON
+    | IF ParExpression Statement (ELSE Statement)?
+    | ASSERT Expression (COLON Expression)?
+    | SWITCH ParExpression OPEN_CURLY SwitchBlockStatementGroups CLOSE_CURLY 
+    | WHILE Parexpression Statement
+    | DO Statement WHILE ParExpression SEMICOLON
+    | FOR OPEN_PAREN ForControl CLOSE_PAREN Statement
+    | BREAK Identifier? SEMICOLON
+    | CONTINUE Identifier? SEMICOLON
+    | RETURN Expression? SEMICOLON
+    | THROW Expression? SEMICOLON
+    | SYNCHRONIZED ParExpression Block
+    | TRY Block CatchesOrFinally
+    | TRY RecourceSpecification BLock Catches? Finally?
+    ;
+
+CatchesOrFinally 
+    = Catches? Finally
+    | Catches
+    ;
+
+StatementExpression = Expression ;
+
+// ==================================================================
+
+Catches = CatchClause+ ;
+
+CatchClause = CATCH OPEN_PAREN VariableModifier* CatchType Identifier CLOSE_PAREN Block ;
+
+CatchType = QualifiedIdentifier (PIPE QualifiedIdentifier)* ;
+
+Finally = FINALLY Block ;
+
+RecourceSpecification = OPEN_PAREN Recources SEMICOLON? CLOSE_PAREN ;
+
+Recource = VariableModifier* ReferenceType VariableDeclaratorId EQUAL Expression ;
+
+// ==================================================================
+
+SwitchBlockStatementGroups = SwitchBLockStatementGroup* ;
+
+SwitchBlockStatementGroup = SwitchLabels BlockStatements ;
+
+SwitchLabels = SwitchLabel+ ;
+
+SwitchLabel 
+    = CASE Expression COLON
+    | CASE EnumConstantName COLON
+    | DEFAULT COLON
+    ;
+
+EnumConstantName = Identifier ;
+
+ForControl 
+    = ForVarControl
+    | ForInit SEMICOLON Expression? SEMICOLON ForUpdate? 
+    ;
+
+ForVarControl = VariableModifier* Type VariableDeclaratorId ForVarControlRest ;
+
+ForVarControlRest 
+    = ForVariableDeclaratorsRest SEMICOLON Expression? SEMICOLON ForUpdate? 
+    | COLON Expression
+    ;
+
+ForVariableDeclaratorsRest = (EQUAL VariableInitializer)? (COMMA VariableDeclarator)* ;
+
+ForInit = ForUpdate ;
+
+ForUpdate = StatementExpression (COMMA StatementExpression) ;
+
+// ==================================================================
+
+Expression = Expression1 (AssignementOperator Expression1)? ;
+
+AssignementOperator
+    = EQUAL 
+    | PLUS_EQUAL 
+    | MINUS_EQUAL 
+    | STAR_EQUAL 
+    | SLASH_EQUAL 
+    | AND_EQUAL 
+    | OR_EQUAL 
+    | XOR_EQUAL 
+    | PERCENT_EQUAL 
+    | SHIFT_LEFT_EQUAL 
+    | SHIFT_RIGHT_EQUAL 
+    | SHIFT_RIGHT_UNSIGNED_EQUAL 
+    ; 
+
+Expression1 = Expression2 Expression1Rest? ;
+
+Expression1Rest = QUESTION Expression COLON Expression1 ;
+
+Expression2 = Expression3 Expression2Rest? ;
+
+Expression2Rest 
+    = (InfixOp Expression3)*
+    | INSTANCEOF Type
+    ;
+
+// ==================================================================
+
+InfixOp 
+    = LESS_THAN
+    | GREATER_THAN 
+    | LOGICAL_OR 
+    | LOGICAL_AND 
+    | BITWISE_OR 
+    | BITWISE_AND 
+    | XOR 
+    | LOGICAL_EQUALS 
+    | NOT_EQUAL 
+    | LESS_OR_EQUAL 
+    | GREATER_OR_EQUAL 
+    | SHIFT_LEFT 
+    | SHIFT_RIGHT 
+    | SHIFT_RIGHT_UNSIGNED 
+    | PLUS 
+    | MINUS 
+    | STAR 
+    | SLASH 
+    | PERCENT 
+    ; 
+
+Expression
+    = PrefixOp Expression3
+    | OPEN_PAREN ExpressionOrType CLOSE_PAREN Expression3
+    | Primary Selector* PostfixOp*
+    ;
+
+PrefixOp 
+    = INCREMENT
+    | DECREMENT
+    | LOGICAL_NOT
+    | BITWISE_NOT
+    | PLUS
+    | MINUS
+    ;
+
+PostfixOp
+    = INCREMENT
+    | DECREMENT
+    ;
+
+// ==================================================================
+
+// ========================== TERMINALS =============================
+
+// KEYWORDS
+FINALLY = 'finally' ;
+IF = 'if' ;
+DEFAULT = 'default' ;
+CASE = 'case' ;
+WHILE = 'while' ;
+ASSERT = 'assert' ;
+SWITCH = 'switch' ;
+DO = 'do' ;
+FOR = 'for' ;
+INSTANCEOF = 'instanceof' ;
+BREAK = 'break' ;
+CONTINUE = 'continue' ;
+RETURN = 'return' ;
+THROW = 'throw' ;
+TRY = 'try' ;
+CATCH = 'catch' ;
+ELSE = 'else' ;
+THROWS = 'throws' ;
+PUBLIC = 'public' ;
+PROTECTED = 'protected' ; 
+PRIVATE = 'private' ; 
+STATIC = 'static' ;
+ABSTRACT = 'abstract' ;
+FINAL = 'final' ;
+NATIVE = 'native' ;
+SYNCHRONIZED = 'synchronized' ;
+TRANSIENT = 'transient' ;
+VOLATILE = 'volatile' ;
+STRICTFP = 'strictfp' ;
+INTERFACE = 'interface' ;
+ENUM = 'enum' ;
+IMPLEMENTS = 'implements' ;
+SUPER = 'super' ;
+EXTENDS = 'extends' ;
+CLASS = 'class' ;
+STATIC = 'static' ;
+IMPORT = 'import' ;
+PACKAGE = 'package' ;
+
+// BASIC TYPES
+VOID = 'void' ;
+BYTE = 'byte' ;
+SHORT = 'short' ;
+CHAR = 'char' ;
+LONG = 'long' ;
+INT = 'int' ;
+FLOAT = 'float' ;
+DOUBLE = 'double' ;
+BOOLEAN = 'boolean' ;
+
+// OPERATORS
+DOTS_3 = '...' ;
+AND = '&' ;
+QUESTION = '?' ;
+OPEN_PAREN = '(' ;
+CLOSE_PAREN = ')' ;
+OPEN_BRACKET = '[' ;
+CLOSE_BRACKET = ']' ;
+OPEN_CURLY = '{' ;
+CLOSE_CURLY = '}' ;
+AT = '@' ;
+OPEN_POINTY = '<' ;
+CLOSE_POINTY = '>' ;
+DOT = '.' ;
+COLON = ':' ;
+SEMICOLON = ';' ;
+STAR = '*' ;
+PIPE = '|' ;
+
+// ASSIGNEMENT OPERATORS
+EQUAL = '=' ;
+PLUS_EQUAL = '+=' ;
+MINUS_EQUAL = '-=' ;
+STAR_EQUAL = '*=' ;
+SLASH_EQUAL = '/=' ;
+AND_EQUAL = '&=' ;
+OR_EQUAL = '|=' ;
+XOR_EQUAL = '^=' ;
+PERCENT_EQUAL = '%=' ;
+SHIFT_LEFT_EQUAL = '<<=' ;
+SHIFT_RIGHT_EQUAL = '>>=' ;
+SHIFT_RIGHT_UNSIGNED_EQUAL = '>>>=' ;
+
+// INFIX OPERATORS
+LESS_THAN = '<' ;
+GREATER_THAN = '>' ;
+LOGICAL_OR = '||' ;
+LOGICAL_AND = '&&' ;
+BITWISE_OR = '|' ;
+BITWISE_AND = '&' ;
+XOR = '^' ;
+LOGICAL_EQUALS = '==' ;
+NOT_EQUAL = '!=' ;
+LESS_OR_EQUAL = '<=' ;
+GREATER_OR_EQUAL = '>=' ;
+SHIFT_LEFT = '<<' ;
+SHIFT_RIGHT = '>>' ;
+SHIFT_RIGHT_UNSIGNED = '>>>' ;
+PLUS = '+' ;
+MINUS = '-' ;
+STAR = '*' ;
+SLASH = '/' ;
+PERCENT = '%' ;
+
+// PREFIX/POSTFIX OPS
+INCREMENT = '++' ;
+DECREMENT = '--' ; 
+LOGICAL_NOT = '!' ;
+BITWISE_NOT = '~' ;
+
