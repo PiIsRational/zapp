@@ -429,9 +429,72 @@ PostfixOp
 
 // ==================================================================
 
+Primary 
+    = Literal
+    | ParExpression
+    | THIS Arguments?
+    | SUPER SuperSuffix
+    | NEW Creator
+    | NonWildcardTypeArguments ExplicitGenerixInvocationSuffixOrThisArgs
+    | Identifier (DOT Identifier)* IdentifierSuffix?
+    | BasicType (OPEN_BRACKET CLOSE_BRACKET)* DOT CLASS 
+    | VOID DOT CLASS
+    ;
+
+ExplicitGenericInvocationSuffixOrThisArgs
+    = ExplicitGenericInvocationSuffix
+    | THIS Arguments
+    ;
+
+Literal
+    = IntegerLiteral
+    | FloatingPointLiteral
+    | CharacterLiteral
+    | StringLiteral
+    | BooleanLiteral
+    | NullLiteral
+    ;
+
+ParExpression = OPEN_PAREN Expression CLOSE_PAREN ;
+
+Arguments = OPEN_PAREN (Expression (COMMA Expression)*)? CLOSE_PAREN ;
+
+SuperSuffix
+    = Arguments
+    | DOT Identifier Arguments?
+    ;
+
+ExplicitGenericInvocationSuffix
+    = SUPER SuperSuffix
+    | Identifier Arguments
+    ;
+
+// ==================================================================
+
+Creator
+    = NonWildcardTypeArguments CreateName ClassCreatorRest
+    | CreatedName CreatorRest 
+    ;
+
+CreatorRest
+    = ClassCreatorRest
+    | ArrayCreatorRest
+    ;
+
+CreatedName
+    = Identifier TypeArgumentsOrDiamond? (DOT Identifier TypeArgumentOrDiamond?)* 
+    ;
+
+ClassCreatorRest = Arguments ClassBody? ;
+
+
+
+// ==================================================================
 // ========================== TERMINALS =============================
 
 // KEYWORDS
+THIS = 'this' ;
+NEW = 'new' ;
 FINALLY = 'finally' ;
 IF = 'if' ;
 DEFAULT = 'default' ;
