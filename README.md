@@ -7,7 +7,7 @@ that is written in Zig and generates code written in zig.
 
 The documentation is [here](https://github.com/PiIsRational/zapp/wiki):
 * the grammar format is described [here](https://github.com/PiIsRational/zapp/wiki/Grammar-syntax)
-* using actions in the grammar is explained [here](https://github.com/zapp/PiIsRational/wiki/Actions)
+* using actions in the grammar is explained [here](https://github.com/PiIsRational/zapp/wiki/Actions)
 * informations about using zapp [here](https://github.com/PiIsRational/zapp/wiki/Zapp-Specifics)
 * the interface of the generated parsers is explained [here](https://github.com/PiIsRational/zapp/wiki/The-Parser-interface)
 
