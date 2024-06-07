@@ -16,7 +16,7 @@
 
 const std = @import("std");
 const Error = @import("errors.zig");
-const Parser = @import("parser").Parser(.{});
+const Parser = @import("parser").Parser(.{ .use_memo = true });
 const assert = std.debug.assert;
 
 const Green = "\x1b[32;1m";

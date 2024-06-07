@@ -75,9 +75,120 @@ const structs =
     \\    msg: []const u8,
     \\};
     \\
-    \\const MemoData = struct {
-    \\    state: u32,
-    \\    length: u32,
+    \\const MemoTable = struct {
+    \\    start: usize,
+    \\    max_chars: usize,
+    \\    states: std.ArrayList([RuleCount]u32),
+    \\    lengths: std.ArrayList([RuleCount]u32),
+    \\
+    \\    pub const MemoValue = union(enum) {
+    \\        pass: struct {
+    \\            length: u32,
+    \\            end_state: u32,
+    \\        },
+    \\        fail: struct {
+    \\            end_state: u32,
+    \\        },
+    \\        empty: void,
+    \\    };
+    \\
+    \\    pub fn init(allocator: Allocator) MemoTable {
+    \\        return .{
+    \\            .max_chars = 0,
+    \\            .start = 0,
+    \\            .states = std.ArrayList([RuleCount]u32).init(allocator),
+    \\            .lengths = std.ArrayList([RuleCount]u32).init(allocator),
+    \\        };
+    \\    }
+    \\
+    \\    pub fn reset(self: *MemoTable) void {
+    \\        self.max_chars = 0;
+    \\        self.start = 0;
+    \\        self.states.clearRetainingCapacity();
+    \\        self.lengths.clearRetainingCapacity();
+    \\    }
+    \\
+    \\    pub fn deinit(self: MemoTable) void {
+    \\        self.states.deinit();
+    \\        self.lengths.deinit();
+    \\    }
+    \\
+    \\    fn assumeSize(self: *MemoTable, chars: usize) !void {  
+    \\        if (chars < self.states.items.len + self.start) return;
+    \\        const append_size = chars + 1 - self.states.items.len - self.start;
+    \\        try self.states.appendNTimes([1]u32{ 0 } ** RuleCount, append_size);
+    \\        try self.lengths.appendNTimes([1]u32{ 0 } ** RuleCount, append_size);
+    \\    }
+    \\
+    \\    pub fn add(
+    \\        self: *MemoTable, 
+    \\        char: usize, 
+    \\        rule: usize, 
+    \\        value: MemoValue,
+    \\    ) !void {
+    \\        if (char < self.start) return;
+    \\        try self.assumeSize(char);
+    \\
+    \\        switch (value) {
+    \\            .pass => |val| {
+    \\                self.lengths.items[char - self.start][rule] = val.length + 2;
+    \\                self.states.items[char - self.start][rule] = val.end_state;
+    \\            },
+    \\            .fail => |val| {
+    \\                self.lengths.items[char - self.start][rule] = 1;
+    \\                self.states.items[char - self.start][rule] = val.end_state;
+    \\            },
+    \\            .empty => unreachable,
+    \\        }
+    \\    }
+    \\
+    \\    pub fn get(self: *MemoTable, char: usize, rule: usize) MemoValue {
+    \\       if (char < self.start) return .empty;
+    \\       if (char >= self.start + self.lengths.items.len) return .empty;
+    \\
+    \\       const value = self.lengths.items[char - self.start][rule];
+    \\       if (value == 0) return .empty;
+    \\       if (value == 1) return .{ 
+    \\           .fail = .{ .end_state = self.getState(char, rule) }, 
+    \\       };
+    \\       
+    \\       return .{ .pass = .{
+    \\           .end_state = self.getState(char, rule),
+    \\           .length = value - 2,
+    \\       }};
+    \\    }
+    \\
+    \\    pub fn getState(self: *MemoTable, char: usize, rule: usize) u32 {
+    \\        return self.states.items[char - self.start][rule];
+    \\    }
+    \\
+    \\    pub fn getMemUseage(self: *MemoTable) usize {
+    \\        return self.states.capacity * @sizeOf([RuleCount]u32) +
+    \\            self.lengths.capacity * @sizeOf([RuleCount]u32);
+    \\    }
+    \\
+    \\    pub fn resetTo(self: *MemoTable, new_begin: usize) void {
+    \\        self.max_chars = @max(self.max_chars, self.lengths.items.len);
+    \\        const new_start = new_begin - self.start;
+    \\        if (new_start < self.states.items.len) {
+    \\            std.mem.copyForwards(
+    \\                [RuleCount]u32,
+    \\                self.states.items, 
+    \\                self.states.items[new_start..],
+    \\            );
+    \\            std.mem.copyForwards(
+    \\                [RuleCount]u32,
+    \\                self.lengths.items, 
+    \\                self.lengths.items[new_start..],
+    \\            );
+    \\            self.states.shrinkRetainingCapacity(self.states.items.len - new_start);
+    \\            self.lengths.shrinkRetainingCapacity(self.lengths.items.len - new_start);
+    \\        } else {
+    \\            self.states.clearRetainingCapacity();    
+    \\            self.lengths.clearRetainingCapacity();    
+    \\        }
+    \\        self.start = new_begin;
+    \\    }
     \\};
     \\
     \\const InferInstr = struct {
@@ -150,10 +261,9 @@ const vars =
     \\stack_alloc: ?std.heap.FixedBufferAllocator,
     \\infer_stack: std.ArrayList(InferFrame),
     \\calc_stack: std.ArrayList(InferReturnType),
-    \\memo: std.ArrayList([RuleCount]MemoData),
     \\infer_actions: std.ArrayList(InferInstr),
     \\infer_instrs: std.ArrayList(InferInstr),
-    \\memo_start: usize,
+    \\memo: MemoTable,
     \\start: usize,
     \\acc: usize,
     \\infer_acc: usize,
@@ -167,7 +277,6 @@ const vars =
     \\max_reached: usize,
     \\max_slice: []const u8,
     \\next_expected: usize,
-    \\max_memo: usize,
     \\max_memo_state: usize,
     \\infer_fail_msg: []const u8,
     \\infer_fail_err: ?anyerror,
@@ -190,7 +299,7 @@ const funcs =
     \\        self.stack = std.ArrayList(EvalFrame).init(allocator);
     \\    }
     \\    self.infer_stack = std.ArrayList(InferFrame).init(allocator);
-    \\    self.memo = std.ArrayList([RuleCount]MemoData).init(allocator);
+    \\    self.memo = MemoTable.init(allocator);
     \\    self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
     \\    self.infer_actions = std.ArrayList(InferInstr).init(allocator);
     \\    self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
@@ -216,11 +325,10 @@ const funcs =
     \\    assert(self.calc_stack.items.len == 0);
     \\    self.infer_actions.clearRetainingCapacity();
     \\    self.infer_instrs.clearRetainingCapacity();
-    \\    self.memo.clearRetainingCapacity();
+    \\    self.memo.reset();
     \\    self.state = 0;
     \\    self.infer_state = 0;
     \\    self.infer_start = 0;
-    \\    self.memo_start = 0;
     \\    self.stack_start = 0;
     \\    self.start = 0;
     \\    self.acc = 0;
@@ -233,15 +341,14 @@ const funcs =
     \\    self.infer_fail_msg = "";
     \\    self.infer_fail_err = null;
     \\    self.empty_backtrack = AddrToNFail[0];
-    \\    self.max_memo = 0;
     \\    self.max_memo_state = 0;
     \\    self.chars = chars;
     \\}
     \\
     \\pub fn stats(self: *@This()) Stats {
     \\    return .{
-    \\        .memo = self.memo.capacity * @sizeOf([RuleCount]MemoData),
-    \\        .max_memo = self.max_memo,
+    \\        .memo = self.memo.getMemUseage(),
+    \\        .max_memo = self.memo.max_chars,
     \\        .parse = self.stack.capacity * @sizeOf(EvalFrame),
     \\        .infer = self.infer_stack.capacity * @sizeOf(InferFrame),
     \\        .instr = self.infer_instrs.capacity * @sizeOf(InferInstr),
@@ -261,7 +368,7 @@ const funcs =
     \\        .start = self.start,
     \\        .acc = self.acc,
     \\        .state = self.state,
-    \\        .stack_start = self.stack_start + self.memo_start,
+    \\        .stack_start = self.stack_start + self.memo.start,
     \\        .look = .{
     \\            .inverted = inverted,
     \\            .consuming = consuming,
@@ -277,24 +384,17 @@ const funcs =
     \\        self.empty_backtrack and consuming;
     \\      
     \\    if (!opts.use_memo) return;
-    \\    if (self.start + self.acc >= self.memo.items.len + self.memo_start or
-    \\        self.memo.items[
-    \\        self.start + self.acc - self.memo_start
-    \\    ][AddrToRule[state]].length == 0) {
-    \\        return;
-    \\    }
-    \\
-    \\    const value = self.memo.items[
-    \\        self.start + self.acc - self.memo_start
-    \\    ][AddrToRule[state]];
-    \\ 
-    \\
-    \\    self.state = value.state;
-    \\    if (value.length == 1) {
-    \\        try self.returnFromNonterminal(true, true);
-    \\    } else {
-    \\        self.acc = value.length - 2;
-    \\        try self.returnFromNonterminal(false, true);
+    \\    switch (self.memo.get(self.start, AddrToRule[state])) {
+    \\        .pass => |val| { 
+    \\            self.state = val.end_state;
+    \\            self.acc = val.length;
+    \\            try self.returnFromNonterminal(false, true);
+    \\        },
+    \\        .fail => |val| {
+    \\            self.state = val.end_state;
+    \\            try self.returnFromNonterminal(true, true);
+    \\        },
+    \\        .empty => return,
     \\    }
     \\}
     \\
@@ -321,7 +421,8 @@ const funcs =
     \\    const look = frame.look;
     \\    const good = failed == look.inverted;
     \\  
-    \\    if (!failed and look.consuming and self.max_reached <= self.start + self.acc and 
+    \\    if (!failed and look.consuming and 
+    \\        self.max_reached <= self.start + self.acc and 
     \\       (self.max_reached < self.start + self.acc or self.acc > self.max_slice.len)) {
     \\        self.max_slice = self.chars[self.start .. self.start + self.acc];
     \\        self.max_reached = self.start + self.acc;
@@ -329,24 +430,16 @@ const funcs =
     \\        self.next_expected = self.state;
     \\    }
     \\
-    \\    if (opts.use_memo) {
-    \\        if (self.start >= self.memo.items.len + self.memo_start) {
-    \\            try self.memo.appendNTimes(
-    \\                [1]MemoData{.{ .length = 0, .state = 0 }} ** RuleCount,
-    \\                self.start + 1 - self.memo.items.len - self.memo_start,
-    \\            );
-    \\        }
-    \\
-    \\        if (self.memo_start <= self.start and self.memo.items[
-    \\            self.start - self.memo_start
-    \\        ][AddrToRule[self.state]].length == 0) {
-    \\            self.memo.items[
-    \\                self.start - self.memo_start
-    \\            ][AddrToRule[self.state]] = if (failed)
-    \\                .{ .length = 1, .state = @intCast(self.state) }
-    \\            else
-    \\                .{ .length = 2 + @as(u32, @intCast(self.acc)), .state = @intCast(self.state) };
-    \\        }
+    \\    if (!memo and opts.use_memo) {
+    \\        try self.memo.add(self.start, AddrToRule[self.state], 
+    \\            if (failed)
+    \\                .{ .fail = .{ .end_state = @intCast(self.state) } }
+    \\            else 
+    \\                .{ .pass = .{ 
+    \\                    .length = @intCast(self.acc), 
+    \\                    .end_state = @intCast(self.state), 
+    \\                } }
+    \\        );
     \\    }
     \\
     \\    if (look.consuming and good) {
@@ -363,16 +456,16 @@ const funcs =
     \\        self.acc = frame.acc;
     \\        self.state = frame.state + 1;
     \\    } else {
-    \\        if (frame.stack_start >= self.memo_start) {
+    \\        if (frame.stack_start >= self.memo.start) {
     \\            self.infer_actions.shrinkRetainingCapacity(
-    \\                frame.stack_start - self.memo_start,
+    \\                frame.stack_start - self.memo.start,
     \\            );
     \\        }
     \\        self.acc = 0;
     \\        self.state = AddrToFailState[frame.state];
     \\    }
     \\
-    \\    self.stack_start = frame.stack_start - @min(frame.stack_start, self.memo_start);
+    \\    self.stack_start = frame.stack_start - @min(frame.stack_start, self.memo.start);
     \\    self.start = frame.start;
     \\    if (opts.use_memo) {
     \\        if (frame.empty_backtrack) {
@@ -430,11 +523,8 @@ const inferFuncs =
     \\        .state = self.infer_state,
     \\    });
     \\
-    \\    const memo =
-    \\        self.memo.items[self.infer_acc - self.memo_start][
-    \\        AddrToRule[state]
-    \\    ];
-    \\    self.infer_state = ActionTranslate[memo.state];
+    \\    const last_state = self.memo.getState(self.infer_acc, AddrToRule[state]);
+    \\    self.infer_state = ActionTranslate[last_state];
     \\}
     \\
     \\fn returnFromInfer(self: *@This(), comptime state: usize) Allocator.Error!void {
@@ -554,26 +644,13 @@ fn genTopLevelComment(self: *CodeGen) !void {
 
 fn resetMemo(self: *CodeGen) !void {
     const resetMemoRest =
-        \\    if (new_begin < self.memo_start) {
+        \\    if (new_begin < self.memo.start) {
         \\        self.did_fail = true;
         \\        return;
         \\    }
-        \\    if (self.memo.items.len > self.max_memo) {
-        \\        self.max_memo = self.memo.items.len;
+        \\    if (self.memo.lengths.items.len > self.memo.max_chars) 
         \\        self.max_memo_state = self.state;
-        \\    }
-        \\    const new_start = new_begin - self.memo_start;
-        \\    if (new_start < self.memo.items.len) {
-        \\        std.mem.copyForwards(
-        \\            [RuleCount]MemoData,
-        \\            self.memo.items, 
-        \\            self.memo.items[new_start..],
-        \\        );
-        \\        self.memo.shrinkRetainingCapacity(self.memo.items.len - new_start);
-        \\    } else {
-        \\        self.memo.clearRetainingCapacity();    
-        \\    }
-        \\    self.memo_start = new_begin;
+        \\    self.memo.resetTo(new_begin);
         \\}
     ;
     try self.writer.print(
