@@ -45,6 +45,281 @@ fn invert(comptime T: type, s: []T) []T {
     return s;
 }
 
+const MemoConfig = struct {
+    rule_count: usize,
+    chunks: ?usize = null,
+};
+
+const MemoIndex = enum(u32) {
+    const stdlib = @import("std");
+    empty = stdlib.math.maxInt(u32),
+    _,
+
+    pub fn init(value: u32) MemoIndex {
+        return @enumFromInt(value);
+    }
+
+    pub fn unwrap(self: @This()) ?u32 {
+        if (self == .empty) return null;
+        return @intFromEnum(self);
+    }
+};
+
+fn UnorderedMemo(comptime T: type, comptime size: usize) type {
+    const stdlib = @import("std");
+
+    if (size * @sizeOf(T) < @sizeOf(MemoIndex)) {
+        @compileError("too small chunks!");
+    }
+
+    return struct {
+        const Cell = struct {
+            table: [size]T,
+
+            pub fn next(self: *@This()) *MemoIndex {
+                return @ptrCast(&self.table);
+            }
+        };
+
+        free_list: MemoIndex,
+        values: stdlib.ArrayList(Cell),
+
+        pub fn init(allocator: stdlib.mem.Allocator) @This() {
+            return .{
+                .free_list = .empty,
+                .values = stdlib.ArrayList(Cell).init(allocator),
+            };
+        }
+
+        pub fn new(self: *@This(), comptime default: T) !MemoIndex {
+            const cell_default: Cell = .{ .table = [1]T{default} ** size };
+            if (self.free_list.unwrap()) |value| {
+                const index = self.free_list;
+                self.free_list = self.values.items[value].next().*;
+                self.values.items[index.unwrap() orelse unreachable] = cell_default;
+                return index;
+            }
+
+            try self.values.append(cell_default);
+            return MemoIndex.init(@intCast(self.values.items.len - 1));
+        }
+
+        pub fn free(self: *@This(), index: MemoIndex) void {
+            const value = index.unwrap() orelse unreachable;
+            self.values.items[value].next().* = self.free_list;
+            self.free_list = index;
+        }
+
+        pub fn freeAll(self: *@This()) void {
+            self.free_list = .empty;
+            self.values.clearRetainingCapacity();
+        }
+
+        pub fn getMemUseage(self: @This()) usize {
+            return self.values.capacity * @sizeOf(Cell);
+        }
+
+        pub fn get(self: @This(), index: MemoIndex, rule: usize) *T {
+            return &self.values.items[index.unwrap() orelse unreachable].table[rule];
+        }
+
+        pub fn deinit(self: *@This()) void {
+            self.values.deinit();
+        }
+    };
+}
+
+fn MemoTable(comptime config: MemoConfig) type {
+    return struct {
+        const stdlib = @import("std");
+        const Chunks = if (config.chunks) |chunks| chunks else chunksFromRules();
+        const SubMemoSize = @divFloor(config.rule_count, Chunks) +
+            if (@rem(config.rule_count, Chunks) == 0) 0 else 1;
+        const SubMemo = UnorderedMemo(u32, SubMemoSize);
+
+        start: usize,
+        max_chars: usize,
+        base_table: stdlib.ArrayList([Chunks]MemoIndex),
+        lengths: [Chunks]SubMemo,
+        states: [Chunks]SubMemo,
+
+        fn chunksFromRules() usize {
+            return stdlib.math.sqrt(config.rule_count);
+        }
+
+        pub const MemoResult = union(enum) {
+            pass: struct {
+                length: u32,
+                end_state: u32,
+            },
+            fail: struct {
+                end_state: u32,
+            },
+            empty: void,
+        };
+
+        pub fn init(allocator: stdlib.mem.Allocator) @This() {
+            var states = [1]SubMemo{undefined} ** Chunks;
+            var lengths = [1]SubMemo{undefined} ** Chunks;
+            for (&states, &lengths) |*state, *length| {
+                state.* = SubMemo.init(allocator);
+                length.* = SubMemo.init(allocator);
+            }
+
+            return .{
+                .max_chars = 0,
+                .start = 0,
+                .base_table = stdlib.ArrayList([Chunks]MemoIndex).init(allocator),
+                .states = states,
+                .lengths = lengths,
+            };
+        }
+
+        pub fn reset(self: *@This()) void {
+            self.max_chars = 0;
+            self.start = 0;
+            self.base_table.clearRetainingCapacity();
+
+            for (&self.states, &self.lengths) |*state, *length| {
+                state.freeAll();
+                length.freeAll();
+            }
+        }
+
+        pub fn deinit(self: *@This()) void {
+            self.base_table.deinit();
+
+            for (&self.states, &self.lengths) |*state, *length| {
+                state.deinit();
+                length.deinit();
+            }
+        }
+
+        fn assumeSize(self: *@This(), chars: usize, rule: usize) !void {
+            const first_level_index = @divFloor(rule, SubMemoSize);
+            const lookup_place = chars - self.start;
+            if (chars >= self.base_table.items.len + self.start) {
+                const append_size = chars + 1 - self.base_table.items.len - self.start;
+                try self.base_table.appendNTimes([1]MemoIndex{.empty} ** Chunks, append_size);
+            } else if (self.base_table.items[lookup_place][first_level_index] != .empty)
+                return;
+
+            const state_idx = try self.states[first_level_index].new(0);
+            const length_idx = try self.lengths[first_level_index].new(0);
+            stdlib.debug.assert(state_idx != .empty and state_idx == length_idx);
+
+            self.base_table.items[lookup_place][first_level_index] = length_idx;
+        }
+
+        fn getTableIdx(self: @This(), char: usize, rule: usize) MemoIndex {
+            const lookup_place = char - self.start;
+            const first_level_index = @divFloor(rule, SubMemoSize);
+
+            return self.base_table.items[lookup_place][first_level_index];
+        }
+
+        fn getPtrs(self: *@This(), chars: usize, rule: usize) struct { state: *u32, length: *u32 } {
+            const first_level_index = @divFloor(rule, SubMemoSize);
+            const second_level_index = @rem(rule, SubMemoSize);
+            const table_index = self.getTableIdx(chars, rule);
+            stdlib.debug.assert(table_index != .empty);
+
+            return .{
+                .state = self.states[first_level_index].get(table_index, second_level_index),
+                .length = self.lengths[first_level_index].get(table_index, second_level_index),
+            };
+        }
+
+        pub fn add(self: *@This(), char: usize, rule: usize, value: MemoResult) !void {
+            if (char < self.start) return;
+            try self.assumeSize(char, rule);
+            const ptrs = self.getPtrs(char, rule);
+
+            switch (value) {
+                .pass => |val| {
+                    ptrs.length.* = val.length + 2;
+                    ptrs.state.* = val.end_state;
+                },
+                .fail => |val| {
+                    ptrs.length.* = 1;
+                    ptrs.state.* = val.end_state;
+                },
+                .empty => unreachable,
+            }
+        }
+
+        pub fn get(self: *@This(), char: usize, rule: usize) MemoResult {
+            if (char < self.start) return .empty;
+            if (char >= self.start + self.base_table.items.len) return .empty;
+            if (self.getTableIdx(char, rule) == .empty) return .empty;
+
+            const ptrs = self.getPtrs(char, rule);
+            const value = ptrs.length.*;
+            if (value == 0) return .empty;
+
+            if (value == 1) return .{
+                .fail = .{ .end_state = ptrs.state.* },
+            };
+
+            return .{ .pass = .{
+                .end_state = ptrs.state.*,
+                .length = value - 2,
+            } };
+        }
+
+        pub fn getState(self: *@This(), char: usize, rule: usize) u32 {
+            const ptrs = self.getPtrs(char, rule);
+            return ptrs.state.*;
+        }
+
+        pub fn getMemUseage(self: *@This()) usize {
+            var useage = self.base_table.capacity * @sizeOf(MemoIndex);
+            for (self.states, self.lengths) |state, length| {
+                useage += state.getMemUseage() + length.getMemUseage();
+            }
+
+            return useage;
+        }
+
+        fn invalidateOld(self: *@This(), new_start: usize) void {
+            if (new_start < self.base_table.items.len) {
+                for (self.base_table.items[0..new_start]) |sub| for (sub, 0..) |index, base_rule| {
+                    if (index == .empty) continue;
+
+                    self.states[base_rule].free(index);
+                    self.lengths[base_rule].free(index);
+                };
+            } else {
+                for (&self.lengths, &self.states) |*length, *state| {
+                    length.freeAll();
+                    state.freeAll();
+                }
+            }
+        }
+
+        pub fn resetTo(self: *@This(), new_begin: usize) void {
+            self.max_chars = @max(self.max_chars, self.base_table.items.len);
+
+            const new_start = new_begin - self.start;
+            self.invalidateOld(new_start);
+
+            if (new_start < self.base_table.items.len) {
+                stdlib.mem.copyForwards(
+                    [Chunks]MemoIndex,
+                    self.base_table.items,
+                    self.base_table.items[new_start..],
+                );
+                self.base_table.shrinkRetainingCapacity(
+                    self.base_table.items.len - new_start,
+                );
+            } else {
+                self.base_table.clearRetainingCapacity();
+            }
+
+            self.start = new_begin;
+        }
+    };
+}
 const InferReturnType = union {
     type_2: []const u8,
     type_5: ReturnType,
@@ -106,11 +381,6 @@ pub const InferError = struct {
     msg: []const u8,
 };
 
-const MemoData = struct {
-    state: u32,
-    length: u32,
-};
-
 const InferInstr = struct {
     state: usize,
     length: usize,
@@ -170,6 +440,10 @@ pub const ParseOptions = struct {
     /// set the limit to the parsing stack
     /// per default it is unlimited
     stack_limit: ?usize = null,
+
+    /// the amount of chunks to use in the memoization table
+    /// per default it depends on the rule count
+    chunks: ?usize = null,
 };
 
 const NameTable = [_][]const u8{
@@ -214,15 +488,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
         stack_alloc: ?std.heap.FixedBufferAllocator,
         infer_stack: std.ArrayList(InferFrame),
         calc_stack: std.ArrayList(InferReturnType),
-        memo: std.ArrayList([RuleCount]MemoData),
         infer_actions: std.ArrayList(InferInstr),
         infer_instrs: std.ArrayList(InferInstr),
-        memo_start: usize,
+        memo: MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks }),
         start: usize,
         acc: usize,
         infer_acc: usize,
         infer_done: bool,
-        fail: bool,
+        did_fail: bool,
         state: usize,
         infer_state: usize,
         infer_start: usize,
@@ -231,7 +504,6 @@ pub fn Zapp(comptime opts: ParseOptions) type {
         max_reached: usize,
         max_slice: []const u8,
         next_expected: usize,
-        max_memo: usize,
         max_memo_state: usize,
         infer_fail_msg: []const u8,
         infer_fail_err: ?anyerror,
@@ -253,7 +525,8 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 self.stack = std.ArrayList(EvalFrame).init(allocator);
             }
             self.infer_stack = std.ArrayList(InferFrame).init(allocator);
-            self.memo = std.ArrayList([RuleCount]MemoData).init(allocator);
+            self.memo = MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks })
+                .init(allocator);
             self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
             self.infer_actions = std.ArrayList(InferInstr).init(allocator);
             self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
@@ -279,32 +552,30 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             assert(self.calc_stack.items.len == 0);
             self.infer_actions.clearRetainingCapacity();
             self.infer_instrs.clearRetainingCapacity();
-            self.memo.clearRetainingCapacity();
+            self.memo.reset();
             self.state = 0;
             self.infer_state = 0;
             self.infer_start = 0;
-            self.memo_start = 0;
             self.stack_start = 0;
             self.start = 0;
             self.acc = 0;
             self.infer_acc = 0;
             self.infer_done = false;
-            self.fail = false;
+            self.did_fail = false;
             self.max_reached = 0;
             self.max_slice = "";
             self.next_expected = 0;
             self.infer_fail_msg = "";
             self.infer_fail_err = null;
             self.empty_backtrack = AddrToNFail[0];
-            self.max_memo = 0;
             self.max_memo_state = 0;
             self.chars = chars;
         }
 
         pub fn stats(self: *@This()) Stats {
             return .{
-                .memo = self.memo.capacity * @sizeOf([RuleCount]MemoData),
-                .max_memo = self.max_memo,
+                .memo = self.memo.getMemUseage(),
+                .max_memo = self.memo.max_chars,
                 .parse = self.stack.capacity * @sizeOf(EvalFrame),
                 .infer = self.infer_stack.capacity * @sizeOf(InferFrame),
                 .instr = self.infer_instrs.capacity * @sizeOf(InferInstr),
@@ -324,7 +595,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 .start = self.start,
                 .acc = self.acc,
                 .state = self.state,
-                .stack_start = self.stack_start + self.memo_start,
+                .stack_start = self.stack_start + self.memo.start,
                 .look = .{
                     .inverted = inverted,
                     .consuming = consuming,
@@ -340,23 +611,17 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 self.empty_backtrack and consuming;
 
             if (!opts.use_memo) return;
-            if (self.start + self.acc >= self.memo.items.len + self.memo_start or
-                self.memo.items[
-                self.start + self.acc - self.memo_start
-            ][AddrToRule[state]].length == 0) {
-                return;
-            }
-
-            const value = self.memo.items[
-                self.start + self.acc - self.memo_start
-            ][AddrToRule[state]];
-
-            self.state = value.state;
-            if (value.length == 1) {
-                try self.returnFromNonterminal(true, true);
-            } else {
-                self.acc = value.length - 2;
-                try self.returnFromNonterminal(false, true);
+            switch (self.memo.get(self.start, AddrToRule[state])) {
+                .pass => |val| {
+                    self.state = val.end_state;
+                    self.acc = val.length;
+                    try self.returnFromNonterminal(false, true);
+                },
+                .fail => |val| {
+                    self.state = val.end_state;
+                    try self.returnFromNonterminal(true, true);
+                },
+                .empty => return,
             }
         }
 
@@ -366,7 +631,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             comptime memo: bool,
         ) Allocator.Error!void {
             const frame = self.stack.popOrNull() orelse blk: {
-                self.fail = failed;
+                self.did_fail = failed;
                 break :blk EvalFrame{
                     .stack_start = 0,
                     .start = self.start,
@@ -383,7 +648,8 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             const look = frame.look;
             const good = failed == look.inverted;
 
-            if (!failed and look.consuming and self.max_reached <= self.start + self.acc and
+            if (!failed and look.consuming and
+                self.max_reached <= self.start + self.acc and
                 (self.max_reached < self.start + self.acc or self.acc > self.max_slice.len))
             {
                 self.max_slice = self.chars[self.start .. self.start + self.acc];
@@ -392,24 +658,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 self.next_expected = self.state;
             }
 
-            if (opts.use_memo) {
-                if (self.start >= self.memo.items.len + self.memo_start) {
-                    try self.memo.appendNTimes(
-                        [1]MemoData{.{ .length = 0, .state = 0 }} ** RuleCount,
-                        self.start + 1 - self.memo.items.len - self.memo_start,
-                    );
-                }
-
-                if (self.memo_start <= self.start and self.memo.items[
-                    self.start - self.memo_start
-                ][AddrToRule[self.state]].length == 0) {
-                    self.memo.items[
-                        self.start - self.memo_start
-                    ][AddrToRule[self.state]] = if (failed)
-                        .{ .length = 1, .state = @intCast(self.state) }
-                    else
-                        .{ .length = 2 + @as(u32, @intCast(self.acc)), .state = @intCast(self.state) };
-                }
+            if (!memo and opts.use_memo) {
+                try self.memo.add(self.start, AddrToRule[self.state], if (failed)
+                    .{ .fail = .{ .end_state = @intCast(self.state) } }
+                else
+                    .{ .pass = .{
+                        .length = @intCast(self.acc),
+                        .end_state = @intCast(self.state),
+                    } });
             }
 
             if (look.consuming and good) {
@@ -426,16 +682,16 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 self.acc = frame.acc;
                 self.state = frame.state + 1;
             } else {
-                if (frame.stack_start >= self.memo_start) {
+                if (frame.stack_start >= self.memo.start) {
                     self.infer_actions.shrinkRetainingCapacity(
-                        frame.stack_start - self.memo_start,
+                        frame.stack_start - self.memo.start,
                     );
                 }
                 self.acc = 0;
                 self.state = AddrToFailState[frame.state];
             }
 
-            self.stack_start = frame.stack_start - @min(frame.stack_start, self.memo_start);
+            self.stack_start = frame.stack_start - @min(frame.stack_start, self.memo.start);
             self.start = frame.start;
             if (opts.use_memo) {
                 if (frame.empty_backtrack) {
@@ -468,26 +724,13 @@ pub fn Zapp(comptime opts: ParseOptions) type {
 
         fn resetMemo(self: *@This(), new_begin: usize) Allocator.Error!void {
             try self.finalizeInferInstrs();
-            if (new_begin < self.memo_start) {
-                self.fail = true;
+            if (new_begin < self.memo.start) {
+                self.did_fail = true;
                 return;
             }
-            if (self.memo.items.len > self.max_memo) {
-                self.max_memo = self.memo.items.len;
+            if (self.memo.base_table.items.len > self.memo.max_chars)
                 self.max_memo_state = self.state;
-            }
-            const new_start = new_begin - self.memo_start;
-            if (new_start < self.memo.items.len) {
-                std.mem.copyForwards(
-                    [RuleCount]MemoData,
-                    self.memo.items,
-                    self.memo.items[new_start..],
-                );
-                self.memo.shrinkRetainingCapacity(self.memo.items.len - new_start);
-            } else {
-                self.memo.clearRetainingCapacity();
-            }
-            self.memo_start = new_begin;
+            self.memo.resetTo(new_begin);
         }
         pub fn parse(
             self: *@This(),
@@ -2289,7 +2532,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 }
             }
 
-            return if (!self.fail) blk: {
+            return if (!self.did_fail) blk: {
                 const infer_result = self.infer() catch |err|
                     if (err == error.OutOfMemory)
                     return error.OutOfMemory
@@ -2312,8 +2555,8 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             self.stack_start = 0;
         }
 
-        fn fail(self: @This(), msg: []const u8, err: ?anyerror) void {
-            self.fail = true;
+        fn fail(self: *@This(), msg: []const u8, err: ?anyerror) void {
+            self.did_fail = true;
             self.infer_fail_err = err;
             self.infer_fail_msg = msg;
         }
@@ -2324,11 +2567,8 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 .state = self.infer_state,
             });
 
-            const memo =
-                self.memo.items[self.infer_acc - self.memo_start][
-                AddrToRule[state]
-            ];
-            self.infer_state = ActionTranslate[memo.state];
+            const last_state = self.memo.getState(self.infer_acc, AddrToRule[state]);
+            self.infer_state = ActionTranslate[last_state];
         }
 
         fn returnFromInfer(self: *@This(), comptime state: usize) Allocator.Error!void {
@@ -2533,9 +2773,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         const num = std.fmt.parseInt(usize, self.chars[start .. start + length][1..], 10) catch |err| switch (err) {
                             error.InvalidCharacter => unreachable,
                             else => {
-                                std.debug.print("too large integer: {d}\n", .{self.chars[start .. start + length][1..]});
-                                self.fail = true;
-                                self.infer_done = true;
+                                self.fail("too large integer!\n", null);
                                 return;
                             },
                         };
@@ -2553,9 +2791,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         const num = std.fmt.parseInt(usize, self.chars[start .. start + length][2..], 10) catch |err| switch (err) {
                             error.InvalidCharacter => unreachable,
                             else => {
-                                std.debug.print("too large integer: {d}\n", .{self.chars[start .. start + length][2..]});
-                                self.fail = true;
-                                self.infer_done = true;
+                                self.fail("too large integer!\n", null);
                                 return;
                             },
                         };
@@ -2850,6 +3086,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             }
             return;
         }
+
         fn memoInfer(self: *@This(), state: usize, start: usize) Allocator.Error!void {
             self.infer_start = start;
             self.infer_acc = start;
@@ -3736,7 +3973,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 try self.callAction(instr.state, instr.start, instr.length);
             }
 
-            const output: ParseReturn = if (self.fail)
+            const output: ParseReturn = if (self.did_fail)
                 .{ .infer_fail = .{
                     .err = self.infer_fail_err,
                     .msg = self.infer_fail_msg,
@@ -3744,7 +3981,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             else
                 .{ .pass = void{} };
 
-            assert(self.fail or self.calc_stack.items.len == 0);
+            assert(self.did_fail or self.calc_stack.items.len == 0);
             return output;
         }
     };

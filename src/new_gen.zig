@@ -135,6 +135,10 @@ const structs =
     \\    /// set the limit to the parsing stack
     \\    /// per default it is unlimited
     \\    stack_limit: ?usize = null,
+    \\      
+    \\    /// the amount of chunks to use in the memoization table
+    \\    /// per default it depends on the rule count
+    \\    chunks: ?usize = null,
     \\};
     \\
 ;
@@ -148,7 +152,7 @@ const vars =
     \\calc_stack: std.ArrayList(InferReturnType),
     \\infer_actions: std.ArrayList(InferInstr),
     \\infer_instrs: std.ArrayList(InferInstr),
-    \\memo: MemoTable(.{ .rule_count = RuleCount }),
+    \\memo: MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks }),
     \\start: usize,
     \\acc: usize,
     \\infer_acc: usize,
@@ -184,7 +188,8 @@ const funcs =
     \\        self.stack = std.ArrayList(EvalFrame).init(allocator);
     \\    }
     \\    self.infer_stack = std.ArrayList(InferFrame).init(allocator);
-    \\    self.memo = MemoTable(.{ .rule_count = RuleCount }).init(allocator);
+    \\    self.memo = MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks })
+    \\        .init(allocator);
     \\    self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
     \\    self.infer_actions = std.ArrayList(InferInstr).init(allocator);
     \\    self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
