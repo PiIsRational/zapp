@@ -75,121 +75,6 @@ const structs =
     \\    msg: []const u8,
     \\};
     \\
-    \\const MemoTable = struct {
-    \\    start: usize,
-    \\    max_chars: usize,
-    \\    states: std.ArrayList([RuleCount]u32),
-    \\    lengths: std.ArrayList([RuleCount]u32),
-    \\
-    \\    pub const MemoValue = union(enum) {
-    \\        pass: struct {
-    \\            length: u32,
-    \\            end_state: u32,
-    \\        },
-    \\        fail: struct {
-    \\            end_state: u32,
-    \\        },
-    \\        empty: void,
-    \\    };
-    \\
-    \\    pub fn init(allocator: Allocator) MemoTable {
-    \\        return .{
-    \\            .max_chars = 0,
-    \\            .start = 0,
-    \\            .states = std.ArrayList([RuleCount]u32).init(allocator),
-    \\            .lengths = std.ArrayList([RuleCount]u32).init(allocator),
-    \\        };
-    \\    }
-    \\
-    \\    pub fn reset(self: *MemoTable) void {
-    \\        self.max_chars = 0;
-    \\        self.start = 0;
-    \\        self.states.clearRetainingCapacity();
-    \\        self.lengths.clearRetainingCapacity();
-    \\    }
-    \\
-    \\    pub fn deinit(self: MemoTable) void {
-    \\        self.states.deinit();
-    \\        self.lengths.deinit();
-    \\    }
-    \\
-    \\    fn assumeSize(self: *MemoTable, chars: usize) !void {  
-    \\        if (chars < self.states.items.len + self.start) return;
-    \\        const append_size = chars + 1 - self.states.items.len - self.start;
-    \\        try self.states.appendNTimes([1]u32{ 0 } ** RuleCount, append_size);
-    \\        try self.lengths.appendNTimes([1]u32{ 0 } ** RuleCount, append_size);
-    \\    }
-    \\
-    \\    pub fn add(
-    \\        self: *MemoTable, 
-    \\        char: usize, 
-    \\        rule: usize, 
-    \\        value: MemoValue,
-    \\    ) !void {
-    \\        if (char < self.start) return;
-    \\        try self.assumeSize(char);
-    \\
-    \\        switch (value) {
-    \\            .pass => |val| {
-    \\                self.lengths.items[char - self.start][rule] = val.length + 2;
-    \\                self.states.items[char - self.start][rule] = val.end_state;
-    \\            },
-    \\            .fail => |val| {
-    \\                self.lengths.items[char - self.start][rule] = 1;
-    \\                self.states.items[char - self.start][rule] = val.end_state;
-    \\            },
-    \\            .empty => unreachable,
-    \\        }
-    \\    }
-    \\
-    \\    pub fn get(self: *MemoTable, char: usize, rule: usize) MemoValue {
-    \\       if (char < self.start) return .empty;
-    \\       if (char >= self.start + self.lengths.items.len) return .empty;
-    \\
-    \\       const value = self.lengths.items[char - self.start][rule];
-    \\       if (value == 0) return .empty;
-    \\       if (value == 1) return .{ 
-    \\           .fail = .{ .end_state = self.getState(char, rule) }, 
-    \\       };
-    \\       
-    \\       return .{ .pass = .{
-    \\           .end_state = self.getState(char, rule),
-    \\           .length = value - 2,
-    \\       }};
-    \\    }
-    \\
-    \\    pub fn getState(self: *MemoTable, char: usize, rule: usize) u32 {
-    \\        return self.states.items[char - self.start][rule];
-    \\    }
-    \\
-    \\    pub fn getMemUseage(self: *MemoTable) usize {
-    \\        return self.states.capacity * @sizeOf([RuleCount]u32) +
-    \\            self.lengths.capacity * @sizeOf([RuleCount]u32);
-    \\    }
-    \\
-    \\    pub fn resetTo(self: *MemoTable, new_begin: usize) void {
-    \\        self.max_chars = @max(self.max_chars, self.lengths.items.len);
-    \\        const new_start = new_begin - self.start;
-    \\        if (new_start < self.states.items.len) {
-    \\            std.mem.copyForwards(
-    \\                [RuleCount]u32,
-    \\                self.states.items, 
-    \\                self.states.items[new_start..],
-    \\            );
-    \\            std.mem.copyForwards(
-    \\                [RuleCount]u32,
-    \\                self.lengths.items, 
-    \\                self.lengths.items[new_start..],
-    \\            );
-    \\            self.states.shrinkRetainingCapacity(self.states.items.len - new_start);
-    \\            self.lengths.shrinkRetainingCapacity(self.lengths.items.len - new_start);
-    \\        } else {
-    \\            self.states.clearRetainingCapacity();    
-    \\            self.lengths.clearRetainingCapacity();    
-    \\        }
-    \\        self.start = new_begin;
-    \\    }
-    \\};
     \\
     \\const InferInstr = struct {
     \\    state: usize,
@@ -263,7 +148,7 @@ const vars =
     \\calc_stack: std.ArrayList(InferReturnType),
     \\infer_actions: std.ArrayList(InferInstr),
     \\infer_instrs: std.ArrayList(InferInstr),
-    \\memo: MemoTable,
+    \\memo: MemoTable(.{ .rule_count = RuleCount }),
     \\start: usize,
     \\acc: usize,
     \\infer_acc: usize,
@@ -299,7 +184,7 @@ const funcs =
     \\        self.stack = std.ArrayList(EvalFrame).init(allocator);
     \\    }
     \\    self.infer_stack = std.ArrayList(InferFrame).init(allocator);
-    \\    self.memo = MemoTable.init(allocator);
+    \\    self.memo = MemoTable(.{ .rule_count = RuleCount }).init(allocator);
     \\    self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
     \\    self.infer_actions = std.ArrayList(InferInstr).init(allocator);
     \\    self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
@@ -574,6 +459,7 @@ pub fn generate(
     try writer.print("{s}\n", .{helper});
 
     // type declarations
+    try writer.writeAll(@embedFile("./runtime/memo.zig"));
     try self.returnTypes();
     try self.parseReturn();
     try writer.print("{s}\n", .{structs});
@@ -648,7 +534,7 @@ fn resetMemo(self: *CodeGen) !void {
         \\        self.did_fail = true;
         \\        return;
         \\    }
-        \\    if (self.memo.lengths.items.len > self.memo.max_chars) 
+        \\    if (self.memo.base_table.items.len > self.memo.max_chars) 
         \\        self.max_memo_state = self.state;
         \\    self.memo.resetTo(new_begin);
         \\}

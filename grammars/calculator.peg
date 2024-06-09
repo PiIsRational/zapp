@@ -48,13 +48,15 @@ Div: isize = UnaryNeg (SLASH UnaryNeg)* {
     }
 };
 
-UnaryNeg: isize = MINUS Single { -$2 }
-                | Single { $1 }
-                ;
+UnaryNeg: isize 
+    = MINUS Single { -$2 }
+    | Single { $1 }
+    ;
 
-Single: isize = L_PAREN Addition R_PAREN { $2 } 
-              | Number { $1 }
-              ;
+Single: isize 
+    = L_PAREN Addition R_PAREN { $2 } 
+    | Number { $1 }
+    ;
 
 // End Tokens
 PLUS = '+' Spacing;
@@ -72,19 +74,22 @@ NUMBER: isize = [0-9]+ {
 // Spacing
 Spacing = SpacingInner* ;
 
-SpacingInner = Comment 
-             | Space
-             ;
+SpacingInner 
+    = Comment 
+    | Space
+    ;
 
 Comment = '#' (!LineEnd .)* LineEnd ;
 
-Space = [\t ]
-      | LineEnd
-      ;
+Space 
+    = [\t ]
+    | LineEnd
+    ;
 
-LineEnd = '\r\n'
-        | '\n'
-        | '\r'
-        ;
+LineEnd 
+    = '\r\n'
+    | '\n'
+    | '\r'
+    ;
 
 End = !. ;
