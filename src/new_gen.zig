@@ -249,9 +249,9 @@ const funcs =
     \\
     \\fn parseNonterminal(
     \\    self: *@This(), 
-    \\    comptime state: usize, 
-    \\    comptime inverted: bool, 
-    \\    comptime consuming: bool,
+    \\    state: usize, 
+    \\    inverted: bool, 
+    \\    consuming: bool,
     \\) Allocator.Error!void {
     \\    if (opts.use_memo) try self.adjustBacktrack();
     \\    try self.stack.append(.{
@@ -289,9 +289,9 @@ const funcs =
     \\}
     \\
     \\fn returnFromNonterminal(
-    \\        self: *@This(), 
-    \\        comptime failed: bool, 
-    \\        comptime memo: bool, 
+    \\    self: *@This(), 
+    \\    failed: bool, 
+    \\    memo: bool, 
     \\) Allocator.Error!void {
     \\    const frame = self.stack.popOrNull() orelse blk: {
     \\        self.did_fail = failed;
@@ -407,7 +407,7 @@ const inferFuncs =
     \\    self.infer_fail_msg = msg;
     \\}
     \\
-    \\fn inferNonterminal(self: *@This(), comptime state: usize) Allocator.Error!void {
+    \\fn inferNonterminal(self: *@This(), state: usize) Allocator.Error!void {
     \\    try self.infer_stack.append(.{
     \\        .acc = self.infer_acc,
     \\        .state = self.infer_state,
@@ -417,7 +417,7 @@ const inferFuncs =
     \\    self.infer_state = ActionTranslate[last_state];
     \\}
     \\
-    \\fn returnFromInfer(self: *@This(), comptime state: usize) Allocator.Error!void {
+    \\fn returnFromInfer(self: *@This(), state: usize) Allocator.Error!void {
     \\    const frame = self.infer_stack.popOrNull() orelse blk: {
     \\        self.infer_done = true;
     \\        break :blk InferFrame{
