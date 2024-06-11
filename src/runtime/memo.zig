@@ -27,7 +27,7 @@ fn UnorderedMemo(comptime T: type, comptime size: usize) type {
 
     return struct {
         const Cell = struct {
-            table: [size]T,
+            table: [size]T align(@alignOf(MemoIndex)),
 
             pub fn next(self: *@This()) *MemoIndex {
                 return @ptrCast(&self.table);
@@ -88,13 +88,14 @@ fn MemoTable(comptime config: MemoConfig) type {
         const Chunks = if (config.chunks) |chunks| chunks else chunksFromRules();
         const SubMemoSize = @divFloor(config.rule_count, Chunks) +
             if (@rem(config.rule_count, Chunks) == 0) 0 else 1;
-        const SubMemo = UnorderedMemo(u32, SubMemoSize);
+        const LengthSubMemo = UnorderedMemo(u32, SubMemoSize);
+        const StateSubMemo = UnorderedMemo(u16, SubMemoSize);
 
         start: usize,
         max_chars: usize,
         base_table: stdlib.ArrayList([Chunks]MemoIndex),
-        lengths: [Chunks]SubMemo,
-        states: [Chunks]SubMemo,
+        lengths: [Chunks]LengthSubMemo,
+        states: [Chunks]StateSubMemo,
 
         fn chunksFromRules() usize {
             return stdlib.math.sqrt(config.rule_count);
@@ -103,20 +104,20 @@ fn MemoTable(comptime config: MemoConfig) type {
         pub const MemoResult = union(enum) {
             pass: struct {
                 length: u32,
-                end_state: u32,
+                end_state: u16,
             },
             fail: struct {
-                end_state: u32,
+                end_state: u16,
             },
             empty: void,
         };
 
         pub fn init(allocator: stdlib.mem.Allocator) @This() {
-            var states = [1]SubMemo{undefined} ** Chunks;
-            var lengths = [1]SubMemo{undefined} ** Chunks;
+            var states = [1]StateSubMemo{undefined} ** Chunks;
+            var lengths = [1]LengthSubMemo{undefined} ** Chunks;
             for (&states, &lengths) |*state, *length| {
-                state.* = SubMemo.init(allocator);
-                length.* = SubMemo.init(allocator);
+                state.* = StateSubMemo.init(allocator);
+                length.* = LengthSubMemo.init(allocator);
             }
 
             return .{
@@ -171,7 +172,7 @@ fn MemoTable(comptime config: MemoConfig) type {
             return self.base_table.items[lookup_place][first_level_index];
         }
 
-        fn getPtrs(self: *@This(), chars: usize, rule: usize) struct { state: *u32, length: *u32 } {
+        fn getPtrs(self: *@This(), chars: usize, rule: usize) struct { state: *u16, length: *u32 } {
             const first_level_index = @divFloor(rule, SubMemoSize);
             const second_level_index = @rem(rule, SubMemoSize);
             const table_index = self.getTableIdx(chars, rule);

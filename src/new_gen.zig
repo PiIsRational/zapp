@@ -46,6 +46,11 @@ const helper =
 
 const structs =
     \\
+    \\const State = u16;
+    \\const Rule = u16;
+    \\const CharIdx = u32;
+    \\const CharSpanLength = u32;
+    \\
     \\/// the maximal accepted input size for the parser
     \\/// (the -2 is because 0 and 1 represent empty cells and no math cells)
     \\pub const MaxInputSize = std.math.maxInt(u32) - 2; 
@@ -58,9 +63,9 @@ const structs =
     \\
     \\const EvalFrame = struct {
     \\    stack_start: usize,
-    \\    start: usize,
-    \\    acc: usize,
-    \\    state: usize,
+    \\    start: CharIdx,
+    \\    acc: CharSpanLength,
+    \\    state: State,
     \\    look: LookType,
     \\    empty_backtrack: bool,
     \\};
@@ -77,15 +82,15 @@ const structs =
     \\
     \\
     \\const InferInstr = struct {
-    \\    state: usize,
-    \\    length: usize,
-    \\    start: usize,
+    \\    state: State,
+    \\    length: CharSpanLength,
+    \\    start: CharIdx,
     \\    memo: bool,
     \\};
     \\
     \\const InferFrame = struct {
-    \\    acc: usize,
-    \\    state: usize,
+    \\    acc: CharIdx,
+    \\    state: State,
     \\};
     \\
     \\const LookType = struct {
@@ -153,20 +158,20 @@ const vars =
     \\infer_actions: std.ArrayList(InferInstr),
     \\infer_instrs: std.ArrayList(InferInstr),
     \\memo: MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks }),
-    \\start: usize,
-    \\acc: usize,
-    \\infer_acc: usize,
+    \\state: State,
+    \\start: CharIdx,
+    \\acc: CharSpanLength,
+    \\infer_acc: CharSpanLength,
     \\infer_done: bool,
     \\did_fail: bool,
-    \\state: usize,
-    \\infer_state: usize,
-    \\infer_start: usize,
+    \\infer_state: State,
+    \\infer_start: CharIdx,
     \\stack_start: usize,
     \\empty_backtrack: bool,
-    \\max_reached: usize,
+    \\max_reached: CharIdx,
     \\max_slice: []const u8,
-    \\next_expected: usize,
-    \\max_memo_state: usize,
+    \\next_expected: State,
+    \\max_memo_state: State,
     \\infer_fail_msg: []const u8,
     \\infer_fail_err: ?anyerror,
 ;
@@ -249,7 +254,7 @@ const funcs =
     \\
     \\fn parseNonterminal(
     \\    self: *@This(), 
-    \\    state: usize, 
+    \\    state: State, 
     \\    inverted: bool, 
     \\    consuming: bool,
     \\) Allocator.Error!void {
@@ -311,7 +316,7 @@ const funcs =
     \\    const look = frame.look;
     \\    const good = failed == look.inverted;
     \\  
-    \\    if (!failed and look.consuming and 
+    \\    if (!memo and !failed and look.consuming and 
     \\        self.max_reached <= self.start + self.acc and 
     \\       (self.max_reached < self.start + self.acc or self.acc > self.max_slice.len)) {
     \\        self.max_slice = self.chars[self.start .. self.start + self.acc];
@@ -407,7 +412,7 @@ const inferFuncs =
     \\    self.infer_fail_msg = msg;
     \\}
     \\
-    \\fn inferNonterminal(self: *@This(), state: usize) Allocator.Error!void {
+    \\fn inferNonterminal(self: *@This(), state: State) Allocator.Error!void {
     \\    try self.infer_stack.append(.{
     \\        .acc = self.infer_acc,
     \\        .state = self.infer_state,
@@ -417,7 +422,7 @@ const inferFuncs =
     \\    self.infer_state = ActionTranslate[last_state];
     \\}
     \\
-    \\fn returnFromInfer(self: *@This(), state: usize) Allocator.Error!void {
+    \\fn returnFromInfer(self: *@This(), state: State) Allocator.Error!void {
     \\    const frame = self.infer_stack.popOrNull() orelse blk: {
     \\        self.infer_done = true;
     \\        break :blk InferFrame{
@@ -575,7 +580,7 @@ fn addrToFailState(self: *CodeGen) !void {
     const blocks = self.ir.blocks.items;
     const writer = self.writer;
 
-    try writer.print("const AddrToFailState = [_]usize{{\n", .{});
+    try writer.print("const AddrToFailState = [_]State{{\n", .{});
 
     try writer.print("{d}", .{
         if (blocks[0].fail) |f| f.id else blocks.len,
@@ -593,7 +598,7 @@ fn addrToFailState(self: *CodeGen) !void {
 /// lookup generation
 fn addrToRule(self: *CodeGen) !void {
     const blocks = self.ir.blocks.items;
-    try self.writer.print("const AddrToRule = [_]usize{{\n", .{});
+    try self.writer.print("const AddrToRule = [_]Rule{{\n", .{});
 
     const first = blocks[0].base;
     try self.writer.print("{d}", .{first});
@@ -646,7 +651,7 @@ fn actionTranslationTable(self: *CodeGen) !void {
         }
     }
 
-    try self.writer.print("const ActionTranslate = [_]usize{{\n", .{});
+    try self.writer.print("const ActionTranslate = [_]State{{\n", .{});
 
     try self.writer.print("{d}", .{table[0] - 1});
     for (1..blocks.len) |i| {
@@ -859,7 +864,6 @@ fn parseString(self: *CodeGen, instr: *lir.Instr, fail: *lir.Block) !void {
 }
 
 fn callAction(self: *CodeGen) !void {
-    // TODO: remove the trick and properly check useage of start and length
     const start =
         \\fn callAction(self: *@This(), state: usize, start: usize, length: usize) !void {
         \\    _ = start + length + self.state; // just to be able to compile 
@@ -869,7 +873,6 @@ fn callAction(self: *CodeGen) !void {
     const end =
         \\        else => unreachable,
         \\    }
-        \\    return;
         \\}
     ;
     try self.writer.print("{s}\n", .{start});
@@ -1017,7 +1020,7 @@ fn infer(self: *CodeGen) !void {
 
 fn memoInfer(self: *CodeGen) !void {
     const inferStart =
-        \\fn memoInfer(self: *@This(), state: usize, start: usize) Allocator.Error!void {
+        \\fn memoInfer(self: *@This(), state: State, start: CharIdx) Allocator.Error!void {
         \\self.infer_start = start;
         \\self.infer_acc = start;
         \\self.infer_state = ActionTranslate[state];
