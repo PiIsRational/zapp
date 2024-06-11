@@ -75,7 +75,7 @@ exponent
 
 string: "json.Value" = '"' character* '"' { 
     blk: {
-        if(!std.unicode.utf8ValidateSlice($0)) {
+        if (!std.unicode.utf8ValidateSlice($0)) {
             self.fail("there was wrong utf-8 in the string!", error.InvalidUtf8);
             return;   
         }

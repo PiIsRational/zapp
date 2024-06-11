@@ -43,9 +43,10 @@ Grammar = Spacing (TopLevelComment Spacing)* Name MetaData Definition+ FileEnd {
 };
 
 // the metadata
-MetaData = TopHeader FieldHeader
-         | FieldHeader? TopHeader?
-         ;
+MetaData 
+    = TopHeader FieldHeader
+    | FieldHeader? TopHeader?
+    ;
 
 Name = '%% NAME' Spacing Identifier { self.ir.name = $3; };
 
@@ -57,9 +58,10 @@ FieldHeader = FIELD_START HeaderInner HEADER_END {
 };
 
 HeaderInner: "[]const u8" = HeaderContent* { $0 };
-HeaderContent = !HEADER_END .
-              | Literal { self.allocator.free($1); }
-              ;
+HeaderContent 
+    = !HEADER_END .
+    | Literal { self.allocator.free($1); }
+    ;
 
 // the metadata
 Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequence)* SEMICOLON {
@@ -81,21 +83,21 @@ Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequenc
 };
 
 TypeAnnotation: ReturnType
-                = COLON Identifier { ReturnType.init($2, false, false) }
-                | COLON Literal { ReturnType.init($2, true, false) }
-                | @ { ReturnType.empty() }
-                ;
+    = COLON Identifier { ReturnType.init($2, false, false) }
+    | COLON Literal { ReturnType.init($2, true, false) }
+    | @ { ReturnType.empty() }
+    ;
 
 ActionSequence: Sequence 
-          = Sequence '{' Action '}' Spacing {
+    = Sequence '{' Action '}' Spacing {
     blk: {
         var seq = $1;
         seq.action = $3;
         break: blk seq;
     }
 }
-          | Sequence { $1 }
-          ;
+    | Sequence { $1 }
+    ;
 
 Sequence: Sequence = Operated+ {.{
     .operateds = $1,
@@ -158,9 +160,7 @@ ActionVar: ActionVar = '$' [0-9] [0-9]*  // immutable variables
         const num = std.fmt.parseInt(usize, $0[1..], 10) catch |err| switch (err) {
             error.InvalidCharacter => unreachable,
             else => {
-                std.debug.print("too large integer: {d}\n", .{$0[1..]});
-                self.fail = true;
-                self.infer_done = true;
+                self.fail("too large integer!\n", null);
                 return;
             },
         };
@@ -177,9 +177,7 @@ ActionVar: ActionVar = '$' [0-9] [0-9]*  // immutable variables
         const num = std.fmt.parseInt(usize, $0[2..], 10) catch |err| switch (err) {
             error.InvalidCharacter => unreachable,
             else => {
-                std.debug.print("too large integer: {d}\n", .{$0[2..]});
-                self.fail = true;
-                self.infer_done = true;
+                self.fail("too large integer!\n", null);
                 return;
             },
         };
@@ -206,40 +204,42 @@ Operated: Operated = PrefixOp Primary SuffixOp {.{
 }};
 
 PrefixOp: PrefixOp 
-         = AND { .AND }
-         | NOT { .NOT }
-         | @ { .NONE }
-         ;
+    = AND { .AND }
+    | NOT { .NOT }
+    | @ { .NONE }
+    ;
 
 SuffixOp: PostfixOp
-          = STAR { .STAR }
-          | PLUS { .PLUS }
-          | QUESTION { .QUESTION }
-          | @ { .NONE }
-          ;
+    = STAR { .STAR }
+    | PLUS { .PLUS }
+    | QUESTION { .QUESTION }
+    | @ { .NONE }
+    ;
 
 Primary: Primary
-         = OPEN_PAREN Sequence CLOSE_PAREN { .{ .SEQ = $2 } }
-         | Identifier { .{ .IDENTIFIER = $1 } }
-         | Literal { .{ .LITERAL = $1 } }
-         | Class { .{ .CLASS = $1 } }
-         | DOT { .DOT }
-         | AT { .EPSILON }
-         | CUT_OP { .CUT }
-         ;
+    = OPEN_PAREN Sequence CLOSE_PAREN { .{ .SEQ = $2 } }
+    | Identifier { .{ .IDENTIFIER = $1 } }
+    | Literal { .{ .LITERAL = $1 } }
+    | Class { .{ .CLASS = $1 } }
+    | DOT { .DOT }
+    | AT { .EPSILON }
+    | CUT_OP { .CUT }
+    ;
 
 // lexical syntax
 Identifier: "[]const u8" = IDENTIFIER Spacing { $1 };
 IDENTIFIER: "[]const u8" = IdentStart IdentCont* { $0 };
 IdentStart = [a-zA-Z_];
-IdentCont = IdentStart
-          | [0-9]
-          ;
+
+IdentCont 
+    = IdentStart
+    | [0-9]
+    ;
 
 Literal: "[]const u8" 
-        = ['] (!['] Char)* ['] Spacing { invert(u8, try $*2.toOwnedSlice()) }
-        | ["] (!["] Char)* ["] Spacing { invert(u8, try $*2.toOwnedSlice()) }
-        ;
+    = ['] (!['] Char)* ['] Spacing { invert(u8, try $*2.toOwnedSlice()) }
+    | ["] (!["] Char)* ["] Spacing { invert(u8, try $*2.toOwnedSlice()) }
+    ;
 
 Class: Class = '[' (!']' Range)* ']' Spacing { .{ .content = $2 } };
 
@@ -248,16 +248,16 @@ Range: Range = RangeChar '-' RangeChar {.{
     .to = $3,
     .backing = $0,
 }}
-       | RangeChar {.{
+    | RangeChar {.{
     .from = $1,
     .to = 0,
     .backing = $0,
 }};
 
 RangeChar: u8 
-           = '\\' [-] { '-' }
-           | !']' Char { $2 }
-           ;
+    = '\\' [-] { '-' }
+    | !']' Char { $2 }
+    ;
 
 Char: u8 = '\\' [nrt'"\[\]\\] {
     switch ($0[1]) {
@@ -267,37 +267,38 @@ Char: u8 = '\\' [nrt'"\[\]\\] {
         else => |c| c, 
     }
 }
-     // there is no null char allowed 
-     | '\\x' [1-9A-Fa-f] [0-9A-Fa-f] {  try std.fmt.parseInt(u8, $0[2..], 16) }
-     | '\\x0' [1-9A-Fa-f] { try std.fmt.parseInt(u8, $0[2..], 16) } 
-     | !'\\' . { $0[0] }
-     ; 
+    // there is no null char allowed 
+    | '\\x' [1-9A-Fa-f] [0-9A-Fa-f] {  try std.fmt.parseInt(u8, $0[2..], 16) }
+    | '\\x0' [1-9A-Fa-f] { try std.fmt.parseInt(u8, $0[2..], 16) } 
+    | !'\\' . { $0[0] }
+    ; 
 
 // the terminal Nonterminals
-TOP_START = '%% TOP' LineEnd Spacing;
-FIELD_START = '%% FIELDS' LineEnd Spacing;
-HEADER_END = '%%' LineEnd Spacing;
-AT = '@' Spacing;
-DOT = '.' Spacing;
-OPEN_PAREN = '(' Spacing;
-CLOSE_PAREN = ')' Spacing;
-QUESTION = '?' Spacing;
-STAR = '*' Spacing;
-PLUS = '+' Spacing;
-AND = '&' Spacing;
-NOT = '!' Spacing;
-COLON = ':' Spacing;
-PIPE = '|' Spacing;
-EQUALS = '=' Spacing;
-SEMICOLON = ';' Spacing;
-CUT_OP = '^' Spacing;
+TOP_START = '%% TOP' LineEnd Spacing ;
+FIELD_START = '%% FIELDS' LineEnd Spacing ;
+HEADER_END = '%%' LineEnd Spacing ;
+AT = '@' Spacing ;
+DOT = '.' Spacing ;
+OPEN_PAREN = '(' Spacing ;
+CLOSE_PAREN = ')' Spacing ;
+QUESTION = '?' Spacing ;
+STAR = '*' Spacing ;
+PLUS = '+' Spacing ;
+AND = '&' Spacing ;
+NOT = '!' Spacing ;
+COLON = ':' Spacing ;
+PIPE = '|' Spacing ;
+EQUALS = '=' Spacing ;
+SEMICOLON = ';' Spacing ;
+CUT_OP = '^' Spacing ;
 
 // Spacing
-Spacing = SpaceUnit*;
+Spacing = SpaceUnit* ;
 
-SpaceUnit = Space 
-          | Comment
-          ;
+SpaceUnit 
+    = Space 
+    | Comment
+    ;
 
 Comment = '//' ![*] (!LineEnd .)* LineEnd ;
 
@@ -305,14 +306,16 @@ TopLevelComment: "[]const u8" = '//*' CommentInner LineEnd { $2 };
 
 CommentInner: "[]const u8" = (!LineEnd .)* { $0 };
 
-LineEnd = '\r\n'
-        | '\n'
-        | '\r'
-        ;
+LineEnd 
+    = '\r\n'
+    | '\n'
+    | '\r'
+    ;
 
-Space = ' '
-      | '\t'
-      | LineEnd
-      ;
+Space 
+    = ' '
+    | '\t'
+    | LineEnd
+    ;
 
-FileEnd = !.;
+FileEnd = !. ;
