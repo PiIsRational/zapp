@@ -123,7 +123,11 @@ fn parserGen(
 ) !void {
     const stdout = std.io.getStdOut().writer();
 
+    var root_node = std.Progress.start(.{ .root_name = "zapp gen", .estimated_total_items = 5 });
+    defer root_node.end();
+
     // read the full source
+    var load_progress = root_node.start("read source file", 0);
     const src_file = std.fs.cwd().openFile(src_path, .{}) catch {
         try Error.print("could not open the given source file", null, "", &.{});
         return;
@@ -149,9 +153,14 @@ fn parserGen(
         }
         return;
     };
+
+    load_progress.end();
     defer allocator.free(src);
 
+    std.time.sleep(std.time.ns_per_s);
+
     // parse
+    var parse_progress = root_node.start("parse source file", 0);
     var parser = try Parser.init(allocator);
     defer parser.deinit();
 
@@ -182,26 +191,31 @@ fn parserGen(
     if (parser_name) |name| {
         p_ir.name = name;
     }
+    parse_progress.end();
 
     // optimize
     var passes: Passes = undefined;
-    if (!try passes.optimize(&p_ir, inlining)) return;
+    if (!try passes.optimize(&p_ir, &root_node, inlining)) return;
 
     if (verbose_pir) {
         try stdout.print("{s}\n", .{p_ir});
     }
 
     // lower
+    var lower_node = root_node.start("lowering", 0);
     var lir = try lower(allocator, p_ir);
     defer lir.deinit();
+    lower_node.end();
 
     // generate
+    var codegen_progress = root_node.start("codegen", 0);
     const f = std.fs.cwd().createFile(dst_path, .{}) catch {
         try Error.print("could not create the destination file", null, "", &.{});
         return;
     };
     var ngen: CodeGen = undefined;
     try ngen.generate(lir, f.writer());
+    codegen_progress.end();
 }
 
 fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type {

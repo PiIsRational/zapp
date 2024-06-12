@@ -27,34 +27,46 @@ ir: *ir.PegIr,
 pass: bool,
 relations: []bool,
 reachable: []bool,
+main_progress: std.Progress.Node,
 
-pub fn optimize(self: *FirstPass, pIr: *ir.PegIr, inlining: bool) !bool {
+pub fn optimize(
+    self: *FirstPass,
+    pIr: *ir.PegIr,
+    p_node: *std.Progress.Node,
+    inlining: bool,
+) !bool {
+    self.main_progress = p_node.start("optimize pir", 15);
+    defer self.main_progress.end();
     const allocator = pIr.allocator;
     self.ir = pIr;
     self.pass = true;
     self.idents = std.StringHashMap(usize).init(allocator);
     defer self.idents.deinit();
 
-    try self.defPass(false, doubleDefCheck);
-    try self.defPass(false, checkNoActionReturn);
+    try self.defPass(false, doubleDefCheck, "check no doubled defs");
+    try self.defPass(false, checkNoActionReturn, "check no return without action");
     if (!self.pass) return false;
-    try self.opPass(checkIdentifier);
+    try self.opPass(checkIdentifier, "no use of undefined identifiers");
     if (!self.pass) return false;
-    try self.seqPass(desugarIdentifierSequence);
-    try self.opAppendDefPass(desugarSequences);
-    try self.opPass(checkEpsWithOp);
+    try self.seqPass(desugarIdentifierSequence, "desugar identifiers");
+    try self.opAppendDefPass(desugarSequences, "desugar sequences");
+    try self.opPass(checkEpsWithOp, "check no weird operations on epsilon");
     if (!self.pass) return false;
-    try self.defPass(true, typingPass);
-    try self.seqPass(appendImplicitActions);
-    try self.seqPass(checkActionVars);
-    try self.opPass(checkClass);
-    try self.seqAppendDefPass(desugarPlusSequence);
-    try self.seqAppendDefPass(desugarStarSequence);
-    try self.opAppendDefPass(desugarQuestionOp);
-    try self.seqPass(removeEps);
+    try self.defPass(true, typingPass, "add typing");
+    try self.seqPass(appendImplicitActions, "append implicit actions");
+    try self.seqPass(checkActionVars, "check action validity");
+    try self.opPass(checkClass, "verify classes are correct");
+    try self.seqAppendDefPass(desugarPlusSequence, "desugar plus sequences");
+    try self.seqAppendDefPass(desugarStarSequence, "desugar star sequences");
+    try self.opAppendDefPass(desugarQuestionOp, "desugar questions");
+    try self.seqPass(removeEps, "eliminate epsilon");
 
     const rule_count = self.ir.defs.items.len;
-    for (0..rule_count) |_| try self.defPass(false, setAcceptsEps);
+    for (0..rule_count) |_| try self.defPass(
+        false,
+        setAcceptsEps,
+        "check for epsilon acceptance",
+    );
 
     self.relations = try allocator.alloc(
         bool,
@@ -63,36 +75,41 @@ pub fn optimize(self: *FirstPass, pIr: *ir.PegIr, inlining: bool) !bool {
     @memset(self.relations, false);
 
     // TODO: make this faster
-    for (0..rule_count) |_| try self.defPass(false, buildRelations);
+    for (0..rule_count) |_| try self.defPass(false, buildRelations, "analyze reachability");
     allocator.free(self.relations);
 
     self.reachable = try allocator.alloc(bool, rule_count);
     defer allocator.free(self.reachable);
     @memset(self.reachable, false);
     try self.checkAccess();
-    try self.defPass(false, sameAsRoot);
+    try self.defPass(false, sameAsRoot, "check reachable from start");
     try self.deleteUnreachableDefs();
     if (!self.pass) return false;
 
     self.ir.is_acceptor = true;
-    try self.seqPass(checkIsAcceptor);
+    try self.seqPass(checkIsAcceptor, "check for no actions");
     try self.findRecursions();
-    try self.seqPass(setActionRets);
+    try self.seqPass(setActionRets, "add rets to actions");
 
     try self.updateReachable();
-    for (0..self.ir.defs.items.len) |_| try self.defPass(false, findEmptyRules);
-    try self.defPass(false, errorOnEmptyRules);
+    for (0..self.ir.defs.items.len) |_| try self.defPass(
+        false,
+        findEmptyRules,
+        "try to find unmatchable rules",
+    );
+    try self.defPass(false, errorOnEmptyRules, "maybe error out on empty rules");
     if (!self.pass) return false;
-    try self.defPass(false, addActionReturnType);
+    try self.defPass(false, addActionReturnType, "add return types to actions");
 
     // single sequence inlining
     if (inlining) {
-        try self.defPass(false, inlineOneSeqDefs);
+        try self.defPass(false, inlineOneSeqDefs, "inline single sequence defs");
         try self.checkAccess();
         try self.deleteUnreachableDefs();
-        try self.seqPass(checkDoubledCut);
-        try self.defPass(false, checkLastSeqCut);
     }
+
+    try self.seqPass(checkDoubledCut, "check for doubled cut ops");
+    try self.defPass(false, checkLastSeqCut, "check for cuts in ending sequences");
 
     return self.pass;
 }
@@ -489,8 +506,8 @@ fn deleteDef(self: *FirstPass, def: usize) !void {
     const allocator = self.ir.allocator;
     defs.items[def].deinit(allocator);
     _ = defs.orderedRemove(def);
-    try self.opPass(OpUpdate.update);
-    try self.defPass(false, DefUpdate.update);
+    try self.opPass(OpUpdate.update, "update ops for delete");
+    try self.defPass(false, DefUpdate.update, "delete ops");
 }
 
 fn sameAsRoot(self: *FirstPass, def: *ir.Definition) anyerror!void {
@@ -1511,7 +1528,10 @@ fn inlineAction(
 fn defAppendPass(
     self: *FirstPass,
     comptime pass: fn (self: *FirstPass, def: *ir.Definition) anyerror!?ir.Definition,
+    comptime name: []const u8,
 ) !void {
+    var progress = self.main_progress.start(name, 0);
+    defer progress.end();
     var defs = &self.ir.defs;
     var i: usize = 0;
 
@@ -1531,7 +1551,10 @@ fn defPass(
     self: *FirstPass,
     comptime backwards: bool,
     comptime pass: fn (self: *FirstPass, def: *ir.Definition) anyerror!void,
+    comptime name: []const u8,
 ) !void {
+    var progress = self.main_progress.start(name, 0);
+    defer progress.end();
     const defs = self.ir.defs.items;
     if (backwards) {
         for (0..defs.len) |i| {
@@ -1548,6 +1571,7 @@ fn defPass(
 fn seqPass(
     self: *FirstPass,
     comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!void,
+    comptime name: []const u8,
 ) !void {
     const Iter = struct {
         pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!void {
@@ -1557,12 +1581,13 @@ fn seqPass(
         }
     };
 
-    try self.defPass(false, Iter.sequence_iter);
+    try self.defPass(false, Iter.sequence_iter, name);
 }
 
 fn seqAppendDefPass(
     self: *FirstPass,
     comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Definition,
+    comptime name: []const u8,
 ) !void {
     const Iter = struct {
         pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!?ir.Definition {
@@ -1576,12 +1601,13 @@ fn seqAppendDefPass(
         }
     };
 
-    try self.defAppendPass(Iter.sequence_iter);
+    try self.defAppendPass(Iter.sequence_iter, name);
 }
 
 fn seqAppendPass(
     self: *FirstPass,
     comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Sequence,
+    comptime name: []const u8,
 ) !void {
     const Iter = struct {
         pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!void {
@@ -1599,12 +1625,13 @@ fn seqAppendPass(
         }
     };
 
-    try self.defPass(false, Iter.sequence_iter);
+    try self.defPass(false, Iter.sequence_iter, name);
 }
 
 fn opAppendDefPass(
     self: *FirstPass,
     comptime pass: fn (self: *FirstPass, op: *ir.Operated) anyerror!?ir.Definition,
+    comptime name: []const u8,
 ) !void {
     const Iter = struct {
         pub fn sequence_iter(s: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Definition {
@@ -1618,12 +1645,13 @@ fn opAppendDefPass(
         }
     };
 
-    try self.seqAppendDefPass(Iter.sequence_iter);
+    try self.seqAppendDefPass(Iter.sequence_iter, name);
 }
 
 fn opPass(
     self: *FirstPass,
     comptime pass: fn (self: *FirstPass, op: *ir.Operated) anyerror!void,
+    comptime name: []const u8,
 ) !void {
     const Iter = struct {
         pub fn op_iter(s: *FirstPass, seq: *ir.Sequence) anyerror!void {
@@ -1633,7 +1661,7 @@ fn opPass(
         }
     };
 
-    try self.seqPass(Iter.op_iter);
+    try self.seqPass(Iter.op_iter, name);
 }
 
 /// set the return type for all operateds
