@@ -240,7 +240,7 @@ const funcs =
     \\    self.chars = chars;
     \\}
     \\
-    \\pub fn stats(self: *@This()) Stats {
+    \\pub fn stats(self: *const @This()) Stats {
     \\    return .{
     \\        .memo = self.memo.getMemUseage(),
     \\        .max_memo = self.memo.max_chars,
@@ -381,7 +381,7 @@ const funcs =
     \\    }
     \\}
     \\
-    \\fn getParseError(self: @This()) ParsingError {
+    \\fn getParseError(self: *const @This()) ParsingError {
     \\    const rule = AddrToRule[self.next_expected];
     \\    return .{
     \\        .last_found = self.max_slice,
@@ -420,6 +420,16 @@ const inferFuncs =
     \\
     \\    const last_state = self.memo.getState(self.infer_acc, AddrToRule[state]);
     \\    self.infer_state = ActionTranslate[last_state];
+    \\}
+    \\
+    \\fn skipInferNonterminal(self: *@This(), state: State) void {
+    \\    const length = switch (self.memo.get(self.infer_acc, AddrToRule[state])) {
+    \\        .pass => |val| val.length,
+    \\        else => unreachable,
+    \\    };
+    \\
+    \\    self.infer_acc += length;
+    \\    self.infer_state += 1;
     \\}
     \\
     \\fn returnFromInfer(self: *@This(), state: State) Allocator.Error!void {
@@ -1048,10 +1058,16 @@ fn memoInfer(self: *CodeGen) !void {
 fn inferAction(self: *CodeGen, action: lir.Action, count: *usize) !void {
     for (action.nonterms.items) |nonterm| {
         const add = nonterm.calls.id;
-        try self.inferCall(count, nonterm.consumes, add, false);
+        const skip = !nonterm.calls.meta.moves_actions;
+
+        if (skip) {
+            try self.inferCall(count, nonterm.consumes, add, true, false);
+        } else {
+            try self.inferCall(count, nonterm.consumes, add, false, false);
+        }
     }
 
-    try self.inferCall(count, action.last_offset, action.base.id, true);
+    try self.inferCall(count, action.last_offset, action.base.id, false, true);
 }
 
 fn inferCall(
@@ -1059,12 +1075,15 @@ fn inferCall(
     count: *usize,
     offset: usize,
     add: usize,
+    comptime skip: bool,
     comptime ret: bool,
 ) !void {
     try self.writer.print("{d} => {{\n", .{count.*});
     try self.writer.print("self.infer_acc += {d};\n", .{offset});
     try self.writer.print(if (ret)
         "try self.returnFromInfer({d});\n"
+    else if (skip)
+        "self.skipInferNonterminal({d});\n"
     else
         "try self.inferNonterminal({d});\n", .{add});
     try self.writer.print("}},\n", .{});

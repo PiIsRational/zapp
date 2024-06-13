@@ -392,27 +392,12 @@ pub const Definition = struct {
         _ = options;
 
         try writer.print("{s} (%{d}){s}{s}{s}{s}", .{
-            self.identifier, self.id,
-            if (self.accepts_eps)
-                " (ε)"
-            else
-                "",
-            if (self.mid_recurse)
-                " (m∞)"
-            else if (self.right_recurse)
-                " (r∞)"
-            else
-                "",
-            if (self.regular)
-                " (reg)"
-            else if (self.finite)
-                " (fin)"
-            else
-                "",
-            if (self.moves_actions)
-                " (act)"
-            else
-                "",
+            self.identifier,
+            self.id,
+            if (self.accepts_eps) " (ε)" else "",
+            if (self.mid_recurse) " (m∞)" else if (self.right_recurse) " (r∞)" else "",
+            if (self.regular) " (reg)" else if (self.finite) " (fin)" else "",
+            if (self.moves_actions) " (act)" else "",
         });
         try writer.print(": {s}", .{self.return_type});
         try writer.print(" =\n", .{});

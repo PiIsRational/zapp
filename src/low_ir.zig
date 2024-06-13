@@ -201,6 +201,7 @@ pub const BlockMeta = struct {
     regular: bool,
     finite: bool,
     nonterm_fail: bool,
+    moves_actions: bool,
 
     pub const Empty: BlockMeta = .{
         .mid_recurse = false,
@@ -208,6 +209,7 @@ pub const BlockMeta = struct {
         .regular = false,
         .finite = false,
         .nonterm_fail = false,
+        .moves_actions = false,
     };
 
     pub fn format(
@@ -217,22 +219,10 @@ pub const BlockMeta = struct {
         writer: anytype,
     ) !void {
         try writer.print("{s}{s}{s}", .{
-            if (self.mid_recurse)
-                " (mr)"
-            else if (self.right_recurse)
-                " (rr)"
-            else
-                "",
-            if (self.regular)
-                " (reg)"
-            else if (self.finite)
-                " (fin)"
-            else
-                "",
-            if (self.nonterm_fail)
-                " (fail)"
-            else
-                "",
+            if (self.mid_recurse) " (mr)" else if (self.right_recurse) " (rr)" else "",
+            if (self.regular) " (reg)" else if (self.finite) " (fin)" else "",
+            if (self.nonterm_fail) " (fail)" else "",
+            if (self.moves_actions) " (act)" else "",
         });
     }
 };

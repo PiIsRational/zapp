@@ -165,14 +165,14 @@ fn MemoTable(comptime config: MemoConfig) type {
             self.base_table.items[lookup_place][first_level_index] = length_idx;
         }
 
-        fn getTableIdx(self: @This(), char: usize, rule: usize) MemoIndex {
+        fn getTableIdx(self: *const @This(), char: usize, rule: usize) MemoIndex {
             const lookup_place = char - self.start;
             const first_level_index = @divFloor(rule, SubMemoSize);
 
             return self.base_table.items[lookup_place][first_level_index];
         }
 
-        fn getPtrs(self: *@This(), chars: usize, rule: usize) struct { state: *u16, length: *u32 } {
+        fn getPtrs(self: *const @This(), chars: usize, rule: usize) struct { state: *u16, length: *u32 } {
             const first_level_index = @divFloor(rule, SubMemoSize);
             const second_level_index = @rem(rule, SubMemoSize);
             const table_index = self.getTableIdx(chars, rule);
@@ -202,7 +202,7 @@ fn MemoTable(comptime config: MemoConfig) type {
             }
         }
 
-        pub fn get(self: *@This(), char: usize, rule: usize) MemoResult {
+        pub fn get(self: *const @This(), char: usize, rule: usize) MemoResult {
             if (char < self.start) return .empty;
             if (char >= self.start + self.base_table.items.len) return .empty;
             if (self.getTableIdx(char, rule) == .empty) return .empty;
@@ -221,12 +221,12 @@ fn MemoTable(comptime config: MemoConfig) type {
             } };
         }
 
-        pub fn getState(self: *@This(), char: usize, rule: usize) u32 {
+        pub fn getState(self: *const @This(), char: usize, rule: usize) u32 {
             const ptrs = self.getPtrs(char, rule);
             return ptrs.state.*;
         }
 
-        pub fn getMemUseage(self: *@This()) usize {
+        pub fn getMemUseage(self: *const @This()) usize {
             var useage = self.base_table.capacity * @sizeOf(MemoIndex);
             for (self.states, self.lengths) |state, length| {
                 useage += state.getMemUseage() + length.getMemUseage();

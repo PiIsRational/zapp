@@ -164,6 +164,7 @@ fn lowerSeq(
         .regular = def.regular,
         .finite = def.finite,
         .nonterm_fail = last_branch,
+        .moves_actions = def.moves_actions,
     };
 
     for (0..ops.len) |i| {
@@ -201,6 +202,7 @@ fn lowerSeq(
             .regular = def.regular,
             .finite = def.finite,
             .nonterm_fail = last_branch or has_cut,
+            .moves_actions = def.moves_actions,
         };
     }
 
