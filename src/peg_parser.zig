@@ -2645,6 +2645,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         .right_recurse = false,
                         .regular = true,
                         .finite = true,
+                        .moves_actions = false,
                     });
                 },
                 47 => {

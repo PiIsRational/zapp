@@ -330,6 +330,7 @@ pub const Definition = struct {
     right_recurse: bool,
     regular: bool,
     finite: bool,
+    moves_actions: bool,
 
     pub fn init(
         allocator: Allocator,
@@ -351,6 +352,7 @@ pub const Definition = struct {
             .right_recurse = false,
             .regular = true,
             .finite = true,
+            .moves_actions = false,
         };
     }
 
@@ -389,7 +391,7 @@ pub const Definition = struct {
         _ = fmt;
         _ = options;
 
-        try writer.print("{s} (%{d}){s}{s}{s}", .{
+        try writer.print("{s} (%{d}){s}{s}{s}{s}", .{
             self.identifier, self.id,
             if (self.accepts_eps)
                 " (ε)"
@@ -405,6 +407,10 @@ pub const Definition = struct {
                 " (reg)"
             else if (self.finite)
                 " (fin)"
+            else
+                "",
+            if (self.moves_actions)
+                " (act)"
             else
                 "",
         });

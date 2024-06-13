@@ -79,6 +79,7 @@ Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequenc
         .right_recurse = false,
         .regular = true,
         .finite = true,
+        .moves_actions = false,
     });
 };
 

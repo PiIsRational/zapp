@@ -35,7 +35,7 @@ pub fn optimize(
     p_node: *std.Progress.Node,
     inlining: bool,
 ) !bool {
-    self.main_progress = p_node.start("optimize pir", 15);
+    self.main_progress = p_node.start("optimize pir", 0);
     defer self.main_progress.end();
     const allocator = pIr.allocator;
     self.ir = pIr;
@@ -110,6 +110,14 @@ pub fn optimize(
 
     try self.seqPass(checkDoubledCut, "check for doubled cut ops");
     try self.defPass(false, checkLastSeqCut, "check for cuts in ending sequences");
+    if (!self.pass) return false;
+
+    try self.defPass(false, setInitialUseActions, "init moves actions");
+    for (0..self.ir.defs.items.len) |_| try self.defPass(
+        false,
+        updateUseActions,
+        "use action step",
+    );
 
     return self.pass;
 }
@@ -129,6 +137,45 @@ fn errorOnEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
             .t = .ERROR,
         }},
     );
+}
+
+/// sets use action for the first time using actions
+/// every time after that it should not look at actions anymore
+///
+/// needs:
+///     * all actions should be finalized
+/// change bounds:
+///     * sets `moves_actions` for rules that contain actions
+fn setInitialUseActions(_: *FirstPass, def: *ir.Definition) anyerror!void {
+    for (def.sequences.items) |seq| {
+        if (seq.action.isEmpty()) continue;
+
+        def.moves_actions = true;
+        return;
+    }
+}
+
+/// updates use actions
+///
+/// needs:
+///     * `setInitUseActions` should be called just before
+/// change bounds:
+///     * executes one step of the use action alg
+fn updateUseActions(self: *FirstPass, def: *ir.Definition) anyerror!void {
+    if (def.moves_actions) return;
+
+    for (def.sequences.items) |seq| for (seq.operateds.items) |op| {
+        switch (op.value) {
+            .ID => |id| {
+                const child_def = self.getDefinition(id);
+                if (!child_def.moves_actions) continue;
+
+                def.moves_actions = true;
+                return;
+            },
+            else => {},
+        }
+    };
 }
 
 /// adds the retutrn type to the actions
@@ -220,7 +267,7 @@ const NodeState = enum {
 ///
 /// needs:
 ///     * left recursions are eliminated
-pub fn findRecursions(self: *FirstPass) !void {
+fn findRecursions(self: *FirstPass) !void {
     const allocator = self.ir.allocator;
 
     const Orient = Orientation(struct {
@@ -964,6 +1011,7 @@ fn desugarStarSequence(
             .right_recurse = false,
             .regular = true,
             .finite = true,
+            .moves_actions = false,
         };
 
         return new_def;
