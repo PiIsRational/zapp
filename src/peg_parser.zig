@@ -20,6 +20,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
+const su = @import("string_utils.zig");
 const ir = @import("peg_ir.zig");
 const PegIr = ir.PegIr;
 const PegGrammar = ir.PegGrammar;
@@ -212,14 +213,14 @@ fn MemoTable(comptime config: MemoConfig) type {
             self.base_table.items[lookup_place][first_level_index] = length_idx;
         }
 
-        fn getTableIdx(self: @This(), char: usize, rule: usize) MemoIndex {
+        fn getTableIdx(self: *const @This(), char: usize, rule: usize) MemoIndex {
             const lookup_place = char - self.start;
             const first_level_index = @divFloor(rule, SubMemoSize);
 
             return self.base_table.items[lookup_place][first_level_index];
         }
 
-        fn getPtrs(self: @This(), chars: usize, rule: usize) struct { state: *u16, length: *u32 } {
+        fn getPtrs(self: *const @This(), chars: usize, rule: usize) struct { state: *u16, length: *u32 } {
             const first_level_index = @divFloor(rule, SubMemoSize);
             const second_level_index = @rem(rule, SubMemoSize);
             const table_index = self.getTableIdx(chars, rule);
@@ -249,7 +250,7 @@ fn MemoTable(comptime config: MemoConfig) type {
             }
         }
 
-        pub fn get(self: @This(), char: usize, rule: usize) MemoResult {
+        pub fn get(self: *const @This(), char: usize, rule: usize) MemoResult {
             if (char < self.start) return .empty;
             if (char >= self.start + self.base_table.items.len) return .empty;
             if (self.getTableIdx(char, rule) == .empty) return .empty;
@@ -268,12 +269,12 @@ fn MemoTable(comptime config: MemoConfig) type {
             } };
         }
 
-        pub fn getState(self: *@This(), char: usize, rule: usize) u32 {
+        pub fn getState(self: *const @This(), char: usize, rule: usize) u32 {
             const ptrs = self.getPtrs(char, rule);
             return ptrs.state.*;
         }
 
-        pub fn getMemUseage(self: *@This()) usize {
+        pub fn getMemUseage(self: *const @This()) usize {
             var useage = self.base_table.capacity * @sizeOf(MemoIndex);
             for (self.states, self.lengths) |state, length| {
                 useage += state.getMemUseage() + length.getMemUseage();
@@ -480,6 +481,22 @@ const NameTable = [_][]const u8{
     "CommentInner",
     "LineEnd",
     "Space",
+    "Grammar",
+    "HeaderInner",
+    "Definition",
+    "ActionVar",
+    "ActionVar",
+    "IDENTIFIER",
+    "Literal",
+    "Literal",
+    "Class",
+    "Spacing",
+    "Comment",
+    "CommentInner",
+    "Grammar",
+    "Sequence",
+    "MetaData",
+    "MetaData",
 };
 const AddrToRule = [_]Rule{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 24, 24, 24, 25, 25, 25, 25, 26, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 27, 28, 28, 28, 28, 28, 29, 29, 29, 29, 29, 29, 30, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 33, 33, 33, 33, 33, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 37, 37, 37, 37, 37, 37, 38, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 41, 41, 41, 41, 41, 41, 41, 41, 42, 42, 42, 42, 42, 42, 42, 42 };
 const RuleCount = 43;
@@ -578,7 +595,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             self.chars = chars;
         }
 
-        pub fn stats(self: *@This()) Stats {
+        pub fn stats(self: *const @This()) Stats {
             return .{
                 .memo = self.memo.getMemUseage(),
                 .max_memo = self.memo.max_chars,
@@ -717,7 +734,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             }
         }
 
-        fn getParseError(self: @This()) ParsingError {
+        fn getParseError(self: *const @This()) ParsingError {
             const rule = AddrToRule[self.next_expected];
             return .{
                 .last_found = self.max_slice,
@@ -2656,6 +2673,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         .regular = true,
                         .finite = true,
                         .moves_actions = false,
+                        .is_terminal = su.isScreamingSnakeCase(@"$0"),
                     });
                 },
                 47 => {

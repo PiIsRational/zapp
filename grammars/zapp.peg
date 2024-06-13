@@ -17,6 +17,7 @@
 %% NAME Zapp
 
 %% TOP
+const su = @import("string_utils.zig");
 const ir = @import("peg_ir.zig");
 const PegIr = ir.PegIr;
 const PegGrammar = ir.PegGrammar;
@@ -80,6 +81,7 @@ Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequenc
         .regular = true,
         .finite = true,
         .moves_actions = false,
+        .is_terminal = su.isScreamingSnakeCase($1),
     });
 };
 

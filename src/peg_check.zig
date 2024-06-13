@@ -20,7 +20,7 @@ const Allocator = std.mem.Allocator;
 const ir = @import("peg_ir.zig");
 const Error = @import("errors.zig");
 
-const FirstPass = @This();
+const PegPassManager = @This();
 
 idents: std.StringHashMap(usize),
 ir: *ir.PegIr,
@@ -30,7 +30,7 @@ reachable: []bool,
 main_progress: std.Progress.Node,
 
 pub fn optimize(
-    self: *FirstPass,
+    self: *PegPassManager,
     pIr: *ir.PegIr,
     p_node: *std.Progress.Node,
     inlining: bool,
@@ -123,7 +123,7 @@ pub fn optimize(
 }
 
 /// the error message writer for `findEmptyRules`
-fn errorOnEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn errorOnEmptyRules(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     if (self.reachable[def.id]) return;
 
     self.pass = false;
@@ -146,7 +146,7 @@ fn errorOnEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * all actions should be finalized
 /// change bounds:
 ///     * sets `moves_actions` for rules that contain actions
-fn setInitialUseActions(_: *FirstPass, def: *ir.Definition) anyerror!void {
+fn setInitialUseActions(_: *PegPassManager, def: *ir.Definition) anyerror!void {
     for (def.sequences.items) |seq| {
         if (seq.action.isEmpty()) continue;
 
@@ -161,7 +161,7 @@ fn setInitialUseActions(_: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * `setInitUseActions` should be called just before
 /// change bounds:
 ///     * executes one step of the use action alg
-fn updateUseActions(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn updateUseActions(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     if (def.moves_actions) return;
 
     for (def.sequences.items) |seq| for (seq.operateds.items) |op| {
@@ -185,7 +185,7 @@ fn updateUseActions(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * no inlining by now
 /// change bounds:
 ///     * adds the correct return type to actions
-fn addActionReturnType(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn addActionReturnType(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     const allocator = self.ir.allocator;
     for (def.sequences.items) |seq| {
         const action = seq.action;
@@ -210,7 +210,7 @@ fn addActionReturnType(self: *FirstPass, def: *ir.Definition) anyerror!void {
 /// asserts:
 ///     * mostly no empty rules
 ///      (no empty rules through forced recursion)
-fn findEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn findEmptyRules(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     for (def.sequences.items) |seq| {
         var good = true;
         for (seq.operateds.items) |op| {
@@ -230,7 +230,7 @@ fn findEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
     }
 }
 
-fn updateReachable(self: *FirstPass) !void {
+fn updateReachable(self: *PegPassManager) !void {
     const allocator = self.ir.allocator;
     const rule_count = self.ir.defs.items.len;
     self.reachable = try allocator.realloc(self.reachable, rule_count);
@@ -245,7 +245,7 @@ fn Orientation(extra: type) type {
         op_id: usize,
         other: extra,
 
-        pub fn index(orient: @This(), pass: *FirstPass) ?*ir.Operated {
+        pub fn index(orient: @This(), pass: *PegPassManager) ?*ir.Operated {
             const defs = pass.ir.defs.items;
             const seqs = defs[orient.rule_id].sequences.items;
             if (orient.seq_id >= seqs.len) return null;
@@ -267,7 +267,7 @@ const NodeState = enum {
 ///
 /// needs:
 ///     * left recursions are eliminated
-fn findRecursions(self: *FirstPass) !void {
+fn findRecursions(self: *PegPassManager) !void {
     const allocator = self.ir.allocator;
 
     const Orient = Orientation(struct {
@@ -395,7 +395,7 @@ fn findRecursions(self: *FirstPass) !void {
 ///     * all canonicalizations should be passed
 /// change bounds:
 ///     * the action rets are set
-fn setActionRets(_: *FirstPass, seq: *ir.Sequence) !void {
+fn setActionRets(_: *PegPassManager, seq: *ir.Sequence) !void {
     try seq.action.setRets(seq.*);
 }
 
@@ -407,7 +407,7 @@ fn setActionRets(_: *FirstPass, seq: *ir.Sequence) !void {
 /// asserts:
 ///     * no misplaced cut operators in the grammar
 ///      (with the `checkDoubledCut` pass)
-fn checkLastSeqCut(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn checkLastSeqCut(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     const last_seq = def.sequences.items[0];
     var fail: bool = true;
     for (last_seq.operateds.items) |op| {
@@ -443,7 +443,7 @@ fn checkLastSeqCut(self: *FirstPass, def: *ir.Definition) anyerror!void {
 /// asserts:
 ///     * no misplaced cut operators in the grammar
 ///      (with the `checkLastSeqCut` pass)
-fn checkDoubledCut(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn checkDoubledCut(self: *PegPassManager, seq: *ir.Sequence) anyerror!void {
     var fail = false;
     var found_cut = false;
     var other_str: []const u8 = undefined;
@@ -504,13 +504,13 @@ fn checkDoubledCut(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
 ///     * `self.ir.is_acceptor` should be set to `true`
 /// change bounds:
 ///     * `self.ir.is_acceptor` is set to `false` if an action is encountered
-fn checkIsAcceptor(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn checkIsAcceptor(self: *PegPassManager, seq: *ir.Sequence) anyerror!void {
     if (!seq.action.isEmpty()) {
         self.ir.is_acceptor = false;
     }
 }
 
-fn deleteUnreachableDefs(self: *FirstPass) !void {
+fn deleteUnreachableDefs(self: *PegPassManager) !void {
     const def_cnt = self.reachable.len;
     for (0..def_cnt) |i| {
         const id = def_cnt - 1 - i;
@@ -519,11 +519,11 @@ fn deleteUnreachableDefs(self: *FirstPass) !void {
     }
 }
 
-fn deleteDef(self: *FirstPass, def: usize) !void {
+fn deleteDef(self: *PegPassManager, def: usize) !void {
     const OpUpdate = struct {
         var def_num: usize = 0;
 
-        pub fn update(pass: *FirstPass, op: *ir.Operated) anyerror!void {
+        pub fn update(pass: *PegPassManager, op: *ir.Operated) anyerror!void {
             _ = pass;
             switch (op.value) {
                 .ID => |*id| if (id.* > def_num) {
@@ -541,7 +541,7 @@ fn deleteDef(self: *FirstPass, def: usize) !void {
     const DefUpdate = struct {
         var def_num: usize = 0;
 
-        pub fn update(pass: *FirstPass, defn: *ir.Definition) anyerror!void {
+        pub fn update(pass: *PegPassManager, defn: *ir.Definition) anyerror!void {
             _ = pass;
             if (defn.id > def_num) defn.id -= 1;
         }
@@ -557,7 +557,7 @@ fn deleteDef(self: *FirstPass, def: usize) !void {
     try self.defPass(false, DefUpdate.update, "delete ops");
 }
 
-fn sameAsRoot(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn sameAsRoot(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     if (self.reachable[def.id]) return;
     if (def.generated()) return;
     try Error.print(
@@ -572,7 +572,7 @@ fn sameAsRoot(self: *FirstPass, def: *ir.Definition) anyerror!void {
     );
 }
 
-fn checkAccess(self: *FirstPass) !void {
+fn checkAccess(self: *PegPassManager) !void {
     try self.updateReachable();
     // doing a dfs
     const allocator = self.ir.allocator;
@@ -606,7 +606,7 @@ fn checkAccess(self: *FirstPass) !void {
 ///     * no double def
 /// change bounds:
 ///     * the literals are set
-fn doubleDefCheck(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn doubleDefCheck(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     const result = try self.idents.fetchPut(
         def.identifier,
         def.id,
@@ -637,7 +637,7 @@ fn doubleDefCheck(self: *FirstPass, def: *ir.Definition) anyerror!void {
 /// needs: none
 /// asserts:
 ///     * no empty expressions
-fn checkNoActionReturn(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn checkNoActionReturn(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     for (def.sequences.items) |seq| {
         if (!def.return_type.isNone() and seq.action.isEmpty()) {
             try Error.print(
@@ -667,7 +667,7 @@ fn checkNoActionReturn(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * there should be no inlined actions here (bases.len == 1)
 /// asserts:
 ///     * actions use only available vars
-fn checkActionVars(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn checkActionVars(self: *PegPassManager, seq: *ir.Sequence) anyerror!void {
     var arg_count: usize = 0;
     const action = seq.action;
     const ops = seq.operateds.items;
@@ -748,7 +748,7 @@ fn checkActionVars(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
 /// needs: none
 /// asserts:
 ///     * all classes are correct
-fn checkClass(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn checkClass(self: *PegPassManager, op: *ir.Operated) anyerror!void {
     const cls = switch (op.value) {
         .CLASS => |cl| cl,
         else => return,
@@ -764,7 +764,7 @@ fn checkClass(self: *FirstPass, op: *ir.Operated) anyerror!void {
 /// needs: none
 /// asserts:
 ///     * ranges are correct
-fn checkRange(self: *FirstPass, r: ir.Range) !void {
+fn checkRange(self: *PegPassManager, r: ir.Range) !void {
     if (r.isChar() or r.from < r.to) {
         return;
     }
@@ -794,7 +794,7 @@ fn checkRange(self: *FirstPass, r: ir.Range) !void {
 ///
 /// needs:
 ///     * the identifiers hash map should be populated
-fn checkIdentifier(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn checkIdentifier(self: *PegPassManager, op: *ir.Operated) anyerror!void {
     const ident = switch (op.value) {
         .IDENTIFIER => |id| id,
         .ID => unreachable,
@@ -820,7 +820,7 @@ fn checkIdentifier(self: *FirstPass, op: *ir.Operated) anyerror!void {
 ///     * accpepts_eps needs to be set correctly
 /// asserts:
 ///     * no possible left recursions in the grammar
-fn buildRelations(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn buildRelations(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     const seqs = def.sequences.items;
     for (seqs) |seq| {
         const ops = seq.operateds.items;
@@ -853,7 +853,7 @@ fn buildRelations(self: *FirstPass, def: *ir.Definition) anyerror!void {
 }
 
 fn addRelation(
-    self: *FirstPass,
+    self: *PegPassManager,
     from: usize,
     to: usize,
     to_rule: []const u8,
@@ -906,7 +906,7 @@ fn addRelation(
 ///     * the identifiers hash map should be populated
 /// change bounds:
 ///     * no operateds have the `IDENTIFIER` field populated
-fn desugarIdentifierSequence(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn desugarIdentifierSequence(self: *PegPassManager, seq: *ir.Sequence) anyerror!void {
     for (seq.operateds.items) |*op| {
         op.value = switch (op.value) {
             .IDENTIFIER => |ident| .{ .ID = self.idents.get(ident).? },
@@ -926,7 +926,8 @@ fn desugarIdentifierSequence(self: *FirstPass, seq: *ir.Sequence) anyerror!void 
 /// change bounds:
 ///     * no operateds with the star operator will exist
 fn desugarStarSequence(
-    self: *FirstPass,
+    self: *PegPassManager,
+    def: *const ir.Definition,
     seq: *ir.Sequence,
 ) anyerror!?ir.Definition {
     var i: usize = 0;
@@ -939,7 +940,7 @@ fn desugarStarSequence(
 
         var sequences = std.ArrayList(ir.Sequence).init(allocator);
         var body_ops = std.ArrayList(ir.Operated).init(allocator);
-        var end_ops = std.ArrayList(ir.Operated).init(allocator);
+        const end_ops = std.ArrayList(ir.Operated).init(allocator);
         const new_id = self.ir.defs.items.len;
         try body_ops.append(ir.Operated.initId(
             new_id,
@@ -953,14 +954,6 @@ fn desugarStarSequence(
         new_op.prefix_op = .NONE;
         try self.setReturnType(&new_op);
         try body_ops.append(new_op);
-        try end_ops.append(.{
-            .string = op.string,
-            .prefix_op = .NONE,
-            .postfix_op = .NONE,
-            .value = .EPSILON,
-            .return_type = ir.ReturnType.empty(),
-        });
-
         const ActionList = std.ArrayList(ir.ActionVar);
         try sequences.append(.{
             .operateds = end_ops,
@@ -996,22 +989,21 @@ fn desugarStarSequence(
             .string = "",
         });
         op.value.deinit(allocator);
-        op.value = .{
-            .ID = new_id,
-        };
+        op.value = .{ .ID = new_id };
         op.postfix_op = .NONE;
-        const defs = self.ir.defs.items;
+
         const new_def: ir.Definition = .{
-            .identifier = "",
+            .identifier = def.identifier,
             .return_type = try op.return_type.clone(allocator),
             .sequences = sequences,
-            .id = defs.len,
+            .id = self.ir.defs.items.len,
             .accepts_eps = false,
             .mid_recurse = false,
             .right_recurse = false,
             .regular = true,
             .finite = true,
             .moves_actions = false,
+            .is_terminal = def.is_terminal,
         };
 
         return new_def;
@@ -1026,7 +1018,7 @@ fn desugarStarSequence(
 ///     * sequences should be canonicalized
 /// asserts:
 ///     * no weird epsilons
-fn checkEpsWithOp(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn checkEpsWithOp(self: *PegPassManager, op: *ir.Operated) anyerror!void {
     switch (op.value) {
         .EPSILON => {},
         // an empty literal is essentially an epsilon
@@ -1055,7 +1047,7 @@ fn checkEpsWithOp(self: *FirstPass, op: *ir.Operated) anyerror!void {
 ///
 /// needs:
 ///     * no operated sequences
-fn typingPass(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn typingPass(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     for (def.sequences.items) |*seq| {
         for (seq.operateds.items) |*op| {
             assert(op.return_type.isImplicit() or op.return_type.isNone());
@@ -1091,7 +1083,7 @@ fn typingPass(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * all types should be set
 /// change bounds:
 ///     * no implicit actions are left
-fn appendImplicitActions(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn appendImplicitActions(self: *PegPassManager, seq: *ir.Sequence) anyerror!void {
     if (!seq.action.implicit) return;
     const allocator = self.ir.allocator;
     var return_types = std.ArrayList(usize).init(allocator);
@@ -1117,9 +1109,9 @@ fn appendImplicitActions(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
 ///     * no resolved types
 /// change bounds:
 ///     * no operated sequences
-fn desugarSequences(self: *FirstPass, op: *ir.Operated) anyerror!?ir.Definition {
+fn desugarSequences(self: *PegPassManager, def: *const ir.Definition, op: *ir.Operated) anyerror!?ir.Definition {
     return switch (op.value) {
-        .SEQ => try self.extractDefinition(op),
+        .SEQ => try self.extractDefinition(op, def.identifier),
         else => null,
     };
 }
@@ -1131,7 +1123,8 @@ fn desugarSequences(self: *FirstPass, op: *ir.Operated) anyerror!?ir.Definition 
 /// change bounds:
 ///     * no question operators for operateds
 fn desugarQuestionOp(
-    self: *FirstPass,
+    self: *PegPassManager,
+    def: *const ir.Definition,
     op: *ir.Operated,
 ) anyerror!?ir.Definition {
     const allocator = self.ir.allocator;
@@ -1139,15 +1132,15 @@ fn desugarQuestionOp(
         return null;
 
     op.postfix_op = .NONE;
-    var def = try self.extractDefinition(op);
+    var new_def = try self.extractDefinition(op, def.identifier);
     var empty_seq = try ir.Sequence.empty(allocator);
-    empty_seq.action = if (def.return_type.isNone())
+    empty_seq.action = if (new_def.return_type.isNone())
         ir.Action.empty(allocator)
     else
         try ir.Action.nullAction(allocator);
-    try def.sequences.insert(0, empty_seq);
+    try new_def.sequences.insert(0, empty_seq);
 
-    return def;
+    return new_def;
 }
 
 /// converts all operateds with a plus operator to the corresponding new definition
@@ -1157,7 +1150,8 @@ fn desugarQuestionOp(
 /// change bounds:
 ///     * there are no plus operators for operateds
 fn desugarPlusSequence(
-    self: *FirstPass,
+    self: *PegPassManager,
+    def: *const ir.Definition,
     seq: *ir.Sequence,
 ) anyerror!?ir.Definition {
     const ops = seq.operateds.items;
@@ -1175,7 +1169,7 @@ fn desugarPlusSequence(
         new_op.postfix_op = .NONE;
         try self.setReturnType(&new_op);
 
-        var new_def = try self.extractDefinition(op);
+        var new_def = try self.extractDefinition(op, def.identifier);
 
         const new_sequence = &new_def.sequences.items[0];
         try new_sequence.operateds.append(new_op);
@@ -1200,7 +1194,7 @@ fn desugarPlusSequence(
 /// change bounds:
 ///     * no epsilons left
 ///     (an epsilon is everything that matches a string of length 0)
-fn removeEps(_: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn removeEps(_: *PegPassManager, seq: *ir.Sequence) anyerror!void {
     var ops = &seq.operateds;
     var read: usize = 0;
 
@@ -1226,7 +1220,7 @@ fn removeEps(_: *FirstPass, seq: *ir.Sequence) anyerror!void {
 ///     * all epsilons should be removed
 /// change bounds:
 ///     * the `accpets_eps` field is correctly set
-fn setAcceptsEps(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn setAcceptsEps(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     const seqs = def.sequences.items;
     outer: for (seqs) |seq| {
         const ops = seq.operateds.items;
@@ -1256,8 +1250,9 @@ fn setAcceptsEps(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///         in this case the operated will be extracted with the postfix operator
 ///         the prefix operator will remain on the base
 fn extractDefinition(
-    self: *FirstPass,
+    self: *PegPassManager,
     op: *ir.Operated,
+    name: []const u8,
 ) !ir.Definition {
     const allocator = self.ir.allocator;
     const new_seq = switch (op.value) {
@@ -1312,7 +1307,7 @@ fn extractDefinition(
     const def = try ir.Definition.init(
         allocator,
         &.{new_seq},
-        "",
+        name,
         return_type,
         defs.len,
     );
@@ -1331,7 +1326,7 @@ fn extractDefinition(
 }
 
 /// currently not used
-fn inlineDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn inlineDefs(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     var i: usize = 1;
     const allocator = self.ir.allocator;
     const seqs = &def.sequences;
@@ -1397,7 +1392,7 @@ fn inlineDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
     }
 }
 
-fn inlineOneSeqDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn inlineOneSeqDefs(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     var i: usize = 1;
     const seqs = &def.sequences;
     while (i <= seqs.items.len) : (i += 1) {
@@ -1458,7 +1453,7 @@ fn inlineOneSeqDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
 }
 
 fn inlineSeq(
-    self: *FirstPass,
+    self: *PegPassManager,
     to: *ir.Sequence,
     from: *const ir.Sequence,
     replace: usize,
@@ -1498,7 +1493,7 @@ fn inlineSeq(
 }
 
 fn inlineAction(
-    self: *FirstPass,
+    self: *PegPassManager,
     to: *ir.Action,
     from: ir.Action,
     old_ops: []const ir.Operated,
@@ -1574,8 +1569,8 @@ fn inlineAction(
 }
 
 fn defAppendPass(
-    self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, def: *ir.Definition) anyerror!?ir.Definition,
+    self: *PegPassManager,
+    comptime pass: fn (self: *PegPassManager, def: *ir.Definition) anyerror!?ir.Definition,
     comptime name: []const u8,
 ) !void {
     var progress = self.main_progress.start(name, 0);
@@ -1596,9 +1591,9 @@ fn defAppendPass(
 }
 
 fn defPass(
-    self: *FirstPass,
+    self: *PegPassManager,
     comptime backwards: bool,
-    comptime pass: fn (self: *FirstPass, def: *ir.Definition) anyerror!void,
+    comptime pass: fn (self: *PegPassManager, def: *ir.Definition) anyerror!void,
     comptime name: []const u8,
 ) !void {
     var progress = self.main_progress.start(name, 0);
@@ -1617,12 +1612,12 @@ fn defPass(
 }
 
 fn seqPass(
-    self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!void,
+    self: *PegPassManager,
+    comptime pass: fn (self: *PegPassManager, seq: *ir.Sequence) anyerror!void,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!void {
+        pub fn sequence_iter(s: *PegPassManager, def: *ir.Definition) anyerror!void {
             for (def.sequences.items) |*seq| {
                 try pass(s, seq);
             }
@@ -1633,14 +1628,18 @@ fn seqPass(
 }
 
 fn seqAppendDefPass(
-    self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Definition,
+    self: *PegPassManager,
+    comptime pass: fn (
+        self: *PegPassManager,
+        def: *const ir.Definition,
+        seq: *ir.Sequence,
+    ) anyerror!?ir.Definition,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!?ir.Definition {
+        pub fn sequence_iter(s: *PegPassManager, def: *ir.Definition) anyerror!?ir.Definition {
             for (def.sequences.items) |*seq| {
-                if (try pass(s, seq)) |new_def| {
+                if (try pass(s, def, seq)) |new_def| {
                     return new_def;
                 }
             }
@@ -1653,12 +1652,12 @@ fn seqAppendDefPass(
 }
 
 fn seqAppendPass(
-    self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Sequence,
+    self: *PegPassManager,
+    comptime pass: fn (self: *PegPassManager, seq: *ir.Sequence) anyerror!?ir.Sequence,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!void {
+        pub fn sequence_iter(s: *PegPassManager, def: *ir.Definition) anyerror!void {
             var i: usize = 0;
             while (i < def.sequences.items.len) {
                 const seq = &def.sequences.items[i];
@@ -1677,14 +1676,22 @@ fn seqAppendPass(
 }
 
 fn opAppendDefPass(
-    self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, op: *ir.Operated) anyerror!?ir.Definition,
+    self: *PegPassManager,
+    comptime pass: fn (
+        self: *PegPassManager,
+        def: *const ir.Definition,
+        op: *ir.Operated,
+    ) anyerror!?ir.Definition,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Definition {
+        pub fn sequence_iter(
+            s: *PegPassManager,
+            def: *const ir.Definition,
+            seq: *ir.Sequence,
+        ) anyerror!?ir.Definition {
             for (seq.operateds.items) |*op| {
-                if (try pass(s, op)) |new_def| {
+                if (try pass(s, def, op)) |new_def| {
                     return new_def;
                 }
             }
@@ -1697,12 +1704,12 @@ fn opAppendDefPass(
 }
 
 fn opPass(
-    self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, op: *ir.Operated) anyerror!void,
+    self: *PegPassManager,
+    comptime pass: fn (self: *PegPassManager, op: *ir.Operated) anyerror!void,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn op_iter(s: *FirstPass, seq: *ir.Sequence) anyerror!void {
+        pub fn op_iter(s: *PegPassManager, seq: *ir.Sequence) anyerror!void {
             for (seq.operateds.items) |*op| {
                 try pass(s, op);
             }
@@ -1720,7 +1727,7 @@ fn opPass(
 ///     * there are no operated sequences
 /// change bounds:
 ///     * the given operated is typed
-fn setReturnType(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn setReturnType(self: *PegPassManager, op: *ir.Operated) anyerror!void {
     const allocator = self.ir.allocator;
 
     op.return_type.deinit(allocator);
@@ -1752,7 +1759,7 @@ fn setReturnType(self: *FirstPass, op: *ir.Operated) anyerror!void {
 }
 
 fn typeError(
-    self: *FirstPass,
+    self: *PegPassManager,
     current_op: *ir.Operated,
     new_op: *ir.Operated,
 ) !void {
@@ -1782,6 +1789,6 @@ fn typeError(
     );
 }
 
-fn getDefinition(self: *FirstPass, id: usize) *ir.Definition {
+fn getDefinition(self: *PegPassManager, id: usize) *ir.Definition {
     return &self.ir.defs.items[id];
 }

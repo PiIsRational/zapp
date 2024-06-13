@@ -110,6 +110,22 @@ pub fn writeCharacter(writer: anytype, char: u8) !void {
     }
 }
 
+pub fn isScreamingSnakeCase(string: []const u8) bool {
+    switch (string[0]) {
+        'A'...'Z' => {},
+        else => return false,
+    }
+
+    if (string.len == 1) return true;
+
+    for (string) |char| switch (char) {
+        'A'...'Z', '0'...'9', '_' => {},
+        else => return false,
+    };
+
+    return true;
+}
+
 const Times = struct {
     val: []const u8,
     n: usize,

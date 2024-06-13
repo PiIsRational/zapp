@@ -1,6 +1,6 @@
 %% NAME Utf_8
 
-Chars = (UTF_8_CHAR ^)*;
+Chars = (UTF_8_CHAR ^)* ;
 
 // From https://lemire.me/blog/2018/05/09/how-quickly-can-you-check-that-a-string-is-valid-unicode-utf-8/
 UTF_8_CHAR
