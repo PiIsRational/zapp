@@ -330,6 +330,7 @@ pub const Definition = struct {
     right_recurse: bool,
     regular: bool,
     finite: bool,
+    has_actions: bool,
     moves_actions: bool,
     is_terminal: bool,
 
@@ -353,6 +354,7 @@ pub const Definition = struct {
             .right_recurse = false,
             .regular = true,
             .finite = true,
+            .has_actions = false,
             .moves_actions = false,
             .is_terminal = false,
         };

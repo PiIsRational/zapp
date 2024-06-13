@@ -2,17 +2,17 @@
 
 // This file is part of Zapp, a packrat parser generator.
 // Copyright (C) 2024  Daniel Grévent
-//
+// 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
+// 
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-//
+// 
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
@@ -323,30 +323,30 @@ fn MemoTable(comptime config: MemoConfig) type {
     };
 }
 const InferReturnType = union {
-    type_2: []const u8,
-    type_5: ReturnType,
-    type_6: Sequence,
-    type_7: Sequence,
-    type_8: Action,
-    type_9: std.ArrayList(ActionVar),
-    type_10: std.ArrayList(ActionVar),
-    type_11: ActionVar,
-    type_12: Operated,
-    type_13: PrefixOp,
-    type_14: PostfixOp,
-    type_15: Primary,
-    type_16: []const u8,
-    type_18: []const u8,
-    type_19: Range,
-    type_20: u8,
-    type_21: u8,
-    type_24: []const u8,
-    type_27: std.ArrayList([]const u8),
-    type_29: std.ArrayList(Sequence),
-    type_33: std.ArrayList(u8),
-    type_34: std.ArrayList(u8),
-    type_35: std.ArrayList(Range),
-    type_40: std.ArrayList(Operated),
+type_2: []const u8,
+type_5: ReturnType,
+type_6: Sequence,
+type_7: Sequence,
+type_8: Action,
+type_9: std.ArrayList(ActionVar),
+type_10: std.ArrayList(ActionVar),
+type_11: ActionVar,
+type_12: Operated,
+type_13: PrefixOp,
+type_14: PostfixOp,
+type_15: Primary,
+type_16: []const u8,
+type_18: []const u8,
+type_19: Range,
+type_20: u8,
+type_21: u8,
+type_24: []const u8,
+type_27: std.ArrayList([]const u8),
+type_29: std.ArrayList(Sequence),
+type_33: std.ArrayList(u8),
+type_34: std.ArrayList(u8),
+type_35: std.ArrayList(Range),
+type_40: std.ArrayList(Operated),
 };
 pub const ParseReturn = union(enum) {
     pass: void,
@@ -361,9 +361,9 @@ const CharSpanLength = u32;
 
 /// the maximal accepted input size for the parser
 /// (the -2 is because 0 and 1 represent empty cells and no math cells)
-pub const MaxInputSize = std.math.maxInt(u32) - 2;
+pub const MaxInputSize = std.math.maxInt(u32) - 2; 
 
-pub const ParserError = error{
+pub const ParserError = error {
     InputTooLarge,
 } || Allocator.Error;
 
@@ -387,6 +387,7 @@ pub const InferError = struct {
     err: ?anyerror,
     msg: []const u8,
 };
+
 
 const InferInstr = struct {
     state: State,
@@ -428,14 +429,14 @@ pub const Stats = struct {
     max_memo_state: usize,
 
     pub fn format(
-        self: Stats,
+        self: Stats, 
         comptime _: []const u8,
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
         try writer.print(
-            "memo: {d}\nmax_memo: {d}\nparse: {d}\ninfer: {d}\ninstr: {d}\ncalc: {d}\n",
-            .{ self.memo, self.max_memo, self.parse, self.infer, self.instr, self.calc },
+            "memo: {d}\nmax_memo: {d}\nparse: {d}\ninfer: {d}\ninstr: {d}\ncalc: {d}\n", 
+            .{self.memo, self.max_memo, self.parse, self.infer, self.instr, self.calc},
         );
     }
 };
@@ -447,3575 +448,3542 @@ pub const ParseOptions = struct {
     /// set the limit to the parsing stack
     /// per default it is unlimited
     stack_limit: ?usize = null,
-
+      
     /// the amount of chunks to use in the memoization table
     /// per default it depends on the rule count
     chunks: ?usize = null,
 };
 
 const NameTable = [_][]const u8{
-    "Grammar",
-    "MetaData",
-    "HeaderInner",
-    "HeaderContent",
-    "Definition",
-    "TypeAnnotation",
-    "ActionSequence",
-    "Sequence",
-    "Action",
-    "ActionParts",
-    "ActionBlocks",
-    "ActionVar",
-    "Operated",
-    "PrefixOp",
-    "SuffixOp",
-    "Primary",
-    "IDENTIFIER",
-    "IdentCont",
-    "Literal",
-    "Range",
-    "RangeChar",
-    "Char",
-    "HEADER_END",
-    "SpaceUnit",
-    "CommentInner",
-    "LineEnd",
-    "Space",
-    "Grammar",
-    "HeaderInner",
-    "Definition",
-    "ActionVar",
-    "ActionVar",
-    "IDENTIFIER",
-    "Literal",
-    "Literal",
-    "Class",
-    "Spacing",
-    "Comment",
-    "CommentInner",
-    "Grammar",
-    "Sequence",
-    "MetaData",
-    "MetaData",
+"Grammar",
+"MetaData",
+"HeaderInner",
+"HeaderContent",
+"Definition",
+"TypeAnnotation",
+"ActionSequence",
+"Sequence",
+"Action",
+"ActionParts",
+"ActionBlocks",
+"ActionVar",
+"Operated",
+"PrefixOp",
+"SuffixOp",
+"Primary",
+"IDENTIFIER",
+"IDENT_CONT",
+"Literal",
+"Range",
+"RangeChar",
+"Char",
+"HEADER_END",
+"SPACE_UNIT",
+"CommentInner",
+"LINE_END",
+"SPACE",
+"Grammar",
+"HeaderInner",
+"Definition",
+"ActionVar",
+"ActionVar",
+"IDENTIFIER",
+"Literal",
+"Literal",
+"Class",
+"SPACING",
+"COMMENT",
+"CommentInner",
+"Grammar",
+"Sequence",
+"MetaData",
+"MetaData",
 };
-const AddrToRule = [_]Rule{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 24, 24, 24, 25, 25, 25, 25, 26, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 27, 28, 28, 28, 28, 28, 29, 29, 29, 29, 29, 29, 30, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 33, 33, 33, 33, 33, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 37, 37, 37, 37, 37, 37, 38, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 41, 41, 41, 41, 41, 41, 41, 41, 42, 42, 42, 42, 42, 42, 42, 42 };
+const AddrToRule = [_]Rule{
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 24, 24, 24, 25, 25, 25, 25, 26, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 27, 28, 28, 28, 28, 28, 29, 29, 29, 29, 29, 29, 30, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 33, 33, 33, 33, 33, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 37, 37, 37, 37, 37, 37, 38, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 41, 41, 41, 41, 41, 41, 41, 41, 42, 42, 42, 42, 42, 42, 42, 42};
 const RuleCount = 43;
-const AddrToFailState = [_]State{ 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 289, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 25, 25, 25, 289, 28, 28, 289, 32, 32, 32, 34, 34, 289, 43, 43, 43, 43, 43, 43, 43, 43, 289, 48, 48, 48, 48, 51, 51, 51, 52, 289, 57, 57, 57, 57, 59, 59, 289, 63, 63, 63, 289, 66, 66, 289, 71, 71, 71, 71, 73, 73, 74, 289, 78, 78, 78, 82, 82, 82, 82, 85, 85, 85, 86, 289, 90, 90, 90, 93, 93, 93, 289, 98, 98, 98, 98, 289, 101, 101, 103, 103, 104, 289, 107, 107, 109, 109, 111, 111, 112, 289, 117, 117, 117, 117, 120, 120, 120, 122, 122, 125, 125, 125, 127, 127, 129, 129, 131, 131, 289, 135, 135, 135, 289, 138, 138, 140, 140, 289, 146, 146, 146, 146, 146, 151, 151, 151, 151, 151, 289, 155, 155, 155, 157, 157, 289, 160, 160, 162, 162, 289, 165, 165, 168, 168, 168, 170, 170, 172, 172, 289, 176, 176, 176, 289, 179, 179, 183, 183, 183, 183, 289, 186, 186, 289, 188, 189, 190, 289, 192, 193, 195, 195, 289, 201, 201, 201, 201, 201, 202, 289, 206, 206, 206, 207, 289, 212, 212, 212, 212, 213, 289, 217, 217, 217, 218, 289, 222, 222, 222, 223, 289, 227, 227, 227, 228, 289, 233, 233, 233, 233, 234, 289, 239, 239, 239, 239, 240, 289, 244, 244, 244, 245, 289, 249, 249, 249, 250, 289, 255, 255, 255, 255, 256, 289, 261, 261, 261, 261, 262, 289, 266, 266, 266, 267, 289, 271, 271, 271, 272, 289, 279, 279, 279, 279, 279, 279, 280, 289, 287, 287, 287, 287, 287, 287, 288, 289 };
-const ActionTranslate = [_]State{ 289, 289, 289, 289, 289, 289, 289, 289, 289, 0, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 9, 289, 289, 20, 289, 289, 23, 289, 289, 289, 25, 289, 26, 289, 289, 289, 289, 289, 289, 289, 289, 28, 289, 289, 289, 289, 36, 289, 289, 40, 43, 289, 289, 289, 289, 44, 289, 48, 289, 289, 289, 50, 289, 289, 53, 289, 289, 289, 289, 55, 289, 59, 61, 289, 289, 289, 62, 289, 289, 289, 65, 289, 289, 67, 70, 289, 289, 289, 71, 289, 289, 73, 289, 289, 289, 289, 75, 289, 289, 79, 289, 81, 83, 289, 289, 84, 289, 86, 289, 88, 90, 289, 289, 289, 289, 91, 289, 289, 95, 289, 98, 289, 289, 100, 289, 103, 289, 105, 289, 107, 289, 289, 289, 109, 289, 289, 111, 289, 112, 289, 289, 289, 289, 289, 113, 289, 289, 289, 289, 116, 289, 289, 289, 119, 289, 122, 289, 289, 124, 289, 125, 289, 289, 127, 289, 289, 128, 289, 129, 289, 130, 289, 289, 289, 131, 289, 289, 134, 289, 289, 289, 136, 289, 289, 139, 289, 141, 142, 143, 289, 144, 145, 289, 146, 289, 289, 289, 289, 289, 148, 153, 289, 289, 289, 154, 157, 289, 289, 289, 289, 158, 162, 289, 289, 289, 163, 165, 289, 289, 289, 166, 168, 289, 289, 289, 169, 172, 289, 289, 289, 289, 173, 176, 289, 289, 289, 289, 177, 180, 289, 289, 289, 181, 184, 289, 289, 289, 185, 188, 289, 289, 289, 289, 189, 191, 289, 289, 289, 289, 192, 194, 289, 289, 289, 195, 198, 289, 289, 289, 199, 202, 289, 289, 289, 289, 289, 289, 203, 209, 289, 289, 289, 289, 289, 289, 210, 216, 289 };
-const AddrToNFail = [_]bool{ true, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, false, true, true, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, false, true, true, false, false, false, false, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, true, true, true, true, true, true, true, true, true, false, false, false, false, true, true, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, true, true, true, false, false, false, false, false, true, true, true, true, true, true, false, false, false, true, true, true, false, false, true, true, true, false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, true, true, true, true, true, true, true, true, false, false, true, true, false, false, true, true, true, false, false, false, false, false, true, true, false, false, false, true, true, false, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, false, true, true, false, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, false, true, true, false, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, false, false, false, true, true, false, false, false, false, false, false, true, true };
-pub fn Zapp(comptime opts: ParseOptions) type {
+const AddrToFailState = [_]State{
+10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 289, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 25, 25, 25, 289, 28, 28, 289, 32, 32, 32, 34, 34, 289, 43, 43, 43, 43, 43, 43, 43, 43, 289, 48, 48, 48, 48, 51, 51, 51, 52, 289, 57, 57, 57, 57, 59, 59, 289, 63, 63, 63, 289, 66, 66, 289, 71, 71, 71, 71, 73, 73, 74, 289, 78, 78, 78, 82, 82, 82, 82, 85, 85, 85, 86, 289, 90, 90, 90, 93, 93, 93, 289, 98, 98, 98, 98, 289, 101, 101, 103, 103, 104, 289, 107, 107, 109, 109, 111, 111, 112, 289, 117, 117, 117, 117, 120, 120, 120, 122, 122, 125, 125, 125, 127, 127, 129, 129, 131, 131, 289, 135, 135, 135, 289, 138, 138, 140, 140, 289, 146, 146, 146, 146, 146, 151, 151, 151, 151, 151, 289, 155, 155, 155, 157, 157, 289, 160, 160, 162, 162, 289, 165, 165, 168, 168, 168, 170, 170, 172, 172, 289, 176, 176, 176, 289, 179, 179, 183, 183, 183, 183, 289, 186, 186, 289, 188, 189, 190, 289, 192, 193, 195, 195, 289, 201, 201, 201, 201, 201, 202, 289, 206, 206, 206, 207, 289, 212, 212, 212, 212, 213, 289, 217, 217, 217, 218, 289, 222, 222, 222, 223, 289, 227, 227, 227, 228, 289, 233, 233, 233, 233, 234, 289, 239, 239, 239, 239, 240, 289, 244, 244, 244, 245, 289, 249, 249, 249, 250, 289, 255, 255, 255, 255, 256, 289, 261, 261, 261, 261, 262, 289, 266, 266, 266, 267, 289, 271, 271, 271, 272, 289, 279, 279, 279, 279, 279, 279, 280, 289, 287, 287, 287, 287, 287, 287, 288, 289};
+const ActionTranslate = [_]State{
+289, 289, 289, 289, 289, 289, 289, 289, 289, 0, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 9, 289, 289, 20, 289, 289, 23, 289, 289, 289, 25, 289, 26, 289, 289, 289, 289, 289, 289, 289, 289, 28, 289, 289, 289, 289, 36, 289, 289, 40, 43, 289, 289, 289, 289, 44, 289, 48, 289, 289, 289, 50, 289, 289, 53, 289, 289, 289, 289, 55, 289, 59, 61, 289, 289, 289, 62, 289, 289, 289, 65, 289, 289, 67, 70, 289, 289, 289, 71, 289, 289, 73, 289, 289, 289, 289, 75, 289, 289, 79, 289, 81, 83, 289, 289, 84, 289, 86, 289, 88, 90, 289, 289, 289, 289, 91, 289, 289, 95, 289, 98, 289, 289, 100, 289, 103, 289, 105, 289, 107, 289, 289, 289, 109, 289, 289, 111, 289, 112, 289, 289, 289, 289, 289, 113, 289, 289, 289, 289, 116, 289, 289, 289, 119, 289, 122, 289, 289, 124, 289, 125, 289, 289, 127, 289, 289, 128, 289, 129, 289, 130, 289, 289, 289, 131, 289, 289, 134, 289, 289, 289, 136, 289, 289, 139, 289, 141, 142, 143, 289, 144, 145, 289, 146, 289, 289, 289, 289, 289, 148, 153, 289, 289, 289, 154, 157, 289, 289, 289, 289, 158, 162, 289, 289, 289, 163, 165, 289, 289, 289, 166, 168, 289, 289, 289, 169, 172, 289, 289, 289, 289, 173, 176, 289, 289, 289, 289, 177, 180, 289, 289, 289, 181, 184, 289, 289, 289, 185, 188, 289, 289, 289, 289, 189, 191, 289, 289, 289, 289, 192, 194, 289, 289, 289, 195, 198, 289, 289, 289, 199, 202, 289, 289, 289, 289, 289, 289, 203, 209, 289, 289, 289, 289, 289, 289, 210, 216, 289};
+const AddrToNFail = [_]bool {true, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, false, true, true, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, false, true, true, false, false, false, false, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, true, true, true, true, true, true, true, true, true, false, false, false, false, true, true, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, true, true, true, false, false, false, false, false, true, true, true, true, true, true, false, false, false, true, true, true, false, false, true, true, true, false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, true, true, true, true, true, true, true, true, false, false, true, true, false, false, true, true, true, false, false, false, false, false, true, true, false, false, false, true, true, false, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, false, true, true, false, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, false, true, true, false, false, false, false, true, true, false, false, false, true, true, false, false, false, true, true, false, false, false, false, false, false, true, true, false, false, false, false, false, false, true, true};
+pub fn @"Zapp"(comptime opts: ParseOptions) type {
     return struct {
-        chars: [:0]const u8,
-        allocator: Allocator,
-        stack: std.ArrayList(EvalFrame),
-        stack_alloc: ?std.heap.FixedBufferAllocator,
-        infer_stack: std.ArrayList(InferFrame),
-        calc_stack: std.ArrayList(InferReturnType),
-        infer_actions: std.ArrayList(InferInstr),
-        infer_instrs: std.ArrayList(InferInstr),
-        memo: MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks }),
-        state: State,
-        start: CharIdx,
-        acc: CharSpanLength,
-        infer_acc: CharSpanLength,
-        infer_done: bool,
-        did_fail: bool,
-        infer_state: State,
-        infer_start: CharIdx,
-        stack_start: usize,
-        empty_backtrack: bool,
-        max_reached: CharIdx,
-        max_slice: []const u8,
-        next_expected: State,
-        max_memo_state: State,
-        infer_fail_msg: []const u8,
-        infer_fail_err: ?anyerror,
+chars: [:0]const u8,
+allocator: Allocator,
+stack: std.ArrayList(EvalFrame),
+stack_alloc: ?std.heap.FixedBufferAllocator,
+infer_stack: std.ArrayList(InferFrame),
+calc_stack: std.ArrayList(InferReturnType),
+infer_actions: std.ArrayList(InferInstr),
+infer_instrs: std.ArrayList(InferInstr),
+memo: MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks }),
+state: State,
+start: CharIdx,
+acc: CharSpanLength,
+infer_acc: CharSpanLength,
+infer_done: bool,
+did_fail: bool,
+infer_state: State,
+infer_start: CharIdx,
+stack_start: usize,
+empty_backtrack: bool,
+max_reached: CharIdx,
+max_slice: []const u8,
+next_expected: State,
+max_memo_state: State,
+infer_fail_msg: []const u8,
+infer_fail_err: ?anyerror,
 
-        ir: PegIr,
+ir: PegIr,
 
-        pub fn init(allocator: Allocator) Allocator.Error!@This() {
-            var self: @This() = undefined;
-            self.allocator = allocator;
-            if (opts.stack_limit) |limit| {
-                var stack_alloc = std.heap.FixedBufferAllocator
-                    .init(try self.allocator.alloc(u8, @sizeOf(EvalFrame) * limit));
-                self.stack = std.ArrayList(EvalFrame)
-                    .init(stack_alloc.allocator());
-                try self.stack.ensureTotalCapacity(limit);
-                self.stack_alloc = stack_alloc;
-            } else {
-                self.stack_alloc = null;
-                self.stack = std.ArrayList(EvalFrame).init(allocator);
-            }
-            self.infer_stack = std.ArrayList(InferFrame).init(allocator);
-            self.memo = MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks })
-                .init(allocator);
-            self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
-            self.infer_actions = std.ArrayList(InferInstr).init(allocator);
-            self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
-            self.reset("");
-            return self;
-        }
 
-        pub fn deinit(self: *@This()) void {
-            self.infer_actions.deinit();
-            self.infer_instrs.deinit();
-            self.stack.deinit();
-            if (self.stack_alloc) |allocator| {
-                self.allocator.free(allocator.buffer);
-            }
-            self.infer_stack.deinit();
-            self.memo.deinit();
-            self.calc_stack.deinit();
-        }
+pub fn init(allocator: Allocator) Allocator.Error!@This() {
+    var self: @This() = undefined;
+    self.allocator = allocator;
+    if (opts.stack_limit) |limit| {
+        var stack_alloc = std.heap.FixedBufferAllocator
+            .init(try self.allocator.alloc(u8, @sizeOf(EvalFrame) * limit));
+        self.stack = std.ArrayList(EvalFrame)
+            .init(stack_alloc.allocator());
+        try self.stack.ensureTotalCapacity(limit);
+        self.stack_alloc = stack_alloc;
+    } else {
+        self.stack_alloc = null;
+        self.stack = std.ArrayList(EvalFrame).init(allocator);
+    }
+    self.infer_stack = std.ArrayList(InferFrame).init(allocator);
+    self.memo = MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks })
+        .init(allocator);
+    self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
+    self.infer_actions = std.ArrayList(InferInstr).init(allocator);
+    self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
+    self.reset("");
+    return self;
+}
 
-        fn reset(self: *@This(), chars: [:0]const u8) void {
-            assert(self.stack.items.len == 0);
-            assert(self.infer_stack.items.len == 0);
-            assert(self.calc_stack.items.len == 0);
-            self.infer_actions.clearRetainingCapacity();
-            self.infer_instrs.clearRetainingCapacity();
-            self.memo.reset();
-            self.state = 0;
-            self.infer_state = 0;
-            self.infer_start = 0;
-            self.stack_start = 0;
-            self.start = 0;
-            self.acc = 0;
-            self.infer_acc = 0;
-            self.infer_done = false;
-            self.did_fail = false;
-            self.max_reached = 0;
-            self.max_slice = "";
-            self.next_expected = 0;
-            self.infer_fail_msg = "";
-            self.infer_fail_err = null;
-            self.empty_backtrack = AddrToNFail[0];
-            self.max_memo_state = 0;
-            self.chars = chars;
-        }
+pub fn deinit(self: *@This()) void {
+    self.infer_actions.deinit();
+    self.infer_instrs.deinit();
+    self.stack.deinit();
+    if (self.stack_alloc) |allocator| {
+        self.allocator.free(allocator.buffer);
+    }
+    self.infer_stack.deinit();
+    self.memo.deinit();
+    self.calc_stack.deinit();
+}
 
-        pub fn stats(self: *const @This()) Stats {
-            return .{
-                .memo = self.memo.getMemUseage(),
-                .max_memo = self.memo.max_chars,
-                .parse = self.stack.capacity * @sizeOf(EvalFrame),
-                .infer = self.infer_stack.capacity * @sizeOf(InferFrame),
-                .instr = self.infer_instrs.capacity * @sizeOf(InferInstr),
-                .calc = self.calc_stack.capacity * @sizeOf(InferReturnType),
-                .max_memo_state = AddrToRule[self.max_memo_state],
-            };
-        }
+fn reset(self: *@This(), chars: [:0]const u8) void {
+    assert(self.stack.items.len == 0);
+    assert(self.infer_stack.items.len == 0);
+    assert(self.calc_stack.items.len == 0);
+    self.infer_actions.clearRetainingCapacity();
+    self.infer_instrs.clearRetainingCapacity();
+    self.memo.reset();
+    self.state = 0;
+    self.infer_state = 0;
+    self.infer_start = 0;
+    self.stack_start = 0;
+    self.start = 0;
+    self.acc = 0;
+    self.infer_acc = 0;
+    self.infer_done = false;
+    self.did_fail = false;
+    self.max_reached = 0;
+    self.max_slice = "";
+    self.next_expected = 0;
+    self.infer_fail_msg = "";
+    self.infer_fail_err = null;
+    self.empty_backtrack = AddrToNFail[0];
+    self.max_memo_state = 0;
+    self.chars = chars;
+}
 
-        fn parseNonterminal(
-            self: *@This(),
-            state: State,
-            inverted: bool,
-            consuming: bool,
-        ) Allocator.Error!void {
-            if (opts.use_memo) try self.adjustBacktrack();
-            try self.stack.append(.{
-                .start = self.start,
-                .acc = self.acc,
-                .state = self.state,
-                .stack_start = self.stack_start + self.memo.start,
-                .look = .{
-                    .inverted = inverted,
-                    .consuming = consuming,
-                },
-                .empty_backtrack = self.empty_backtrack,
-            });
-
-            self.stack_start = self.infer_actions.items.len;
-            self.start += self.acc;
-            self.state = state;
-            self.acc = 0;
-            self.empty_backtrack = AddrToNFail[self.state] and
-                self.empty_backtrack and consuming;
-
-            if (!opts.use_memo) return;
-            switch (self.memo.get(self.start, AddrToRule[state])) {
-                .pass => |val| {
-                    self.state = val.end_state;
-                    self.acc = val.length;
-                    try self.returnFromNonterminal(false, true);
-                },
-                .fail => |val| {
-                    self.state = val.end_state;
-                    try self.returnFromNonterminal(true, true);
-                },
-                .empty => return,
-            }
-        }
-
-        fn returnFromNonterminal(
-            self: *@This(),
-            failed: bool,
-            memo: bool,
-        ) Allocator.Error!void {
-            const frame = self.stack.popOrNull() orelse blk: {
-                self.did_fail = failed;
-                break :blk EvalFrame{
-                    .stack_start = 0,
-                    .start = self.start,
-                    .acc = 0,
-                    .state = self.state,
-                    .look = .{
-                        .inverted = false,
-                        .consuming = true,
-                    },
-                    .empty_backtrack = AddrToNFail[self.state],
-                };
-            };
-
-            const look = frame.look;
-            const good = failed == look.inverted;
-
-            if (!memo and !failed and look.consuming and
-                self.max_reached <= self.start + self.acc and
-                (self.max_reached < self.start + self.acc or self.acc > self.max_slice.len))
-            {
-                self.max_slice = self.chars[self.start .. self.start + self.acc];
-                self.max_reached = self.start + self.acc;
-            } else if (self.max_reached == self.start) {
-                self.next_expected = self.state;
-            }
-
-            if (!memo and opts.use_memo) {
-                try self.memo.add(self.start, AddrToRule[self.state], if (failed)
-                    .{ .fail = .{ .end_state = @intCast(self.state) } }
-                else
-                    .{ .pass = .{
-                        .length = @intCast(self.acc),
-                        .end_state = @intCast(self.state),
-                    } });
-            }
-
-            if (look.consuming and good) {
-                try self.infer_actions.append(.{
-                    .length = self.acc,
-                    .state = self.state,
-                    .start = self.start,
-                    .memo = memo,
-                });
-                self.acc += frame.acc;
-                self.state = frame.state + 1;
-            } else if (good) {
-                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                self.acc = frame.acc;
-                self.state = frame.state + 1;
-            } else {
-                if (frame.stack_start >= self.memo.start) {
-                    self.infer_actions.shrinkRetainingCapacity(
-                        frame.stack_start - self.memo.start,
-                    );
-                }
-                self.acc = 0;
-                self.state = AddrToFailState[frame.state];
-            }
-
-            self.stack_start = frame.stack_start - @min(frame.stack_start, self.memo.start);
-            self.start = frame.start;
-            if (opts.use_memo) {
-                if (frame.empty_backtrack) {
-                    self.empty_backtrack = true;
-                    if (self.empty_backtrack) try self.resetMemo(self.acc + self.start);
-                } else try self.adjustBacktrack();
-            }
-        }
-
-        fn adjustBacktrack(self: *@This()) Allocator.Error!void {
-            if (self.stack.getLastOrNull()) |parent| {
-                self.empty_backtrack = parent.empty_backtrack and AddrToNFail[self.state] and parent.look.consuming;
-                if (self.empty_backtrack) try self.resetMemo(self.acc + self.start);
-            } else {
-                self.empty_backtrack = AddrToNFail[self.state];
-                if (self.empty_backtrack) try self.resetMemo(self.acc + self.start);
-            }
-        }
-
-        fn getParseError(self: *const @This()) ParsingError {
-            const rule = AddrToRule[self.next_expected];
-            return .{
-                .last_found = self.max_slice,
-                .expected = if (rule < NameTable.len)
-                    NameTable[rule]
-                else
-                    "",
-            };
-        }
-
-        fn resetMemo(self: *@This(), new_begin: usize) Allocator.Error!void {
-            try self.finalizeInferInstrs();
-            if (new_begin < self.memo.start) {
-                self.did_fail = true;
-                return;
-            }
-            if (self.memo.base_table.items.len > self.memo.max_chars)
-                self.max_memo_state = self.state;
-            self.memo.resetTo(new_begin);
-        }
-        pub fn parse(
-            self: *@This(),
-            chars: [:0]const u8,
-        ) ParserError!ParseReturn {
-            if (chars.len > MaxInputSize) {
-                return error.InputTooLarge;
-            }
-
-            self.reset(chars);
-
-            while (true) {
-                switch (self.state) {
-                    0 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    1 => {
-                        try self.parseNonterminal(196, false, true);
-                    },
-                    2 => {
-                        if (self.chars.len >= self.start + 7 + self.acc and
-                            std.mem.eql(u8, "%% NAME", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 7]))
-                        {
-                            self.acc += 7;
-                        } else {
-                            self.state = 10;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    3 => {
-                        try self.parseNonterminal(132, false, true);
-                    },
-                    4 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    5 => {
-                        try self.parseNonterminal(11, false, true);
-                    },
-                    6 => {
-                        try self.parseNonterminal(35, false, true);
-                    },
-                    7 => {
-                        try self.parseNonterminal(263, false, true);
-                    },
-                    8 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x00',
-                            => {
-                                self.state = 9;
-                            },
-                            '\x01'...'\xff',
-                            => {
-                                self.state = 10;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    9 => {
-                        try self.returnFromNonterminal(false, false);
-                        break;
-                    },
-                    10 => {
-                        try self.returnFromNonterminal(true, false);
-                        break;
-                    },
-                    11 => {
-                        if (self.chars.len >= self.start + 6 + self.acc and
-                            std.mem.eql(u8, "%% TOP", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 6]))
-                        {
-                            self.acc += 6;
-                        } else {
-                            self.state = 22;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    12 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    13 => {
-                        try self.parseNonterminal(26, false, true);
-                    },
-                    14 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "%%", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 22;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    15 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    16 => {
-                        if (self.chars.len >= self.start + 9 + self.acc and
-                            std.mem.eql(u8, "%% FIELDS", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 9]))
-                        {
-                            self.acc += 9;
-                        } else {
-                            self.state = 22;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    17 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    18 => {
-                        try self.parseNonterminal(26, false, true);
-                    },
-                    19 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "%%", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 22;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    20 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    21 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    22 => {
-                        try self.parseNonterminal(281, false, true);
-                    },
-                    23 => {
-                        try self.parseNonterminal(273, false, true);
-                    },
-                    24 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    25 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    26 => {
-                        try self.parseNonterminal(203, false, true);
-                    },
-                    27 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    28 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    29 => {
-                        try self.parseNonterminal(173, true, false);
-                    },
-                    30 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x01'...'\xff',
-                            => {
-                                self.state = 31;
-                                self.acc += 1;
-                            },
-                            '\x00',
-                            => {
-                                self.state = 32;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    31 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    32 => {
-                        try self.parseNonterminal(141, false, true);
-                    },
-                    33 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    34 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    35 => {
-                        try self.parseNonterminal(132, false, true);
-                    },
-                    36 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    37 => {
-                        try self.parseNonterminal(44, false, true);
-                    },
-                    38 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "=", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 43;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    39 => {
-                        try self.parseNonterminal(53, false, true);
-                    },
-                    40 => {
-                        try self.parseNonterminal(208, false, true);
-                    },
-                    41 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, ";", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 43;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    42 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    43 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    44 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, ":", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 48;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    45 => {
-                        try self.parseNonterminal(132, false, true);
-                    },
-                    46 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    47 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    48 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, ":", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 51;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    49 => {
-                        try self.parseNonterminal(141, false, true);
-                    },
-                    50 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    51 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    52 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    53 => {
-                        try self.parseNonterminal(60, false, true);
-                    },
-                    54 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "{", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 57;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(64, false, true);
-                    },
-                    55 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "}", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 57;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    56 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    57 => {
-                        try self.parseNonterminal(60, false, true);
-                    },
-                    58 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    59 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    60 => {
-                        try self.parseNonterminal(94, false, true);
-                    },
-                    61 => {
-                        try self.parseNonterminal(268, false, true);
-                    },
-                    62 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    63 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    64 => {
-                        try self.parseNonterminal(67, false, true);
-                    },
-                    65 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    66 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    67 => {
-                        try self.parseNonterminal(75, false, true);
-                    },
-                    68 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "{", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 71;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(67, false, true);
-                    },
-                    69 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "}", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 71;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(67, false, true);
-                    },
-                    70 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    71 => {
-                        try self.parseNonterminal(75, false, true);
-                    },
-                    72 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    73 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    74 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    75 => {
-                        try self.parseNonterminal(87, false, true);
-                    },
-                    76 => {
-                        try self.parseNonterminal(75, false, true);
-                    },
-                    77 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    78 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x00'...'!',
-                            '#',
-                            '%'...'&',
-                            '('...'z',
-                            '|',
-                            '~'...'\xff',
-                            => {
-                                self.state = 79;
-                            },
-                            '\"',
-                            '$',
-                            '\'',
-                            '{',
-                            '}',
-                            => {
-                                self.state = 82;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    79 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x01'...'\xff',
-                            => {
-                                self.state = 80;
-                                self.acc += 1;
-                            },
-                            '\x00',
-                            => {
-                                self.state = 82;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    80 => {
-                        try self.parseNonterminal(75, false, true);
-                    },
-                    81 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    82 => {
-                        try self.parseNonterminal(141, false, true);
-                    },
-                    83 => {
-                        try self.parseNonterminal(75, false, true);
-                    },
-                    84 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    85 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    86 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    87 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "$", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 90;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            '0'...'9',
-                            => {
-                                self.state = 88;
-                                self.acc += 1;
-                            },
-                            '\x00'...'/',
-                            ':'...'\xff',
-                            => {
-                                self.state = 90;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    88 => {
-                        try self.parseNonterminal(219, false, true);
-                    },
-                    89 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    90 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "$*", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 93;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            '1'...'9',
-                            => {
-                                self.state = 91;
-                                self.acc += 1;
-                            },
-                            '\x00'...'0',
-                            ':'...'\xff',
-                            => {
-                                self.state = 93;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    91 => {
-                        try self.parseNonterminal(214, false, true);
-                    },
-                    92 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    93 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    94 => {
-                        try self.parseNonterminal(99, false, true);
-                    },
-                    95 => {
-                        try self.parseNonterminal(113, false, true);
-                    },
-                    96 => {
-                        try self.parseNonterminal(105, false, true);
-                    },
-                    97 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    98 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    99 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "&", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 101;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    100 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    101 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "!", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 103;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    102 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    103 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    104 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    105 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "*", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 107;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    106 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    107 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "+", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 109;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    108 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    109 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "?", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 111;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    110 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    111 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    112 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    113 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "(", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 117;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    114 => {
-                        try self.parseNonterminal(60, false, true);
-                    },
-                    115 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, ")", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 117;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    116 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    117 => {
-                        try self.parseNonterminal(132, false, true);
-                    },
-                    118 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    119 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    120 => {
-                        try self.parseNonterminal(141, false, true);
-                    },
-                    121 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    122 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "[", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 125;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(241, false, true);
-                    },
-                    123 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "]", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 125;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    124 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    125 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, ".", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 127;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    126 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    127 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "@", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 129;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    128 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    129 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "^", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 131;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    130 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    131 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    132 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '_',
-                            'A'...'Z',
-                            'a'...'z',
-                            => {
-                                self.state = 133;
-                                self.acc += 1;
-                            },
-                            '\x00'...'@',
-                            '['...'^',
-                            '`',
-                            '{'...'\xff',
-                            => {
-                                self.state = 135;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    133 => {
-                        try self.parseNonterminal(224, false, true);
-                    },
-                    134 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    135 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    136 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '_',
-                            'A'...'Z',
-                            'a'...'z',
-                            => {
-                                self.state = 137;
-                                self.acc += 1;
-                            },
-                            '\x00'...'@',
-                            '['...'^',
-                            '`',
-                            '{'...'\xff',
-                            => {
-                                self.state = 138;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    137 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    138 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '0'...'9',
-                            => {
-                                self.state = 139;
-                                self.acc += 1;
-                            },
-                            '\x00'...'/',
-                            ':'...'\xff',
-                            => {
-                                self.state = 140;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    139 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    140 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    141 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\'',
-                            => {
-                                self.state = 142;
-                                self.acc += 1;
-                            },
-                            '\x00'...'&',
-                            '('...'\xff',
-                            => {
-                                self.state = 146;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    142 => {
-                        try self.parseNonterminal(235, false, true);
-                    },
-                    143 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\'',
-                            => {
-                                self.state = 144;
-                                self.acc += 1;
-                            },
-                            '\x00'...'&',
-                            '('...'\xff',
-                            => {
-                                self.state = 146;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    144 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    145 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    146 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\"',
-                            => {
-                                self.state = 147;
-                                self.acc += 1;
-                            },
-                            '\x00'...'!',
-                            '#'...'\xff',
-                            => {
-                                self.state = 151;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    147 => {
-                        try self.parseNonterminal(229, false, true);
-                    },
-                    148 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\"',
-                            => {
-                                self.state = 149;
-                                self.acc += 1;
-                            },
-                            '\x00'...'!',
-                            '#'...'\xff',
-                            => {
-                                self.state = 151;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    149 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    150 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    151 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    152 => {
-                        try self.parseNonterminal(158, false, true);
-                    },
-                    153 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "-", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 155;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(158, false, true);
-                    },
-                    154 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    155 => {
-                        try self.parseNonterminal(158, false, true);
-                    },
-                    156 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    157 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    158 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "\\", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 160;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            '-',
-                            => {
-                                self.state = 159;
-                                self.acc += 1;
-                            },
-                            '\x00'...',',
-                            '.'...'\xff',
-                            => {
-                                self.state = 160;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    159 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    160 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            !std.mem.eql(u8, "]", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {} else {
-                            self.state = 162;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(163, false, true);
-                    },
-                    161 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    162 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    163 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "\\", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 165;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            '\\',
-                            ']',
-                            '[',
-                            '\"',
-                            '\'',
-                            't',
-                            'r',
-                            'n',
-                            => {
-                                self.state = 164;
-                                self.acc += 1;
-                            },
-                            '\x00'...'!',
-                            '#'...'&',
-                            '('...'Z',
-                            '^'...'m',
-                            'o'...'q',
-                            's',
-                            'u'...'\xff',
-                            => {
-                                self.state = 165;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    164 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    165 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "\\x", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 168;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            'a'...'f',
-                            'A'...'F',
-                            '1'...'9',
-                            => {
-                                self.state = 166;
-                                self.acc += 1;
-                            },
-                            '\x00'...'0',
-                            ':'...'@',
-                            'G'...'`',
-                            'g'...'\xff',
-                            => {
-                                self.state = 168;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    166 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            'a'...'f',
-                            'A'...'F',
-                            '0'...'9',
-                            => {
-                                self.state = 167;
-                                self.acc += 1;
-                            },
-                            '\x00'...'/',
-                            ':'...'@',
-                            'G'...'`',
-                            'g'...'\xff',
-                            => {
-                                self.state = 168;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    167 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    168 => {
-                        if (self.chars.len >= self.start + 3 + self.acc and
-                            std.mem.eql(u8, "\\x0", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 3]))
-                        {
-                            self.acc += 3;
-                        } else {
-                            self.state = 170;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            'a'...'f',
-                            'A'...'F',
-                            '1'...'9',
-                            => {
-                                self.state = 169;
-                                self.acc += 1;
-                            },
-                            '\x00'...'0',
-                            ':'...'@',
-                            'G'...'`',
-                            'g'...'\xff',
-                            => {
-                                self.state = 170;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    169 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    170 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            !std.mem.eql(u8, "\\", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {} else {
-                            self.state = 172;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x01'...'\xff',
-                            => {
-                                self.state = 171;
-                                self.acc += 1;
-                            },
-                            '\x00',
-                            => {
-                                self.state = 172;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    171 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    172 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    173 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "%%", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 176;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    174 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    175 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    176 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    177 => {
-                        try self.parseNonterminal(191, false, true);
-                    },
-                    178 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    179 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "//", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 183;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x00'...')',
-                            '+'...'\xff',
-                            => {
-                                self.state = 180;
-                            },
-                            '*',
-                            => {
-                                self.state = 183;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    180 => {
-                        try self.parseNonterminal(251, false, true);
-                    },
-                    181 => {
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    182 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    183 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    184 => {
-                        try self.parseNonterminal(257, false, true);
-                    },
-                    185 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    186 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    187 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "\r\n", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 188;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    188 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "\n", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 189;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    189 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "\r", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 190;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    190 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    191 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, " ", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 192;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    192 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "\t", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 193;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    193 => {
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    194 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    195 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    196 => {
-                        if (self.chars.len >= self.start + 3 + self.acc and
-                            std.mem.eql(u8, "//*", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 3]))
-                        {
-                            self.acc += 3;
-                        } else {
-                            self.state = 201;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(184, false, true);
-                    },
-                    197 => {
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    198 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    199 => {
-                        try self.parseNonterminal(196, false, true);
-                    },
-                    200 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    201 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    202 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    203 => {
-                        try self.parseNonterminal(29, false, true);
-                    },
-                    204 => {
-                        try self.parseNonterminal(203, false, true);
-                    },
-                    205 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    206 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    207 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    208 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            std.mem.eql(u8, "|", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {
-                            self.acc += 1;
-                        } else {
-                            self.state = 212;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    209 => {
-                        try self.parseNonterminal(53, false, true);
-                    },
-                    210 => {
-                        try self.parseNonterminal(208, false, true);
-                    },
-                    211 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    212 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    213 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    214 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '0'...'9',
-                            => {
-                                self.state = 215;
-                                self.acc += 1;
-                            },
-                            '\x00'...'/',
-                            ':'...'\xff',
-                            => {
-                                self.state = 217;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    215 => {
-                        try self.parseNonterminal(214, false, true);
-                    },
-                    216 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    217 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    218 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    219 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '0'...'9',
-                            => {
-                                self.state = 220;
-                                self.acc += 1;
-                            },
-                            '\x00'...'/',
-                            ':'...'\xff',
-                            => {
-                                self.state = 222;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    220 => {
-                        try self.parseNonterminal(219, false, true);
-                    },
-                    221 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    222 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    223 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    224 => {
-                        try self.parseNonterminal(136, false, true);
-                    },
-                    225 => {
-                        try self.parseNonterminal(224, false, true);
-                    },
-                    226 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    227 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    228 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    229 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x00'...'!',
-                            '#'...'\xff',
-                            => {
-                                self.state = 230;
-                            },
-                            '\"',
-                            => {
-                                self.state = 233;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    230 => {
-                        try self.parseNonterminal(163, false, true);
-                    },
-                    231 => {
-                        try self.parseNonterminal(229, false, true);
-                    },
-                    232 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    233 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    234 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    235 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x00'...'&',
-                            '('...'\xff',
-                            => {
-                                self.state = 236;
-                            },
-                            '\'',
-                            => {
-                                self.state = 239;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    236 => {
-                        try self.parseNonterminal(163, false, true);
-                    },
-                    237 => {
-                        try self.parseNonterminal(235, false, true);
-                    },
-                    238 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    239 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    240 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    241 => {
-                        if (self.chars.len >= self.start + 1 + self.acc and
-                            !std.mem.eql(u8, "]", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 1]))
-                        {} else {
-                            self.state = 244;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(152, false, true);
-                    },
-                    242 => {
-                        try self.parseNonterminal(241, false, true);
-                    },
-                    243 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    244 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    245 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    246 => {
-                        try self.parseNonterminal(177, false, true);
-                    },
-                    247 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    248 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    249 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    250 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    251 => {
-                        try self.parseNonterminal(187, true, false);
-                    },
-                    252 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x01'...'\xff',
-                            => {
-                                self.state = 253;
-                                self.acc += 1;
-                            },
-                            '\x00',
-                            => {
-                                self.state = 255;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    253 => {
-                        try self.parseNonterminal(251, false, true);
-                    },
-                    254 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    255 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    256 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    257 => {
-                        try self.parseNonterminal(187, true, false);
-                    },
-                    258 => {
-                        switch (self.chars[self.acc + self.start]) {
-                            '\x01'...'\xff',
-                            => {
-                                self.state = 259;
-                                self.acc += 1;
-                            },
-                            '\x00',
-                            => {
-                                self.state = 261;
-                                self.acc = 0;
-                                self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                                continue;
-                            },
-                        }
-                    },
-                    259 => {
-                        try self.parseNonterminal(257, false, true);
-                    },
-                    260 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    261 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    262 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    263 => {
-                        try self.parseNonterminal(35, false, true);
-                    },
-                    264 => {
-                        try self.parseNonterminal(263, false, true);
-                    },
-                    265 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    266 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    267 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    268 => {
-                        try self.parseNonterminal(94, false, true);
-                    },
-                    269 => {
-                        try self.parseNonterminal(268, false, true);
-                    },
-                    270 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    271 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    272 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    273 => {
-                        if (self.chars.len >= self.start + 6 + self.acc and
-                            std.mem.eql(u8, "%% TOP", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 6]))
-                        {
-                            self.acc += 6;
-                        } else {
-                            self.state = 279;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    274 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    275 => {
-                        try self.parseNonterminal(26, false, true);
-                    },
-                    276 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "%%", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 279;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    277 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    278 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    279 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    280 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    281 => {
-                        if (self.chars.len >= self.start + 9 + self.acc and
-                            std.mem.eql(u8, "%% FIELDS", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 9]))
-                        {
-                            self.acc += 9;
-                        } else {
-                            self.state = 287;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    282 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    283 => {
-                        try self.parseNonterminal(26, false, true);
-                    },
-                    284 => {
-                        if (self.chars.len >= self.start + 2 + self.acc and
-                            std.mem.eql(u8, "%%", self
-                            .chars[self.start + self.acc .. self.start + self.acc + 2]))
-                        {
-                            self.acc += 2;
-                        } else {
-                            self.state = 287;
-                            self.acc = 0;
-                            self.infer_actions.shrinkRetainingCapacity(self.stack_start);
-                            continue;
-                        }
-                        try self.parseNonterminal(187, false, true);
-                    },
-                    285 => {
-                        try self.parseNonterminal(246, false, true);
-                    },
-                    286 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    287 => {
-                        try self.returnFromNonterminal(false, false);
-                    },
-                    288 => {
-                        try self.returnFromNonterminal(true, false);
-                    },
-                    else => unreachable,
-                }
-            }
-
-            return if (!self.did_fail) blk: {
-                const infer_result = self.infer() catch |err|
-                    if (err == error.OutOfMemory)
-                    return error.OutOfMemory
-                else
-                    ParseReturn{
-                        .infer_fail = .{ .err = err, .msg = "action execution error" },
-                    };
-                break :blk infer_result;
-            } else .{ .parse_fail = self.getParseError() };
-        }
-        fn finalizeInferInstrs(self: *@This()) Allocator.Error!void {
-            for (self.infer_actions.items) |frame| {
-                if (!opts.use_memo or !frame.memo) {
-                    try self.infer_instrs.append(frame);
-                } else {
-                    try self.memoInfer(frame.state, frame.start);
-                }
-            }
-            self.infer_actions.clearRetainingCapacity();
-            self.stack_start = 0;
-        }
-
-        fn fail(self: *@This(), msg: []const u8, err: ?anyerror) void {
-            self.did_fail = true;
-            self.infer_fail_err = err;
-            self.infer_fail_msg = msg;
-        }
-
-        fn inferNonterminal(self: *@This(), state: State) Allocator.Error!void {
-            try self.infer_stack.append(.{
-                .acc = self.infer_acc,
-                .state = self.infer_state,
-            });
-
-            const last_state = self.memo.getState(self.infer_acc, AddrToRule[state]);
-            self.infer_state = ActionTranslate[last_state];
-        }
-
-        fn skipInferNonterminal(self: *@This(), state: State) void {
-            const length = switch (self.memo.get(self.infer_acc, AddrToRule[state])) {
-                .pass => |val| val.length,
-                else => unreachable,
-            };
-
-            self.infer_acc += length;
-            self.infer_state += 1;
-        }
-
-        fn returnFromInfer(self: *@This(), state: State) Allocator.Error!void {
-            const frame = self.infer_stack.popOrNull() orelse blk: {
-                self.infer_done = true;
-                break :blk InferFrame{
-                    .state = self.infer_state,
-                    .acc = self.infer_start,
-                };
-            };
-
-            try self.infer_instrs.append(.{
-                .memo = false,
-                .start = frame.acc,
-                .state = state,
-                .length = self.infer_acc - frame.acc,
-            });
-            self.infer_state = frame.state + 1;
-        }
-        fn callAction(self: *@This(), state: usize, start: usize, length: usize) !void {
-            _ = start + length + self.state; // just to be able to compile
-
-            switch (state) {
-                9 => {
-                    const @"$10" = self.calc_stack.pop().type_16;
-                    const @"$1" = self.calc_stack.pop().type_27;
-                    var @"$*1" = @"$1";
-                    const @"$9": []const u8 = @"$10";
-                    self.ir.name = @"$9";
-                    self.ir.top_level_comment = invert([]const u8, try @"$*1".toOwnedSlice());
-                },
-                21 => {
-                    const @"$3" = self.calc_stack.pop().type_2;
-                    const @"$14" = self.calc_stack.pop().type_2;
-
-                    self.ir.top_header = @"$14";
-
-                    self.ir.field_header = @"$3";
-                },
-                24 => {},
-                27 => {
-                    const @"$ret": []const u8 = self.chars[start .. start + length];
-                    try self.calc_stack.append(.{ .type_2 = @"$ret" });
-                },
-                31 => {},
-                33 => {
-                    const @"$0" = self.calc_stack.pop().type_18;
-                    self.allocator.free(@"$0");
-                },
-                42 => {
-                    const @"$4" = self.calc_stack.pop().type_29;
-                    const @"$3" = self.calc_stack.pop().type_6;
-                    const @"$1" = self.calc_stack.pop().type_5;
-                    const @"$12" = self.calc_stack.pop().type_16;
-                    const @"$0": []const u8 = @"$12";
-
-                    _ = self.chars[start .. start + length]; // to prevent inlining
-                    var sequences = @"$4";
-                    try sequences.append(@"$3");
-                    const def_cnt = self.ir.defs.items.len;
-                    try self.ir.defs.append(.{
-                        .id = def_cnt,
-                        .identifier = @"$0",
-                        .return_type = @"$1",
-                        .sequences = sequences,
-                        .accepts_eps = false,
-                        .mid_recurse = false,
-                        .right_recurse = false,
-                        .regular = true,
-                        .finite = true,
-                        .moves_actions = false,
-                        .is_terminal = su.isScreamingSnakeCase(@"$0"),
-                    });
-                },
-                47 => {
-                    const @"$2" = self.calc_stack.pop().type_16;
-                    const @"$1": []const u8 = @"$2";
-                    const @"$ret": ReturnType = ReturnType.init(@"$1", false, false);
-                    try self.calc_stack.append(.{ .type_5 = @"$ret" });
-                },
-                50 => {
-                    const @"$1" = self.calc_stack.pop().type_18;
-                    const @"$ret": ReturnType = ReturnType.init(@"$1", true, false);
-                    try self.calc_stack.append(.{ .type_5 = @"$ret" });
-                },
-                51 => {
-                    const @"$ret": ReturnType = ReturnType.empty();
-                    try self.calc_stack.append(.{ .type_5 = @"$ret" });
-                },
-                56 => {
-                    const @"$2" = self.calc_stack.pop().type_8;
-                    const @"$0" = self.calc_stack.pop().type_7;
-                    const @"$ret": Sequence =
-                        blk: {
-                        var seq = @"$0";
-                        seq.action = @"$2";
-                        break :blk seq;
-                    };
-                    try self.calc_stack.append(.{ .type_6 = @"$ret" });
-                },
-                58 => {
-                    const @"$0" = self.calc_stack.pop().type_7;
-                    const @"$ret": Sequence = @"$0";
-                    try self.calc_stack.append(.{ .type_6 = @"$ret" });
-                },
-                62 => {
-                    const @"$2" = self.calc_stack.pop().type_40;
-                    var @"$*2" = @"$2";
-                    const @"$1" = self.calc_stack.pop().type_12;
-                    const @"$0": std.ArrayList(Operated) = blk: {
-                        try @"$*2".append(@"$1");
-                        break :blk @"$*2";
-                    };
-                    const @"$ret": Sequence = .{
-                        .operateds = @"$0",
-                        .string = self.chars[start .. start + length],
-                        .action = Action.empty(self.ir.allocator),
-                    };
-                    try self.calc_stack.append(.{ .type_7 = @"$ret" });
-                },
-                65 => {
-                    const @"$0" = self.calc_stack.pop().type_9;
-                    const @"$ret": Action = .{
-                        .implicit = false,
-                        .bases = blk: {
-                            var bases = std.ArrayList(ir.ActionBase).init(self.ir.allocator);
-                            try bases.append(.{
-                                .data = self.chars[start .. start + length],
-                                .owned = false,
-                                .action_vars = @"$0",
-                                .return_type = ReturnType.impl(),
-                                .id = 0,
-                                .mut = false,
-                            });
-                            break :blk bases;
-                        },
-                        .use_match = blk: {
-                            for (@"$0".items) |item| {
-                                if (!item.isMatchedString()) continue;
-                                break :blk true;
-                            }
-                            break :blk false;
-                        },
-                        .rets = std.ArrayList(ActionReturn)
-                            .init(self.ir.allocator),
-                    };
-                    try self.calc_stack.append(.{ .type_8 = @"$ret" });
-                },
-                70 => {
-                    const @"$4" = self.calc_stack.pop().type_9;
-                    const @"$2" = self.calc_stack.pop().type_9;
-                    const @"$0" = self.calc_stack.pop().type_10;
-                    const @"$ret": std.ArrayList(ActionVar) =
-                        blk: {
-                        var list = @"$4";
-                        try list.appendSlice(@"$0".items);
-                        try list.appendSlice(@"$2".items);
-                        @"$0".deinit();
-                        @"$2".deinit();
-                        break :blk list;
-                    };
-                    try self.calc_stack.append(.{ .type_9 = @"$ret" });
-                },
-                72 => {
-                    const @"$0" = self.calc_stack.pop().type_10;
-                    const @"$ret": std.ArrayList(ActionVar) = @"$0";
-                    try self.calc_stack.append(.{ .type_9 = @"$ret" });
-                },
-                73 => {
-                    const @"$ret": std.ArrayList(ActionVar) = std.ArrayList(ActionVar).init(self.ir.allocator);
-                    try self.calc_stack.append(.{ .type_9 = @"$ret" });
-                },
-                77 => {
-                    const @"$1" = self.calc_stack.pop().type_10;
-                    const @"$0" = self.calc_stack.pop().type_11;
-                    const @"$ret": std.ArrayList(ActionVar) = blk: {
-                        var l = @"$1";
-                        try l.append(@"$0");
-                        break :blk l;
-                    };
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
-                },
-                81 => {
-                    const @"$2" = self.calc_stack.pop().type_10;
-                    const @"$ret": std.ArrayList(ActionVar) = @"$2";
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
-                },
-                84 => {
-                    const @"$1" = self.calc_stack.pop().type_10;
-                    const @"$0" = self.calc_stack.pop().type_18;
-                    const @"$ret": std.ArrayList(ActionVar) = blk: {
-                        self.allocator.free(@"$0");
-                        break :blk @"$1";
-                    };
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
-                },
-                85 => {
-                    const @"$ret": std.ArrayList(ActionVar) = std.ArrayList(ActionVar).init(self.ir.allocator);
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
-                },
-                89 => {
-                    const @"$ret": ActionVar =
-                        blk: {
-                        const num = std.fmt.parseInt(usize, self.chars[start .. start + length][1..], 10) catch |err| switch (err) {
-                            error.InvalidCharacter => unreachable,
-                            else => {
-                                self.fail("too large integer!\n", null);
-                                return;
-                            },
-                        };
-                        break :blk .{
-                            .var_decl = self.chars[start .. start + length],
-                            .arg_num = if (num == 0) null else num - 1,
-                            .escape = false,
-                        };
-                    };
-                    try self.calc_stack.append(.{ .type_11 = @"$ret" });
-                },
-                92 => {
-                    const @"$ret": ActionVar =
-                        blk: {
-                        const num = std.fmt.parseInt(usize, self.chars[start .. start + length][2..], 10) catch |err| switch (err) {
-                            error.InvalidCharacter => unreachable,
-                            else => {
-                                self.fail("too large integer!\n", null);
-                                return;
-                            },
-                        };
-                        break :blk .{
-                            .var_decl = self.chars[start .. start + length],
-                            .arg_num = num - 1,
-                            .escape = true, // because it is mutable
-                        };
-                    };
-                    try self.calc_stack.append(.{ .type_11 = @"$ret" });
-                },
-                97 => {
-                    const @"$2" = self.calc_stack.pop().type_14;
-                    const @"$1" = self.calc_stack.pop().type_15;
-                    const @"$0" = self.calc_stack.pop().type_13;
-                    const @"$ret": Operated = .{
-                        .prefix_op = @"$0",
-                        .postfix_op = @"$2",
-                        .value = @"$1",
-                        .return_type = switch (@"$1") {
-                            .IDENTIFIER,
-                            .SEQ,
-                            => ReturnType.impl(),
-                            else => ReturnType.empty(),
-                        },
-                        .string = std.mem.trimRight(u8, self.chars[start .. start + length], " \t\n\r"),
-                    };
-                    try self.calc_stack.append(.{ .type_12 = @"$ret" });
-                },
-                100 => {
-                    const @"$ret": PrefixOp = .AND;
-                    try self.calc_stack.append(.{ .type_13 = @"$ret" });
-                },
-                102 => {
-                    const @"$ret": PrefixOp = .NOT;
-                    try self.calc_stack.append(.{ .type_13 = @"$ret" });
-                },
-                103 => {
-                    const @"$ret": PrefixOp = .NONE;
-                    try self.calc_stack.append(.{ .type_13 = @"$ret" });
-                },
-                106 => {
-                    const @"$ret": PostfixOp = .STAR;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
-                },
-                108 => {
-                    const @"$ret": PostfixOp = .PLUS;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
-                },
-                110 => {
-                    const @"$ret": PostfixOp = .QUESTION;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
-                },
-                111 => {
-                    const @"$ret": PostfixOp = .NONE;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
-                },
-                116 => {
-                    const @"$1" = self.calc_stack.pop().type_7;
-                    const @"$ret": Primary = .{ .SEQ = @"$1" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
-                },
-                119 => {
-                    const @"$1" = self.calc_stack.pop().type_16;
-                    const @"$0": []const u8 = @"$1";
-                    const @"$ret": Primary = .{ .IDENTIFIER = @"$0" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
-                },
-                121 => {
-                    const @"$0" = self.calc_stack.pop().type_18;
-                    const @"$ret": Primary = .{ .LITERAL = @"$0" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
-                },
-                124 => {
-                    const @"$2" = self.calc_stack.pop().type_35;
-                    const @"$0": Class = .{ .content = @"$2" };
-                    const @"$ret": Primary = .{ .CLASS = @"$0" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
-                },
-                126 => {
-                    const @"$ret": Primary = .DOT;
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
-                },
-                128 => {
-                    const @"$ret": Primary = .EPSILON;
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
-                },
-                130 => {
-                    const @"$ret": Primary = .CUT;
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
-                },
-                134 => {
-                    const @"$ret": []const u8 = self.chars[start .. start + length];
-                    try self.calc_stack.append(.{ .type_16 = @"$ret" });
-                },
-                137 => {},
-                139 => {},
-                145 => {
-                    const @"$1" = self.calc_stack.pop().type_34;
-                    var @"$*1" = @"$1";
-                    const @"$ret": []const u8 = invert(u8, try @"$*1".toOwnedSlice());
-                    try self.calc_stack.append(.{ .type_18 = @"$ret" });
-                },
-                150 => {
-                    const @"$1" = self.calc_stack.pop().type_33;
-                    var @"$*1" = @"$1";
-                    const @"$ret": []const u8 = invert(u8, try @"$*1".toOwnedSlice());
-                    try self.calc_stack.append(.{ .type_18 = @"$ret" });
-                },
-                154 => {
-                    const @"$2" = self.calc_stack.pop().type_20;
-                    const @"$0" = self.calc_stack.pop().type_20;
-                    const @"$ret": Range = .{
-                        .from = @"$0",
-                        .to = @"$2",
-                        .backing = self.chars[start .. start + length],
-                    };
-                    try self.calc_stack.append(.{ .type_19 = @"$ret" });
-                },
-                156 => {
-                    const @"$0" = self.calc_stack.pop().type_20;
-                    const @"$ret": Range = .{
-                        .from = @"$0",
-                        .to = 0,
-                        .backing = self.chars[start .. start + length],
-                    };
-                    try self.calc_stack.append(.{ .type_19 = @"$ret" });
-                },
-                159 => {
-                    const @"$ret": u8 = '-';
-                    try self.calc_stack.append(.{ .type_20 = @"$ret" });
-                },
-                161 => {
-                    const @"$1" = self.calc_stack.pop().type_21;
-                    const @"$ret": u8 = @"$1";
-                    try self.calc_stack.append(.{ .type_20 = @"$ret" });
-                },
-                164 => {
-                    const @"$ret": u8 =
-                        switch (self.chars[start .. start + length][1]) {
-                        'n' => '\n',
-                        'r' => '\r',
-                        't' => '\t',
-                        else => |c| c,
-                    };
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
-                },
-                167 => {
-                    const @"$ret": u8 = try std.fmt.parseInt(u8, self.chars[start .. start + length][2..], 16);
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
-                },
-                169 => {
-                    const @"$ret": u8 = try std.fmt.parseInt(u8, self.chars[start .. start + length][2..], 16);
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
-                },
-                171 => {
-                    const @"$ret": u8 = self.chars[start .. start + length][0];
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
-                },
-                175 => {},
-                178 => {},
-                182 => {},
-                185 => {
-                    const @"$ret": []const u8 = self.chars[start .. start + length];
-                    try self.calc_stack.append(.{ .type_24 = @"$ret" });
-                },
-                187 => {},
-                188 => {},
-                189 => {},
-                191 => {},
-                192 => {},
-                194 => {},
-                200 => {
-                    const @"$1" = self.calc_stack.pop().type_27;
-                    var @"$*1" = @"$1";
-                    const @"$6" = self.calc_stack.pop().type_24;
-                    const @"$2": []const u8 = @"$6";
-                    const @"$0": []const u8 = @"$2";
-                    const @"$ret": std.ArrayList([]const u8) = blk: {
-                        try @"$*1".append(@"$0");
-                        break :blk @"$*1";
-                    };
-                    try self.calc_stack.append(.{ .type_27 = @"$ret" });
-                },
-                201 => {
-                    const @"$ret": std.ArrayList([]const u8) = std.ArrayList([]const u8).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_27 = @"$ret" });
-                },
-                205 => {},
-                206 => {},
-                211 => {
-                    const @"$1" = self.calc_stack.pop().type_29;
-                    var @"$*1" = @"$1";
-                    const @"$3" = self.calc_stack.pop().type_6;
-                    const @"$0": Sequence = @"$3";
-                    const @"$ret": std.ArrayList(Sequence) = blk: {
-                        try @"$*1".append(@"$0");
-                        break :blk @"$*1";
-                    };
-                    try self.calc_stack.append(.{ .type_29 = @"$ret" });
-                },
-                212 => {
-                    const @"$ret": std.ArrayList(Sequence) = std.ArrayList(Sequence).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_29 = @"$ret" });
-                },
-                216 => {},
-                217 => {},
-                221 => {},
-                222 => {},
-                226 => {},
-                227 => {},
-                232 => {
-                    const @"$1" = self.calc_stack.pop().type_33;
-                    var @"$*1" = @"$1";
-                    const @"$3" = self.calc_stack.pop().type_21;
-                    const @"$0": u8 = @"$3";
-                    const @"$ret": std.ArrayList(u8) = blk: {
-                        try @"$*1".append(@"$0");
-                        break :blk @"$*1";
-                    };
-                    try self.calc_stack.append(.{ .type_33 = @"$ret" });
-                },
-                233 => {
-                    const @"$ret": std.ArrayList(u8) = std.ArrayList(u8).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_33 = @"$ret" });
-                },
-                238 => {
-                    const @"$1" = self.calc_stack.pop().type_34;
-                    var @"$*1" = @"$1";
-                    const @"$3" = self.calc_stack.pop().type_21;
-                    const @"$0": u8 = @"$3";
-                    const @"$ret": std.ArrayList(u8) = blk: {
-                        try @"$*1".append(@"$0");
-                        break :blk @"$*1";
-                    };
-                    try self.calc_stack.append(.{ .type_34 = @"$ret" });
-                },
-                239 => {
-                    const @"$ret": std.ArrayList(u8) = std.ArrayList(u8).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_34 = @"$ret" });
-                },
-                243 => {
-                    const @"$1" = self.calc_stack.pop().type_35;
-                    var @"$*1" = @"$1";
-                    const @"$3" = self.calc_stack.pop().type_19;
-                    const @"$0": Range = @"$3";
-                    const @"$ret": std.ArrayList(Range) = blk: {
-                        try @"$*1".append(@"$0");
-                        break :blk @"$*1";
-                    };
-                    try self.calc_stack.append(.{ .type_35 = @"$ret" });
-                },
-                244 => {
-                    const @"$ret": std.ArrayList(Range) = std.ArrayList(Range).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_35 = @"$ret" });
-                },
-                248 => {},
-                249 => {},
-                254 => {},
-                255 => {},
-                260 => {},
-                261 => {},
-                265 => {},
-                266 => {},
-                270 => {
-                    const @"$1" = self.calc_stack.pop().type_40;
-                    var @"$*1" = @"$1";
-                    const @"$0" = self.calc_stack.pop().type_12;
-                    const @"$ret": std.ArrayList(Operated) = blk: {
-                        try @"$*1".append(@"$0");
-                        break :blk @"$*1";
-                    };
-                    try self.calc_stack.append(.{ .type_40 = @"$ret" });
-                },
-                271 => {
-                    const @"$ret": std.ArrayList(Operated) = std.ArrayList(Operated).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_40 = @"$ret" });
-                },
-                278 => {
-                    const @"$2" = self.calc_stack.pop().type_2;
-
-                    self.ir.top_header = @"$2";
-                },
-                279 => {},
-                286 => {
-                    const @"$2" = self.calc_stack.pop().type_2;
-
-                    self.ir.field_header = @"$2";
-                },
-                287 => {},
-                else => unreachable,
-            }
-        }
-        fn memoInfer(self: *@This(), state: State, start: CharIdx) Allocator.Error!void {
-            self.infer_start = start;
-            self.infer_acc = start;
-            self.infer_state = ActionTranslate[state];
-            self.infer_done = false;
-
-            while (!self.infer_done) {
-                switch (self.infer_state) {
-                    0 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    1 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(196);
-                    },
-                    2 => {
-                        self.infer_acc += 7;
-                        self.skipInferNonterminal(246);
-                    },
-                    3 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(132);
-                    },
-                    4 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    5 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(11);
-                    },
-                    6 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(35);
-                    },
-                    7 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(263);
-                    },
-                    8 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(9);
-                    },
-                    9 => {
-                        self.infer_acc += 6;
-                        self.skipInferNonterminal(187);
-                    },
-                    10 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    11 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(26);
-                    },
-                    12 => {
-                        self.infer_acc += 2;
-                        self.skipInferNonterminal(187);
-                    },
-                    13 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    14 => {
-                        self.infer_acc += 9;
-                        self.skipInferNonterminal(187);
-                    },
-                    15 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    16 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(26);
-                    },
-                    17 => {
-                        self.infer_acc += 2;
-                        self.skipInferNonterminal(187);
-                    },
-                    18 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    19 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(21);
-                    },
-                    20 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(281);
-                    },
-                    21 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(273);
-                    },
-                    22 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(24);
-                    },
-                    23 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(203);
-                    },
-                    24 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(27);
-                    },
-                    25 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(31);
-                    },
-                    26 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(141);
-                    },
-                    27 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(33);
-                    },
-                    28 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(132);
-                    },
-                    29 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    30 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(44);
-                    },
-                    31 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    32 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(53);
-                    },
-                    33 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(208);
-                    },
-                    34 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    35 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(42);
-                    },
-                    36 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    37 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(132);
-                    },
-                    38 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    39 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(47);
-                    },
-                    40 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    41 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(141);
-                    },
-                    42 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(50);
-                    },
-                    43 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(51);
-                    },
-                    44 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(60);
-                    },
-                    45 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(64);
-                    },
-                    46 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    47 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(56);
-                    },
-                    48 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(60);
-                    },
-                    49 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(58);
-                    },
-                    50 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(94);
-                    },
-                    51 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(268);
-                    },
-                    52 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(62);
-                    },
-                    53 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(67);
-                    },
-                    54 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(65);
-                    },
-                    55 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(75);
-                    },
-                    56 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(67);
-                    },
-                    57 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(67);
-                    },
-                    58 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(70);
-                    },
-                    59 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(75);
-                    },
-                    60 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(72);
-                    },
-                    61 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(73);
-                    },
-                    62 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(87);
-                    },
-                    63 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(75);
-                    },
-                    64 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(77);
-                    },
-                    65 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(75);
-                    },
-                    66 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(81);
-                    },
-                    67 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(141);
-                    },
-                    68 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(75);
-                    },
-                    69 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(84);
-                    },
-                    70 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(85);
-                    },
-                    71 => {
-                        self.infer_acc += 2;
-                        self.skipInferNonterminal(219);
-                    },
-                    72 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(89);
-                    },
-                    73 => {
-                        self.infer_acc += 3;
-                        self.skipInferNonterminal(214);
-                    },
-                    74 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(92);
-                    },
-                    75 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(99);
-                    },
-                    76 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(113);
-                    },
-                    77 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(105);
-                    },
-                    78 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(97);
-                    },
-                    79 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    80 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(100);
-                    },
-                    81 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    82 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(102);
-                    },
-                    83 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(103);
-                    },
-                    84 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    85 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(106);
-                    },
-                    86 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    87 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(108);
-                    },
-                    88 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    89 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(110);
-                    },
-                    90 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(111);
-                    },
-                    91 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    92 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(60);
-                    },
-                    93 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    94 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(116);
-                    },
-                    95 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(132);
-                    },
-                    96 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    97 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(119);
-                    },
-                    98 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(141);
-                    },
-                    99 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(121);
-                    },
-                    100 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(241);
-                    },
-                    101 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    102 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(124);
-                    },
-                    103 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    104 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(126);
-                    },
-                    105 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    106 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(128);
-                    },
-                    107 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    108 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(130);
-                    },
-                    109 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(224);
-                    },
-                    110 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(134);
-                    },
-                    111 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(137);
-                    },
-                    112 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(139);
-                    },
-                    113 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(235);
-                    },
-                    114 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    115 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(145);
-                    },
-                    116 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(229);
-                    },
-                    117 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    118 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(150);
-                    },
-                    119 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(158);
-                    },
-                    120 => {
-                        self.infer_acc += 1;
-                        try self.inferNonterminal(158);
-                    },
-                    121 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(154);
-                    },
-                    122 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(158);
-                    },
-                    123 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(156);
-                    },
-                    124 => {
-                        self.infer_acc += 2;
-                        try self.returnFromInfer(159);
-                    },
-                    125 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(163);
-                    },
-                    126 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(161);
-                    },
-                    127 => {
-                        self.infer_acc += 2;
-                        try self.returnFromInfer(164);
-                    },
-                    128 => {
-                        self.infer_acc += 4;
-                        try self.returnFromInfer(167);
-                    },
-                    129 => {
-                        self.infer_acc += 4;
-                        try self.returnFromInfer(169);
-                    },
-                    130 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(171);
-                    },
-                    131 => {
-                        self.infer_acc += 2;
-                        self.skipInferNonterminal(187);
-                    },
-                    132 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    133 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(175);
-                    },
-                    134 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(191);
-                    },
-                    135 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(178);
-                    },
-                    136 => {
-                        self.infer_acc += 2;
-                        self.skipInferNonterminal(251);
-                    },
-                    137 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(187);
-                    },
-                    138 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(182);
-                    },
-                    139 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(257);
-                    },
-                    140 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(185);
-                    },
-                    141 => {
-                        self.infer_acc += 2;
-                        try self.returnFromInfer(187);
-                    },
-                    142 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(188);
-                    },
-                    143 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(189);
-                    },
-                    144 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(191);
-                    },
-                    145 => {
-                        self.infer_acc += 1;
-                        try self.returnFromInfer(192);
-                    },
-                    146 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(187);
-                    },
-                    147 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(194);
-                    },
-                    148 => {
-                        self.infer_acc += 3;
-                        try self.inferNonterminal(184);
-                    },
-                    149 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(187);
-                    },
-                    150 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    151 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(196);
-                    },
-                    152 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(200);
-                    },
-                    153 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(201);
-                    },
-                    154 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(29);
-                    },
-                    155 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(203);
-                    },
-                    156 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(205);
-                    },
-                    157 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(206);
-                    },
-                    158 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(246);
-                    },
-                    159 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(53);
-                    },
-                    160 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(208);
-                    },
-                    161 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(211);
-                    },
-                    162 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(212);
-                    },
-                    163 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(214);
-                    },
-                    164 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(216);
-                    },
-                    165 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(217);
-                    },
-                    166 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(219);
-                    },
-                    167 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(221);
-                    },
-                    168 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(222);
-                    },
-                    169 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(136);
-                    },
-                    170 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(224);
-                    },
-                    171 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(226);
-                    },
-                    172 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(227);
-                    },
-                    173 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(163);
-                    },
-                    174 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(229);
-                    },
-                    175 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(232);
-                    },
-                    176 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(233);
-                    },
-                    177 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(163);
-                    },
-                    178 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(235);
-                    },
-                    179 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(238);
-                    },
-                    180 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(239);
-                    },
-                    181 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(152);
-                    },
-                    182 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(241);
-                    },
-                    183 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(243);
-                    },
-                    184 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(244);
-                    },
-                    185 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(177);
-                    },
-                    186 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    187 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(248);
-                    },
-                    188 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(249);
-                    },
-                    189 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(251);
-                    },
-                    190 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(254);
-                    },
-                    191 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(255);
-                    },
-                    192 => {
-                        self.infer_acc += 1;
-                        self.skipInferNonterminal(257);
-                    },
-                    193 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(260);
-                    },
-                    194 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(261);
-                    },
-                    195 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(35);
-                    },
-                    196 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(263);
-                    },
-                    197 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(265);
-                    },
-                    198 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(266);
-                    },
-                    199 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(94);
-                    },
-                    200 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(268);
-                    },
-                    201 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(270);
-                    },
-                    202 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(271);
-                    },
-                    203 => {
-                        self.infer_acc += 6;
-                        self.skipInferNonterminal(187);
-                    },
-                    204 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    205 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(26);
-                    },
-                    206 => {
-                        self.infer_acc += 2;
-                        self.skipInferNonterminal(187);
-                    },
-                    207 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    208 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(278);
-                    },
-                    209 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(279);
-                    },
-                    210 => {
-                        self.infer_acc += 9;
-                        self.skipInferNonterminal(187);
-                    },
-                    211 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    212 => {
-                        self.infer_acc += 0;
-                        try self.inferNonterminal(26);
-                    },
-                    213 => {
-                        self.infer_acc += 2;
-                        self.skipInferNonterminal(187);
-                    },
-                    214 => {
-                        self.infer_acc += 0;
-                        self.skipInferNonterminal(246);
-                    },
-                    215 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(286);
-                    },
-                    216 => {
-                        self.infer_acc += 0;
-                        try self.returnFromInfer(287);
-                    },
-                    else => unreachable,
-                }
-            }
-        }
-        fn infer(self: *@This()) !ParseReturn {
-            try self.finalizeInferInstrs();
-            for (self.infer_instrs.items) |instr| {
-                try self.callAction(instr.state, instr.start, instr.length);
-            }
-
-            const output: ParseReturn = if (self.did_fail)
-                .{ .infer_fail = .{
-                    .err = self.infer_fail_err,
-                    .msg = self.infer_fail_msg,
-                } }
-            else
-                .{ .pass = void{} };
-
-            assert(self.did_fail or self.calc_stack.items.len == 0);
-            return output;
-        }
+pub fn stats(self: *const @This()) Stats {
+    return .{
+        .memo = self.memo.getMemUseage(),
+        .max_memo = self.memo.max_chars,
+        .parse = self.stack.capacity * @sizeOf(EvalFrame),
+        .infer = self.infer_stack.capacity * @sizeOf(InferFrame),
+        .instr = self.infer_instrs.capacity * @sizeOf(InferInstr),
+        .calc = self.calc_stack.capacity * @sizeOf(InferReturnType),
+        .max_memo_state = AddrToRule[self.max_memo_state],
     };
+}
+
+fn parseNonterminal(
+    self: *@This(), 
+    state: State, 
+    inverted: bool, 
+    consuming: bool,
+) Allocator.Error!void {
+    if (opts.use_memo) try self.adjustBacktrack();
+    try self.stack.append(.{
+        .start = self.start,
+        .acc = self.acc,
+        .state = self.state,
+        .stack_start = self.stack_start + self.memo.start,
+        .look = .{
+            .inverted = inverted,
+            .consuming = consuming,
+        },
+        .empty_backtrack = self.empty_backtrack,
+    });
+
+    self.stack_start = self.infer_actions.items.len;
+    self.start += self.acc;
+    self.state = state;
+    self.acc = 0;
+    self.empty_backtrack = AddrToNFail[self.state] and 
+        self.empty_backtrack and consuming;
+      
+    if (!opts.use_memo) return;
+    switch (self.memo.get(self.start, AddrToRule[state])) {
+        .pass => |val| { 
+            self.state = val.end_state;
+            self.acc = val.length;
+            try self.returnFromNonterminal(false, true);
+        },
+        .fail => |val| {
+            self.state = val.end_state;
+            try self.returnFromNonterminal(true, true);
+        },
+        .empty => return,
+    }
+}
+
+fn returnFromNonterminal(
+    self: *@This(), 
+    failed: bool, 
+    memo: bool, 
+) Allocator.Error!void {
+    const frame = self.stack.popOrNull() orelse blk: {
+        self.did_fail = failed;
+        break :blk EvalFrame{
+            .stack_start = 0,
+            .start = self.start,
+            .acc = 0,
+            .state = self.state,
+            .look = .{
+                .inverted = false,
+                .consuming = true,
+            },
+            .empty_backtrack = AddrToNFail[self.state],
+        };
+    };
+
+    const look = frame.look;
+    const good = failed == look.inverted;
+  
+    if (!memo and !failed and look.consuming and 
+        self.max_reached <= self.start + self.acc and 
+       (self.max_reached < self.start + self.acc or self.acc > self.max_slice.len)) {
+        self.max_slice = self.chars[self.start .. self.start + self.acc];
+        self.max_reached = self.start + self.acc;
+    } else if (self.max_reached == self.start) {
+        self.next_expected = self.state;
+    }
+
+    if (!memo and opts.use_memo) {
+        try self.memo.add(self.start, AddrToRule[self.state], 
+            if (failed)
+                .{ .fail = .{ .end_state = @intCast(self.state) } }
+            else 
+                .{ .pass = .{ 
+                    .length = @intCast(self.acc), 
+                    .end_state = @intCast(self.state), 
+                } }
+        );
+    }
+
+    if (look.consuming and good) {
+        try self.infer_actions.append(.{
+            .length = self.acc,
+            .state = self.state,
+            .start = self.start,
+            .memo = memo,
+        });
+        self.acc += frame.acc;
+        self.state = frame.state + 1;
+    } else if (good) {
+        self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+        self.acc = frame.acc;
+        self.state = frame.state + 1;
+    } else {
+        if (frame.stack_start >= self.memo.start) {
+            self.infer_actions.shrinkRetainingCapacity(
+                frame.stack_start - self.memo.start,
+            );
+        }
+        self.acc = 0;
+        self.state = AddrToFailState[frame.state];
+    }
+
+    self.stack_start = frame.stack_start - @min(frame.stack_start, self.memo.start);
+    self.start = frame.start;
+    if (opts.use_memo) {
+        if (frame.empty_backtrack) {
+            self.empty_backtrack = true;
+            if (self.empty_backtrack) try self.resetMemo(self.acc + self.start);
+        } else try self.adjustBacktrack();
+    }
+}
+
+fn adjustBacktrack(self: *@This()) Allocator.Error!void {
+    if (self.stack.getLastOrNull()) |parent| {
+        self.empty_backtrack = parent.empty_backtrack 
+            and AddrToNFail[self.state] and parent.look.consuming;
+        if (self.empty_backtrack) try self.resetMemo(self.acc + self.start);
+    } else {
+        self.empty_backtrack = AddrToNFail[self.state];
+        if (self.empty_backtrack) try self.resetMemo(self.acc + self.start);
+    }
+}
+
+fn getParseError(self: *const @This()) ParsingError {
+    const rule = AddrToRule[self.next_expected];
+    return .{
+        .last_found = self.max_slice,
+        .expected = if (rule < NameTable.len) 
+            NameTable[rule] 
+        else "",
+    };
+}
+
+fn resetMemo(self: *@This(), new_begin: usize) Allocator.Error!void {
+try self.finalizeInferInstrs();
+    if (new_begin < self.memo.start) {
+        self.did_fail = true;
+        return;
+    }
+    if (self.memo.base_table.items.len > self.memo.max_chars) 
+        self.max_memo_state = self.state;
+    self.memo.resetTo(new_begin);
+}
+pub fn parse(
+    self: *@This(), 
+    chars: [:0]const u8, 
+) ParserError!ParseReturn {
+
+if (chars.len > MaxInputSize) {
+    return error.InputTooLarge;
+}
+
+self.reset(chars);
+
+while (true) {
+switch (self.state) {
+0 => {
+try self.parseNonterminal(246, false, true);
+},
+1 => {
+try self.parseNonterminal(196, false, true);
+},
+2 => {
+if (self.chars.len >= self.start + 7 + self.acc and
+std.mem.eql(u8, "%% NAME", self
+.chars[self.start + self.acc..self.start + self.acc + 7])){
+self.acc += 7;
+} else {
+self.state = 10;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+3 => {
+try self.parseNonterminal(132, false, true);
+},
+4 => {
+try self.parseNonterminal(246, false, true);
+},
+5 => {
+try self.parseNonterminal(11, false, true);
+},
+6 => {
+try self.parseNonterminal(35, false, true);
+},
+7 => {
+try self.parseNonterminal(263, false, true);
+},
+8 => {
+switch (self.chars[self.acc + self.start]) {
+'\x00',
+=> {
+self.state = 9;
+},
+'\x01'...'\xff',
+=> {
+self.state = 10;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+9 => {
+try self.returnFromNonterminal(false, false);
+break;
+},
+10 => {
+try self.returnFromNonterminal(true, false);
+break;
+},
+11 => {
+if (self.chars.len >= self.start + 6 + self.acc and
+std.mem.eql(u8, "%% TOP", self
+.chars[self.start + self.acc..self.start + self.acc + 6])){
+self.acc += 6;
+} else {
+self.state = 22;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+12 => {
+try self.parseNonterminal(246, false, true);
+},
+13 => {
+try self.parseNonterminal(26, false, true);
+},
+14 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "%%", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 22;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+15 => {
+try self.parseNonterminal(246, false, true);
+},
+16 => {
+if (self.chars.len >= self.start + 9 + self.acc and
+std.mem.eql(u8, "%% FIELDS", self
+.chars[self.start + self.acc..self.start + self.acc + 9])){
+self.acc += 9;
+} else {
+self.state = 22;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+17 => {
+try self.parseNonterminal(246, false, true);
+},
+18 => {
+try self.parseNonterminal(26, false, true);
+},
+19 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "%%", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 22;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+20 => {
+try self.parseNonterminal(246, false, true);
+},
+21 => {
+try self.returnFromNonterminal(false, false);
+},
+22 => {
+try self.parseNonterminal(281, false, true);
+},
+23 => {
+try self.parseNonterminal(273, false, true);
+},
+24 => {
+try self.returnFromNonterminal(false, false);
+},
+25 => {
+try self.returnFromNonterminal(true, false);
+},
+26 => {
+try self.parseNonterminal(203, false, true);
+},
+27 => {
+try self.returnFromNonterminal(false, false);
+},
+28 => {
+try self.returnFromNonterminal(true, false);
+},
+29 => {
+try self.parseNonterminal(173, true, false);
+},
+30 => {
+switch (self.chars[self.acc + self.start]) {
+'\x01'...'\xff',
+=> {
+self.state = 31;
+self.acc += 1;
+},
+'\x00',
+=> {
+self.state = 32;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+31 => {
+try self.returnFromNonterminal(false, false);
+},
+32 => {
+try self.parseNonterminal(141, false, true);
+},
+33 => {
+try self.returnFromNonterminal(false, false);
+},
+34 => {
+try self.returnFromNonterminal(true, false);
+},
+35 => {
+try self.parseNonterminal(132, false, true);
+},
+36 => {
+try self.parseNonterminal(246, false, true);
+},
+37 => {
+try self.parseNonterminal(44, false, true);
+},
+38 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "=", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 43;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+39 => {
+try self.parseNonterminal(53, false, true);
+},
+40 => {
+try self.parseNonterminal(208, false, true);
+},
+41 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, ";", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 43;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+42 => {
+try self.returnFromNonterminal(false, false);
+},
+43 => {
+try self.returnFromNonterminal(true, false);
+},
+44 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, ":", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 48;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+45 => {
+try self.parseNonterminal(132, false, true);
+},
+46 => {
+try self.parseNonterminal(246, false, true);
+},
+47 => {
+try self.returnFromNonterminal(false, false);
+},
+48 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, ":", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 51;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+49 => {
+try self.parseNonterminal(141, false, true);
+},
+50 => {
+try self.returnFromNonterminal(false, false);
+},
+51 => {
+try self.returnFromNonterminal(false, false);
+},
+52 => {
+try self.returnFromNonterminal(true, false);
+},
+53 => {
+try self.parseNonterminal(60, false, true);
+},
+54 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "{", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 57;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(64, false, true);
+},
+55 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "}", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 57;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+56 => {
+try self.returnFromNonterminal(false, false);
+},
+57 => {
+try self.parseNonterminal(60, false, true);
+},
+58 => {
+try self.returnFromNonterminal(false, false);
+},
+59 => {
+try self.returnFromNonterminal(true, false);
+},
+60 => {
+try self.parseNonterminal(94, false, true);
+},
+61 => {
+try self.parseNonterminal(268, false, true);
+},
+62 => {
+try self.returnFromNonterminal(false, false);
+},
+63 => {
+try self.returnFromNonterminal(true, false);
+},
+64 => {
+try self.parseNonterminal(67, false, true);
+},
+65 => {
+try self.returnFromNonterminal(false, false);
+},
+66 => {
+try self.returnFromNonterminal(true, false);
+},
+67 => {
+try self.parseNonterminal(75, false, true);
+},
+68 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "{", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 71;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(67, false, true);
+},
+69 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "}", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 71;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(67, false, true);
+},
+70 => {
+try self.returnFromNonterminal(false, false);
+},
+71 => {
+try self.parseNonterminal(75, false, true);
+},
+72 => {
+try self.returnFromNonterminal(false, false);
+},
+73 => {
+try self.returnFromNonterminal(false, false);
+},
+74 => {
+try self.returnFromNonterminal(true, false);
+},
+75 => {
+try self.parseNonterminal(87, false, true);
+},
+76 => {
+try self.parseNonterminal(75, false, true);
+},
+77 => {
+try self.returnFromNonterminal(false, false);
+},
+78 => {
+switch (self.chars[self.acc + self.start]) {
+'\x00'...'!',
+'#',
+'%'...'&',
+'('...'z',
+'|',
+'~'...'\xff',
+=> {
+self.state = 79;
+},
+'\"',
+'$',
+'\'',
+'{',
+'}',
+=> {
+self.state = 82;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+79 => {
+switch (self.chars[self.acc + self.start]) {
+'\x01'...'\xff',
+=> {
+self.state = 80;
+self.acc += 1;
+},
+'\x00',
+=> {
+self.state = 82;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+80 => {
+try self.parseNonterminal(75, false, true);
+},
+81 => {
+try self.returnFromNonterminal(false, false);
+},
+82 => {
+try self.parseNonterminal(141, false, true);
+},
+83 => {
+try self.parseNonterminal(75, false, true);
+},
+84 => {
+try self.returnFromNonterminal(false, false);
+},
+85 => {
+try self.returnFromNonterminal(false, false);
+},
+86 => {
+try self.returnFromNonterminal(true, false);
+},
+87 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "$", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 90;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'0'...'9',
+=> {
+self.state = 88;
+self.acc += 1;
+},
+'\x00'...'/',
+':'...'\xff',
+=> {
+self.state = 90;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+88 => {
+try self.parseNonterminal(219, false, true);
+},
+89 => {
+try self.returnFromNonterminal(false, false);
+},
+90 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "$*", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 93;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'1'...'9',
+=> {
+self.state = 91;
+self.acc += 1;
+},
+'\x00'...'0',
+':'...'\xff',
+=> {
+self.state = 93;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+91 => {
+try self.parseNonterminal(214, false, true);
+},
+92 => {
+try self.returnFromNonterminal(false, false);
+},
+93 => {
+try self.returnFromNonterminal(true, false);
+},
+94 => {
+try self.parseNonterminal(99, false, true);
+},
+95 => {
+try self.parseNonterminal(113, false, true);
+},
+96 => {
+try self.parseNonterminal(105, false, true);
+},
+97 => {
+try self.returnFromNonterminal(false, false);
+},
+98 => {
+try self.returnFromNonterminal(true, false);
+},
+99 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "&", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 101;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+100 => {
+try self.returnFromNonterminal(false, false);
+},
+101 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "!", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 103;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+102 => {
+try self.returnFromNonterminal(false, false);
+},
+103 => {
+try self.returnFromNonterminal(false, false);
+},
+104 => {
+try self.returnFromNonterminal(true, false);
+},
+105 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "*", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 107;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+106 => {
+try self.returnFromNonterminal(false, false);
+},
+107 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "+", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 109;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+108 => {
+try self.returnFromNonterminal(false, false);
+},
+109 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "?", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 111;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+110 => {
+try self.returnFromNonterminal(false, false);
+},
+111 => {
+try self.returnFromNonterminal(false, false);
+},
+112 => {
+try self.returnFromNonterminal(true, false);
+},
+113 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "(", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 117;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+114 => {
+try self.parseNonterminal(60, false, true);
+},
+115 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, ")", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 117;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+116 => {
+try self.returnFromNonterminal(false, false);
+},
+117 => {
+try self.parseNonterminal(132, false, true);
+},
+118 => {
+try self.parseNonterminal(246, false, true);
+},
+119 => {
+try self.returnFromNonterminal(false, false);
+},
+120 => {
+try self.parseNonterminal(141, false, true);
+},
+121 => {
+try self.returnFromNonterminal(false, false);
+},
+122 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "[", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 125;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(241, false, true);
+},
+123 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "]", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 125;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+124 => {
+try self.returnFromNonterminal(false, false);
+},
+125 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, ".", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 127;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+126 => {
+try self.returnFromNonterminal(false, false);
+},
+127 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "@", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 129;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+128 => {
+try self.returnFromNonterminal(false, false);
+},
+129 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "^", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 131;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+130 => {
+try self.returnFromNonterminal(false, false);
+},
+131 => {
+try self.returnFromNonterminal(true, false);
+},
+132 => {
+switch (self.chars[self.acc + self.start]) {
+'_',
+'A'...'Z',
+'a'...'z',
+=> {
+self.state = 133;
+self.acc += 1;
+},
+'\x00'...'@',
+'['...'^',
+'`',
+'{'...'\xff',
+=> {
+self.state = 135;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+133 => {
+try self.parseNonterminal(224, false, true);
+},
+134 => {
+try self.returnFromNonterminal(false, false);
+},
+135 => {
+try self.returnFromNonterminal(true, false);
+},
+136 => {
+switch (self.chars[self.acc + self.start]) {
+'_',
+'A'...'Z',
+'a'...'z',
+=> {
+self.state = 137;
+self.acc += 1;
+},
+'\x00'...'@',
+'['...'^',
+'`',
+'{'...'\xff',
+=> {
+self.state = 138;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+137 => {
+try self.returnFromNonterminal(false, false);
+},
+138 => {
+switch (self.chars[self.acc + self.start]) {
+'0'...'9',
+=> {
+self.state = 139;
+self.acc += 1;
+},
+'\x00'...'/',
+':'...'\xff',
+=> {
+self.state = 140;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+139 => {
+try self.returnFromNonterminal(false, false);
+},
+140 => {
+try self.returnFromNonterminal(true, false);
+},
+141 => {
+switch (self.chars[self.acc + self.start]) {
+'\'',
+=> {
+self.state = 142;
+self.acc += 1;
+},
+'\x00'...'&',
+'('...'\xff',
+=> {
+self.state = 146;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+142 => {
+try self.parseNonterminal(235, false, true);
+},
+143 => {
+switch (self.chars[self.acc + self.start]) {
+'\'',
+=> {
+self.state = 144;
+self.acc += 1;
+},
+'\x00'...'&',
+'('...'\xff',
+=> {
+self.state = 146;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+144 => {
+try self.parseNonterminal(246, false, true);
+},
+145 => {
+try self.returnFromNonterminal(false, false);
+},
+146 => {
+switch (self.chars[self.acc + self.start]) {
+'\"',
+=> {
+self.state = 147;
+self.acc += 1;
+},
+'\x00'...'!',
+'#'...'\xff',
+=> {
+self.state = 151;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+147 => {
+try self.parseNonterminal(229, false, true);
+},
+148 => {
+switch (self.chars[self.acc + self.start]) {
+'\"',
+=> {
+self.state = 149;
+self.acc += 1;
+},
+'\x00'...'!',
+'#'...'\xff',
+=> {
+self.state = 151;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+149 => {
+try self.parseNonterminal(246, false, true);
+},
+150 => {
+try self.returnFromNonterminal(false, false);
+},
+151 => {
+try self.returnFromNonterminal(true, false);
+},
+152 => {
+try self.parseNonterminal(158, false, true);
+},
+153 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "-", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 155;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(158, false, true);
+},
+154 => {
+try self.returnFromNonterminal(false, false);
+},
+155 => {
+try self.parseNonterminal(158, false, true);
+},
+156 => {
+try self.returnFromNonterminal(false, false);
+},
+157 => {
+try self.returnFromNonterminal(true, false);
+},
+158 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "\\", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 160;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'-',
+=> {
+self.state = 159;
+self.acc += 1;
+},
+'\x00'...',',
+'.'...'\xff',
+=> {
+self.state = 160;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+159 => {
+try self.returnFromNonterminal(false, false);
+},
+160 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+!std.mem.eql(u8, "]", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+} else {
+self.state = 162;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(163, false, true);
+},
+161 => {
+try self.returnFromNonterminal(false, false);
+},
+162 => {
+try self.returnFromNonterminal(true, false);
+},
+163 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "\\", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 165;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'\\',
+']',
+'[',
+'\"',
+'\'',
+'t',
+'r',
+'n',
+=> {
+self.state = 164;
+self.acc += 1;
+},
+'\x00'...'!',
+'#'...'&',
+'('...'Z',
+'^'...'m',
+'o'...'q',
+'s',
+'u'...'\xff',
+=> {
+self.state = 165;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+164 => {
+try self.returnFromNonterminal(false, false);
+},
+165 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "\\x", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 168;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'a'...'f',
+'A'...'F',
+'1'...'9',
+=> {
+self.state = 166;
+self.acc += 1;
+},
+'\x00'...'0',
+':'...'@',
+'G'...'`',
+'g'...'\xff',
+=> {
+self.state = 168;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+166 => {
+switch (self.chars[self.acc + self.start]) {
+'a'...'f',
+'A'...'F',
+'0'...'9',
+=> {
+self.state = 167;
+self.acc += 1;
+},
+'\x00'...'/',
+':'...'@',
+'G'...'`',
+'g'...'\xff',
+=> {
+self.state = 168;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+167 => {
+try self.returnFromNonterminal(false, false);
+},
+168 => {
+if (self.chars.len >= self.start + 3 + self.acc and
+std.mem.eql(u8, "\\x0", self
+.chars[self.start + self.acc..self.start + self.acc + 3])){
+self.acc += 3;
+} else {
+self.state = 170;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'a'...'f',
+'A'...'F',
+'1'...'9',
+=> {
+self.state = 169;
+self.acc += 1;
+},
+'\x00'...'0',
+':'...'@',
+'G'...'`',
+'g'...'\xff',
+=> {
+self.state = 170;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+169 => {
+try self.returnFromNonterminal(false, false);
+},
+170 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+!std.mem.eql(u8, "\\", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+} else {
+self.state = 172;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'\x01'...'\xff',
+=> {
+self.state = 171;
+self.acc += 1;
+},
+'\x00',
+=> {
+self.state = 172;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+171 => {
+try self.returnFromNonterminal(false, false);
+},
+172 => {
+try self.returnFromNonterminal(true, false);
+},
+173 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "%%", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 176;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+174 => {
+try self.parseNonterminal(246, false, true);
+},
+175 => {
+try self.returnFromNonterminal(false, false);
+},
+176 => {
+try self.returnFromNonterminal(true, false);
+},
+177 => {
+try self.parseNonterminal(191, false, true);
+},
+178 => {
+try self.returnFromNonterminal(false, false);
+},
+179 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "//", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 183;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+switch (self.chars[self.acc + self.start]) {
+'\x00'...')',
+'+'...'\xff',
+=> {
+self.state = 180;
+},
+'*',
+=> {
+self.state = 183;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+180 => {
+try self.parseNonterminal(251, false, true);
+},
+181 => {
+try self.parseNonterminal(187, false, true);
+},
+182 => {
+try self.returnFromNonterminal(false, false);
+},
+183 => {
+try self.returnFromNonterminal(true, false);
+},
+184 => {
+try self.parseNonterminal(257, false, true);
+},
+185 => {
+try self.returnFromNonterminal(false, false);
+},
+186 => {
+try self.returnFromNonterminal(true, false);
+},
+187 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "\r\n", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 188;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.returnFromNonterminal(false, false);
+},
+188 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "\n", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 189;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.returnFromNonterminal(false, false);
+},
+189 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "\r", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 190;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.returnFromNonterminal(false, false);
+},
+190 => {
+try self.returnFromNonterminal(true, false);
+},
+191 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, " ", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 192;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.returnFromNonterminal(false, false);
+},
+192 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "\t", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 193;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.returnFromNonterminal(false, false);
+},
+193 => {
+try self.parseNonterminal(187, false, true);
+},
+194 => {
+try self.returnFromNonterminal(false, false);
+},
+195 => {
+try self.returnFromNonterminal(true, false);
+},
+196 => {
+if (self.chars.len >= self.start + 3 + self.acc and
+std.mem.eql(u8, "//*", self
+.chars[self.start + self.acc..self.start + self.acc + 3])){
+self.acc += 3;
+} else {
+self.state = 201;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(184, false, true);
+},
+197 => {
+try self.parseNonterminal(187, false, true);
+},
+198 => {
+try self.parseNonterminal(246, false, true);
+},
+199 => {
+try self.parseNonterminal(196, false, true);
+},
+200 => {
+try self.returnFromNonterminal(false, false);
+},
+201 => {
+try self.returnFromNonterminal(false, false);
+},
+202 => {
+try self.returnFromNonterminal(true, false);
+},
+203 => {
+try self.parseNonterminal(29, false, true);
+},
+204 => {
+try self.parseNonterminal(203, false, true);
+},
+205 => {
+try self.returnFromNonterminal(false, false);
+},
+206 => {
+try self.returnFromNonterminal(false, false);
+},
+207 => {
+try self.returnFromNonterminal(true, false);
+},
+208 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+std.mem.eql(u8, "|", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+self.acc += 1;
+} else {
+self.state = 212;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(246, false, true);
+},
+209 => {
+try self.parseNonterminal(53, false, true);
+},
+210 => {
+try self.parseNonterminal(208, false, true);
+},
+211 => {
+try self.returnFromNonterminal(false, false);
+},
+212 => {
+try self.returnFromNonterminal(false, false);
+},
+213 => {
+try self.returnFromNonterminal(true, false);
+},
+214 => {
+switch (self.chars[self.acc + self.start]) {
+'0'...'9',
+=> {
+self.state = 215;
+self.acc += 1;
+},
+'\x00'...'/',
+':'...'\xff',
+=> {
+self.state = 217;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+215 => {
+try self.parseNonterminal(214, false, true);
+},
+216 => {
+try self.returnFromNonterminal(false, false);
+},
+217 => {
+try self.returnFromNonterminal(false, false);
+},
+218 => {
+try self.returnFromNonterminal(true, false);
+},
+219 => {
+switch (self.chars[self.acc + self.start]) {
+'0'...'9',
+=> {
+self.state = 220;
+self.acc += 1;
+},
+'\x00'...'/',
+':'...'\xff',
+=> {
+self.state = 222;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+220 => {
+try self.parseNonterminal(219, false, true);
+},
+221 => {
+try self.returnFromNonterminal(false, false);
+},
+222 => {
+try self.returnFromNonterminal(false, false);
+},
+223 => {
+try self.returnFromNonterminal(true, false);
+},
+224 => {
+try self.parseNonterminal(136, false, true);
+},
+225 => {
+try self.parseNonterminal(224, false, true);
+},
+226 => {
+try self.returnFromNonterminal(false, false);
+},
+227 => {
+try self.returnFromNonterminal(false, false);
+},
+228 => {
+try self.returnFromNonterminal(true, false);
+},
+229 => {
+switch (self.chars[self.acc + self.start]) {
+'\x00'...'!',
+'#'...'\xff',
+=> {
+self.state = 230;
+},
+'\"',
+=> {
+self.state = 233;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+230 => {
+try self.parseNonterminal(163, false, true);
+},
+231 => {
+try self.parseNonterminal(229, false, true);
+},
+232 => {
+try self.returnFromNonterminal(false, false);
+},
+233 => {
+try self.returnFromNonterminal(false, false);
+},
+234 => {
+try self.returnFromNonterminal(true, false);
+},
+235 => {
+switch (self.chars[self.acc + self.start]) {
+'\x00'...'&',
+'('...'\xff',
+=> {
+self.state = 236;
+},
+'\'',
+=> {
+self.state = 239;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+236 => {
+try self.parseNonterminal(163, false, true);
+},
+237 => {
+try self.parseNonterminal(235, false, true);
+},
+238 => {
+try self.returnFromNonterminal(false, false);
+},
+239 => {
+try self.returnFromNonterminal(false, false);
+},
+240 => {
+try self.returnFromNonterminal(true, false);
+},
+241 => {
+if (self.chars.len >= self.start + 1 + self.acc and
+!std.mem.eql(u8, "]", self
+.chars[self.start + self.acc..self.start + self.acc + 1])){
+} else {
+self.state = 244;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(152, false, true);
+},
+242 => {
+try self.parseNonterminal(241, false, true);
+},
+243 => {
+try self.returnFromNonterminal(false, false);
+},
+244 => {
+try self.returnFromNonterminal(false, false);
+},
+245 => {
+try self.returnFromNonterminal(true, false);
+},
+246 => {
+try self.parseNonterminal(177, false, true);
+},
+247 => {
+try self.parseNonterminal(246, false, true);
+},
+248 => {
+try self.returnFromNonterminal(false, false);
+},
+249 => {
+try self.returnFromNonterminal(false, false);
+},
+250 => {
+try self.returnFromNonterminal(true, false);
+},
+251 => {
+try self.parseNonterminal(187, true, false);
+},
+252 => {
+switch (self.chars[self.acc + self.start]) {
+'\x01'...'\xff',
+=> {
+self.state = 253;
+self.acc += 1;
+},
+'\x00',
+=> {
+self.state = 255;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+253 => {
+try self.parseNonterminal(251, false, true);
+},
+254 => {
+try self.returnFromNonterminal(false, false);
+},
+255 => {
+try self.returnFromNonterminal(false, false);
+},
+256 => {
+try self.returnFromNonterminal(true, false);
+},
+257 => {
+try self.parseNonterminal(187, true, false);
+},
+258 => {
+switch (self.chars[self.acc + self.start]) {
+'\x01'...'\xff',
+=> {
+self.state = 259;
+self.acc += 1;
+},
+'\x00',
+=> {
+self.state = 261;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+},
+}
+},
+259 => {
+try self.parseNonterminal(257, false, true);
+},
+260 => {
+try self.returnFromNonterminal(false, false);
+},
+261 => {
+try self.returnFromNonterminal(false, false);
+},
+262 => {
+try self.returnFromNonterminal(true, false);
+},
+263 => {
+try self.parseNonterminal(35, false, true);
+},
+264 => {
+try self.parseNonterminal(263, false, true);
+},
+265 => {
+try self.returnFromNonterminal(false, false);
+},
+266 => {
+try self.returnFromNonterminal(false, false);
+},
+267 => {
+try self.returnFromNonterminal(true, false);
+},
+268 => {
+try self.parseNonterminal(94, false, true);
+},
+269 => {
+try self.parseNonterminal(268, false, true);
+},
+270 => {
+try self.returnFromNonterminal(false, false);
+},
+271 => {
+try self.returnFromNonterminal(false, false);
+},
+272 => {
+try self.returnFromNonterminal(true, false);
+},
+273 => {
+if (self.chars.len >= self.start + 6 + self.acc and
+std.mem.eql(u8, "%% TOP", self
+.chars[self.start + self.acc..self.start + self.acc + 6])){
+self.acc += 6;
+} else {
+self.state = 279;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+274 => {
+try self.parseNonterminal(246, false, true);
+},
+275 => {
+try self.parseNonterminal(26, false, true);
+},
+276 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "%%", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 279;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+277 => {
+try self.parseNonterminal(246, false, true);
+},
+278 => {
+try self.returnFromNonterminal(false, false);
+},
+279 => {
+try self.returnFromNonterminal(false, false);
+},
+280 => {
+try self.returnFromNonterminal(true, false);
+},
+281 => {
+if (self.chars.len >= self.start + 9 + self.acc and
+std.mem.eql(u8, "%% FIELDS", self
+.chars[self.start + self.acc..self.start + self.acc + 9])){
+self.acc += 9;
+} else {
+self.state = 287;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+282 => {
+try self.parseNonterminal(246, false, true);
+},
+283 => {
+try self.parseNonterminal(26, false, true);
+},
+284 => {
+if (self.chars.len >= self.start + 2 + self.acc and
+std.mem.eql(u8, "%%", self
+.chars[self.start + self.acc..self.start + self.acc + 2])){
+self.acc += 2;
+} else {
+self.state = 287;
+self.acc = 0;
+self.infer_actions.shrinkRetainingCapacity(self.stack_start);
+continue;
+}
+try self.parseNonterminal(187, false, true);
+},
+285 => {
+try self.parseNonterminal(246, false, true);
+},
+286 => {
+try self.returnFromNonterminal(false, false);
+},
+287 => {
+try self.returnFromNonterminal(false, false);
+},
+288 => {
+try self.returnFromNonterminal(true, false);
+},
+            else => unreachable,
+        }
+    }
+
+    return if (!self.did_fail) blk: {
+        const infer_result = self.infer() catch |err| 
+            if (err == error.OutOfMemory)
+                 return error.OutOfMemory 
+            else ParseReturn{ 
+                .infer_fail = .{ .err = err, .msg = "action execution error" }, 
+        };
+        break :blk infer_result;
+    } else 
+        .{ .parse_fail = self.getParseError() };
+}
+fn finalizeInferInstrs(self: *@This()) Allocator.Error!void {
+    for (self.infer_actions.items) |frame| {
+        if (!opts.use_memo or !frame.memo) {
+            try self.infer_instrs.append(frame);
+        } else {
+            try self.memoInfer(frame.state, frame.start);
+        }
+    }
+    self.infer_actions.clearRetainingCapacity();
+    self.stack_start = 0;
+}
+
+fn fail(self: *@This(), msg: []const u8, err: ?anyerror) void {
+    self.did_fail = true;
+    self.infer_fail_err = err;
+    self.infer_fail_msg = msg;
+}
+
+fn inferNonterminal(self: *@This(), state: State) Allocator.Error!void {
+    try self.infer_stack.append(.{
+        .acc = self.infer_acc,
+        .state = self.infer_state,
+    });
+
+    const last_state = self.memo.getState(self.infer_acc, AddrToRule[state]);
+    self.infer_state = ActionTranslate[last_state];
+}
+
+fn skipInferNonterminal(self: *@This(), state: State) void {
+    const length = switch (self.memo.get(self.infer_acc, AddrToRule[state])) {
+        .pass => |val| val.length,
+        else => unreachable,
+    };
+
+    self.infer_acc += length;
+    self.infer_state += 1;
+}
+
+fn returnFromInfer(self: *@This(), state: State) Allocator.Error!void {
+    const frame = self.infer_stack.popOrNull() orelse blk: {
+        self.infer_done = true;
+        break :blk InferFrame{
+            .state = self.infer_state,
+            .acc = self.infer_start,
+        };
+    };
+
+    try self.infer_instrs.append(.{
+        .memo = false,
+        .start = frame.acc,
+        .state = state,
+        .length = self.infer_acc - frame.acc,
+    });
+    self.infer_state = frame.state + 1;
+}
+fn callAction(self: *@This(), state: usize, start: usize, length: usize) !void {
+    _ = start + length + self.state; // just to be able to compile 
+
+    switch (state) {
+9 => {
+const @"$10" = self.calc_stack.pop().type_16;
+const @"$1" = self.calc_stack.pop().type_27;
+var @"$*1" = @"$1";
+const @"$9": []const u8 =  @"$10" ;
+ self.ir.name = @"$9"; 
+    self.ir.top_level_comment = invert([]const u8, try @"$*1".toOwnedSlice());
+},
+21 => {
+const @"$3" = self.calc_stack.pop().type_2;
+const @"$14" = self.calc_stack.pop().type_2;
+ 
+    self.ir.top_header = @"$14";  
+ 
+    self.ir.field_header = @"$3";  
+},
+24 => {
+},
+27 => {
+const @"$ret": []const u8 =  self.chars[start .. start + length] ;
+try self.calc_stack.append(.{.type_2 = @"$ret"});
+},
+31 => {
+},
+33 => {
+const @"$0" = self.calc_stack.pop().type_18;
+ self.allocator.free(@"$0"); },
+42 => {
+const @"$4" = self.calc_stack.pop().type_29;
+const @"$3" = self.calc_stack.pop().type_6;
+const @"$1" = self.calc_stack.pop().type_5;
+const @"$12" = self.calc_stack.pop().type_16;
+const @"$0": []const u8 =  @"$12" ;
+
+    _ = self.chars[start .. start + length]; // to prevent inlining
+    var sequences = @"$4";
+    try sequences.append(@"$3");
+    const def_cnt = self.ir.defs.items.len;
+    try self.ir.defs.append(.{
+        .id = def_cnt,
+        .identifier = @"$0",
+        .return_type = @"$1",
+        .sequences = sequences,
+        .accepts_eps = false,
+        .mid_recurse = false,
+        .right_recurse = false,
+        .regular = true,
+        .finite = true,
+        .has_actions = false,
+        .moves_actions = false,
+        .is_terminal = su.isScreamingSnakeCase(@"$0"),
+    });
+},
+47 => {
+const @"$2" = self.calc_stack.pop().type_16;
+const @"$1": []const u8 =  @"$2" ;
+const @"$ret": ReturnType =  ReturnType.init(@"$1", false, false) ;
+try self.calc_stack.append(.{.type_5 = @"$ret"});
+},
+50 => {
+const @"$1" = self.calc_stack.pop().type_18;
+const @"$ret": ReturnType =  ReturnType.init(@"$1", true, false) ;
+try self.calc_stack.append(.{.type_5 = @"$ret"});
+},
+51 => {
+const @"$ret": ReturnType =  ReturnType.empty() ;
+try self.calc_stack.append(.{.type_5 = @"$ret"});
+},
+56 => {
+const @"$2" = self.calc_stack.pop().type_8;
+const @"$0" = self.calc_stack.pop().type_7;
+const @"$ret": Sequence = 
+    blk: {
+        var seq = @"$0";
+        seq.action = @"$2";
+        break: blk seq;
+    }
+;
+try self.calc_stack.append(.{.type_6 = @"$ret"});
+},
+58 => {
+const @"$0" = self.calc_stack.pop().type_7;
+const @"$ret": Sequence =  @"$0" ;
+try self.calc_stack.append(.{.type_6 = @"$ret"});
+},
+62 => {
+const @"$2" = self.calc_stack.pop().type_40;
+var @"$*2" = @"$2";
+const @"$1" = self.calc_stack.pop().type_12;
+const @"$0": std.ArrayList(Operated) = blk: {try @"$*2".append(@"$1"); break :blk @"$*2"; };
+const @"$ret": Sequence = .{
+    .operateds = @"$0",
+    .string = self.chars[start .. start + length],
+    .action = Action.empty(self.ir.allocator),
+};
+try self.calc_stack.append(.{.type_7 = @"$ret"});
+},
+65 => {
+const @"$0" = self.calc_stack.pop().type_9;
+const @"$ret": Action = .{
+    .implicit = false,
+    .bases = blk: {
+        var bases = std.ArrayList(ir.ActionBase).init(self.ir.allocator);
+        try bases.append(.{
+            .data = self.chars[start .. start + length],
+            .owned = false,
+            .action_vars = @"$0",
+            .return_type = ReturnType.impl(),
+            .id = 0,
+            .mut = false,
+        });
+        break :blk bases;
+    },
+    .use_match = blk: {
+        for (@"$0".items) |item| {
+            if (!item.isMatchedString()) continue;
+            break :blk true;
+        }
+        break :blk false;
+    },
+    .rets = std.ArrayList(ActionReturn)
+        .init(self.ir.allocator),
+};
+try self.calc_stack.append(.{.type_8 = @"$ret"});
+},
+70 => {
+const @"$4" = self.calc_stack.pop().type_9;
+const @"$2" = self.calc_stack.pop().type_9;
+const @"$0" = self.calc_stack.pop().type_10;
+const @"$ret": std.ArrayList(ActionVar) = 
+    blk: {
+        var list = @"$4";
+        try list.appendSlice(@"$0".items);
+        try list.appendSlice(@"$2".items);
+        @"$0".deinit();
+        @"$2".deinit();
+        break: blk list;
+    }
+;
+try self.calc_stack.append(.{.type_9 = @"$ret"});
+},
+72 => {
+const @"$0" = self.calc_stack.pop().type_10;
+const @"$ret": std.ArrayList(ActionVar) =  @"$0" ;
+try self.calc_stack.append(.{.type_9 = @"$ret"});
+},
+73 => {
+const @"$ret": std.ArrayList(ActionVar) =  std.ArrayList(ActionVar).init(self.ir.allocator) ;
+try self.calc_stack.append(.{.type_9 = @"$ret"});
+},
+77 => {
+const @"$1" = self.calc_stack.pop().type_10;
+const @"$0" = self.calc_stack.pop().type_11;
+const @"$ret": std.ArrayList(ActionVar) =  blk: { var l = @"$1"; try l.append(@"$0"); break :blk l;} ;
+try self.calc_stack.append(.{.type_10 = @"$ret"});
+},
+81 => {
+const @"$2" = self.calc_stack.pop().type_10;
+const @"$ret": std.ArrayList(ActionVar) =  @"$2" ;
+try self.calc_stack.append(.{.type_10 = @"$ret"});
+},
+84 => {
+const @"$1" = self.calc_stack.pop().type_10;
+const @"$0" = self.calc_stack.pop().type_18;
+const @"$ret": std.ArrayList(ActionVar) =  blk: { self.allocator.free(@"$0"); break: blk @"$1"; } ;
+try self.calc_stack.append(.{.type_10 = @"$ret"});
+},
+85 => {
+const @"$ret": std.ArrayList(ActionVar) =  std.ArrayList(ActionVar).init(self.ir.allocator) ;
+try self.calc_stack.append(.{.type_10 = @"$ret"});
+},
+89 => {
+const @"$ret": ActionVar = 
+    blk: {       
+        const num = std.fmt.parseInt(usize, self.chars[start .. start + length][1..], 10) catch |err| switch (err) {
+            error.InvalidCharacter => unreachable,
+            else => {
+                self.fail("too large integer!\n", null);
+                return;
+            },
+        };
+        break: blk .{
+            .var_decl = self.chars[start .. start + length],
+            .arg_num = if (num == 0) null else num - 1,
+            .escape = false,
+        };
+    }
+;
+try self.calc_stack.append(.{.type_11 = @"$ret"});
+},
+92 => {
+const @"$ret": ActionVar = 
+    blk: {       
+        const num = std.fmt.parseInt(usize, self.chars[start .. start + length][2..], 10) catch |err| switch (err) {
+            error.InvalidCharacter => unreachable,
+            else => {
+                self.fail("too large integer!\n", null);
+                return;
+            },
+        };
+        break: blk .{
+            .var_decl = self.chars[start .. start + length],
+            .arg_num = num - 1,
+            .escape = true,  // because it is mutable
+        };
+    }
+;
+try self.calc_stack.append(.{.type_11 = @"$ret"});
+},
+97 => {
+const @"$2" = self.calc_stack.pop().type_14;
+const @"$1" = self.calc_stack.pop().type_15;
+const @"$0" = self.calc_stack.pop().type_13;
+const @"$ret": Operated = .{
+    .prefix_op = @"$0",
+    .postfix_op = @"$2",
+    .value = @"$1",
+    .return_type = switch (@"$1") {
+        .IDENTIFIER,
+        .SEQ,
+        => ReturnType.impl(),
+        else => ReturnType.empty(),
+    },
+    .string = std.mem.trimRight(u8, self.chars[start .. start + length], " \t\n\r"),
+};
+try self.calc_stack.append(.{.type_12 = @"$ret"});
+},
+100 => {
+const @"$ret": PrefixOp =  .AND ;
+try self.calc_stack.append(.{.type_13 = @"$ret"});
+},
+102 => {
+const @"$ret": PrefixOp =  .NOT ;
+try self.calc_stack.append(.{.type_13 = @"$ret"});
+},
+103 => {
+const @"$ret": PrefixOp =  .NONE ;
+try self.calc_stack.append(.{.type_13 = @"$ret"});
+},
+106 => {
+const @"$ret": PostfixOp =  .STAR ;
+try self.calc_stack.append(.{.type_14 = @"$ret"});
+},
+108 => {
+const @"$ret": PostfixOp =  .PLUS ;
+try self.calc_stack.append(.{.type_14 = @"$ret"});
+},
+110 => {
+const @"$ret": PostfixOp =  .QUESTION ;
+try self.calc_stack.append(.{.type_14 = @"$ret"});
+},
+111 => {
+const @"$ret": PostfixOp =  .NONE ;
+try self.calc_stack.append(.{.type_14 = @"$ret"});
+},
+116 => {
+const @"$1" = self.calc_stack.pop().type_7;
+const @"$ret": Primary =  .{ .SEQ = @"$1" } ;
+try self.calc_stack.append(.{.type_15 = @"$ret"});
+},
+119 => {
+const @"$1" = self.calc_stack.pop().type_16;
+const @"$0": []const u8 =  @"$1" ;
+const @"$ret": Primary =  .{ .IDENTIFIER = @"$0" } ;
+try self.calc_stack.append(.{.type_15 = @"$ret"});
+},
+121 => {
+const @"$0" = self.calc_stack.pop().type_18;
+const @"$ret": Primary =  .{ .LITERAL = @"$0" } ;
+try self.calc_stack.append(.{.type_15 = @"$ret"});
+},
+124 => {
+const @"$2" = self.calc_stack.pop().type_35;
+const @"$0": Class =  .{ .content = @"$2" } ;
+const @"$ret": Primary =  .{ .CLASS = @"$0" } ;
+try self.calc_stack.append(.{.type_15 = @"$ret"});
+},
+126 => {
+const @"$ret": Primary =  .DOT ;
+try self.calc_stack.append(.{.type_15 = @"$ret"});
+},
+128 => {
+const @"$ret": Primary =  .EPSILON ;
+try self.calc_stack.append(.{.type_15 = @"$ret"});
+},
+130 => {
+const @"$ret": Primary =  .CUT ;
+try self.calc_stack.append(.{.type_15 = @"$ret"});
+},
+134 => {
+const @"$ret": []const u8 =  self.chars[start .. start + length] ;
+try self.calc_stack.append(.{.type_16 = @"$ret"});
+},
+137 => {
+},
+139 => {
+},
+145 => {
+const @"$1" = self.calc_stack.pop().type_34;
+var @"$*1" = @"$1";
+const @"$ret": []const u8 =  invert(u8, try @"$*1".toOwnedSlice()) ;
+try self.calc_stack.append(.{.type_18 = @"$ret"});
+},
+150 => {
+const @"$1" = self.calc_stack.pop().type_33;
+var @"$*1" = @"$1";
+const @"$ret": []const u8 =  invert(u8, try @"$*1".toOwnedSlice()) ;
+try self.calc_stack.append(.{.type_18 = @"$ret"});
+},
+154 => {
+const @"$2" = self.calc_stack.pop().type_20;
+const @"$0" = self.calc_stack.pop().type_20;
+const @"$ret": Range = .{
+    .from = @"$0",
+    .to = @"$2",
+    .backing = self.chars[start .. start + length],
+};
+try self.calc_stack.append(.{.type_19 = @"$ret"});
+},
+156 => {
+const @"$0" = self.calc_stack.pop().type_20;
+const @"$ret": Range = .{
+    .from = @"$0",
+    .to = 0,
+    .backing = self.chars[start .. start + length],
+};
+try self.calc_stack.append(.{.type_19 = @"$ret"});
+},
+159 => {
+const @"$ret": u8 =  '-' ;
+try self.calc_stack.append(.{.type_20 = @"$ret"});
+},
+161 => {
+const @"$1" = self.calc_stack.pop().type_21;
+const @"$ret": u8 =  @"$1" ;
+try self.calc_stack.append(.{.type_20 = @"$ret"});
+},
+164 => {
+const @"$ret": u8 = 
+    switch (self.chars[start .. start + length][1]) {
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        else => |c| c, 
+    }
+;
+try self.calc_stack.append(.{.type_21 = @"$ret"});
+},
+167 => {
+const @"$ret": u8 =   try std.fmt.parseInt(u8, self.chars[start .. start + length][2..], 16) ;
+try self.calc_stack.append(.{.type_21 = @"$ret"});
+},
+169 => {
+const @"$ret": u8 =  try std.fmt.parseInt(u8, self.chars[start .. start + length][2..], 16) ;
+try self.calc_stack.append(.{.type_21 = @"$ret"});
+},
+171 => {
+const @"$ret": u8 =  self.chars[start .. start + length][0] ;
+try self.calc_stack.append(.{.type_21 = @"$ret"});
+},
+175 => {
+},
+178 => {
+},
+182 => {
+},
+185 => {
+const @"$ret": []const u8 =  self.chars[start .. start + length] ;
+try self.calc_stack.append(.{.type_24 = @"$ret"});
+},
+187 => {
+},
+188 => {
+},
+189 => {
+},
+191 => {
+},
+192 => {
+},
+194 => {
+},
+200 => {
+const @"$1" = self.calc_stack.pop().type_27;
+var @"$*1" = @"$1";
+const @"$6" = self.calc_stack.pop().type_24;
+const @"$2": []const u8 =  @"$6" ;
+const @"$0": []const u8 = @"$2";
+const @"$ret": std.ArrayList([]const u8) = blk: {try @"$*1".append(@"$0"); break :blk @"$*1"; };
+try self.calc_stack.append(.{.type_27 = @"$ret"});
+},
+201 => {
+const @"$ret": std.ArrayList([]const u8) = std.ArrayList([]const u8).init(self.allocator);
+try self.calc_stack.append(.{.type_27 = @"$ret"});
+},
+205 => {
+},
+206 => {
+},
+211 => {
+const @"$1" = self.calc_stack.pop().type_29;
+var @"$*1" = @"$1";
+const @"$3" = self.calc_stack.pop().type_6;
+const @"$0": Sequence = @"$3";
+const @"$ret": std.ArrayList(Sequence) = blk: {try @"$*1".append(@"$0"); break :blk @"$*1"; };
+try self.calc_stack.append(.{.type_29 = @"$ret"});
+},
+212 => {
+const @"$ret": std.ArrayList(Sequence) = std.ArrayList(Sequence).init(self.allocator);
+try self.calc_stack.append(.{.type_29 = @"$ret"});
+},
+216 => {
+},
+217 => {
+},
+221 => {
+},
+222 => {
+},
+226 => {
+},
+227 => {
+},
+232 => {
+const @"$1" = self.calc_stack.pop().type_33;
+var @"$*1" = @"$1";
+const @"$3" = self.calc_stack.pop().type_21;
+const @"$0": u8 = @"$3";
+const @"$ret": std.ArrayList(u8) = blk: {try @"$*1".append(@"$0"); break :blk @"$*1"; };
+try self.calc_stack.append(.{.type_33 = @"$ret"});
+},
+233 => {
+const @"$ret": std.ArrayList(u8) = std.ArrayList(u8).init(self.allocator);
+try self.calc_stack.append(.{.type_33 = @"$ret"});
+},
+238 => {
+const @"$1" = self.calc_stack.pop().type_34;
+var @"$*1" = @"$1";
+const @"$3" = self.calc_stack.pop().type_21;
+const @"$0": u8 = @"$3";
+const @"$ret": std.ArrayList(u8) = blk: {try @"$*1".append(@"$0"); break :blk @"$*1"; };
+try self.calc_stack.append(.{.type_34 = @"$ret"});
+},
+239 => {
+const @"$ret": std.ArrayList(u8) = std.ArrayList(u8).init(self.allocator);
+try self.calc_stack.append(.{.type_34 = @"$ret"});
+},
+243 => {
+const @"$1" = self.calc_stack.pop().type_35;
+var @"$*1" = @"$1";
+const @"$3" = self.calc_stack.pop().type_19;
+const @"$0": Range = @"$3";
+const @"$ret": std.ArrayList(Range) = blk: {try @"$*1".append(@"$0"); break :blk @"$*1"; };
+try self.calc_stack.append(.{.type_35 = @"$ret"});
+},
+244 => {
+const @"$ret": std.ArrayList(Range) = std.ArrayList(Range).init(self.allocator);
+try self.calc_stack.append(.{.type_35 = @"$ret"});
+},
+248 => {
+},
+249 => {
+},
+254 => {
+},
+255 => {
+},
+260 => {
+},
+261 => {
+},
+265 => {
+},
+266 => {
+},
+270 => {
+const @"$1" = self.calc_stack.pop().type_40;
+var @"$*1" = @"$1";
+const @"$0" = self.calc_stack.pop().type_12;
+const @"$ret": std.ArrayList(Operated) = blk: {try @"$*1".append(@"$0"); break :blk @"$*1"; };
+try self.calc_stack.append(.{.type_40 = @"$ret"});
+},
+271 => {
+const @"$ret": std.ArrayList(Operated) = std.ArrayList(Operated).init(self.allocator);
+try self.calc_stack.append(.{.type_40 = @"$ret"});
+},
+278 => {
+const @"$2" = self.calc_stack.pop().type_2;
+ 
+    self.ir.top_header = @"$2";  
+},
+279 => {
+},
+286 => {
+const @"$2" = self.calc_stack.pop().type_2;
+ 
+    self.ir.field_header = @"$2";  
+},
+287 => {
+},
+        else => unreachable,
+    }
+}
+fn memoInfer(self: *@This(), state: State, start: CharIdx) Allocator.Error!void {
+self.infer_start = start;
+self.infer_acc = start;
+self.infer_state = ActionTranslate[state];
+self.infer_done = false;
+
+while (!self.infer_done) {
+    switch (self.infer_state) {
+0 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+1 => {
+self.infer_acc += 0;
+try self.inferNonterminal(196);
+},
+2 => {
+self.infer_acc += 7;
+self.skipInferNonterminal(246);
+},
+3 => {
+self.infer_acc += 0;
+try self.inferNonterminal(132);
+},
+4 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+5 => {
+self.infer_acc += 0;
+try self.inferNonterminal(11);
+},
+6 => {
+self.infer_acc += 0;
+try self.inferNonterminal(35);
+},
+7 => {
+self.infer_acc += 0;
+try self.inferNonterminal(263);
+},
+8 => {
+self.infer_acc += 0;
+try self.returnFromInfer(9);
+},
+9 => {
+self.infer_acc += 6;
+self.skipInferNonterminal(187);
+},
+10 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+11 => {
+self.infer_acc += 0;
+try self.inferNonterminal(26);
+},
+12 => {
+self.infer_acc += 2;
+self.skipInferNonterminal(187);
+},
+13 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+14 => {
+self.infer_acc += 9;
+self.skipInferNonterminal(187);
+},
+15 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+16 => {
+self.infer_acc += 0;
+try self.inferNonterminal(26);
+},
+17 => {
+self.infer_acc += 2;
+self.skipInferNonterminal(187);
+},
+18 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+19 => {
+self.infer_acc += 0;
+try self.returnFromInfer(21);
+},
+20 => {
+self.infer_acc += 0;
+try self.inferNonterminal(281);
+},
+21 => {
+self.infer_acc += 0;
+try self.inferNonterminal(273);
+},
+22 => {
+self.infer_acc += 0;
+try self.returnFromInfer(24);
+},
+23 => {
+self.infer_acc += 0;
+try self.inferNonterminal(203);
+},
+24 => {
+self.infer_acc += 0;
+try self.returnFromInfer(27);
+},
+25 => {
+self.infer_acc += 1;
+try self.returnFromInfer(31);
+},
+26 => {
+self.infer_acc += 0;
+try self.inferNonterminal(141);
+},
+27 => {
+self.infer_acc += 0;
+try self.returnFromInfer(33);
+},
+28 => {
+self.infer_acc += 0;
+try self.inferNonterminal(132);
+},
+29 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+30 => {
+self.infer_acc += 0;
+try self.inferNonterminal(44);
+},
+31 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+32 => {
+self.infer_acc += 0;
+try self.inferNonterminal(53);
+},
+33 => {
+self.infer_acc += 0;
+try self.inferNonterminal(208);
+},
+34 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+35 => {
+self.infer_acc += 0;
+try self.returnFromInfer(42);
+},
+36 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+37 => {
+self.infer_acc += 0;
+try self.inferNonterminal(132);
+},
+38 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+39 => {
+self.infer_acc += 0;
+try self.returnFromInfer(47);
+},
+40 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+41 => {
+self.infer_acc += 0;
+try self.inferNonterminal(141);
+},
+42 => {
+self.infer_acc += 0;
+try self.returnFromInfer(50);
+},
+43 => {
+self.infer_acc += 0;
+try self.returnFromInfer(51);
+},
+44 => {
+self.infer_acc += 0;
+try self.inferNonterminal(60);
+},
+45 => {
+self.infer_acc += 1;
+try self.inferNonterminal(64);
+},
+46 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+47 => {
+self.infer_acc += 0;
+try self.returnFromInfer(56);
+},
+48 => {
+self.infer_acc += 0;
+try self.inferNonterminal(60);
+},
+49 => {
+self.infer_acc += 0;
+try self.returnFromInfer(58);
+},
+50 => {
+self.infer_acc += 0;
+try self.inferNonterminal(94);
+},
+51 => {
+self.infer_acc += 0;
+try self.inferNonterminal(268);
+},
+52 => {
+self.infer_acc += 0;
+try self.returnFromInfer(62);
+},
+53 => {
+self.infer_acc += 0;
+try self.inferNonterminal(67);
+},
+54 => {
+self.infer_acc += 0;
+try self.returnFromInfer(65);
+},
+55 => {
+self.infer_acc += 0;
+try self.inferNonterminal(75);
+},
+56 => {
+self.infer_acc += 1;
+try self.inferNonterminal(67);
+},
+57 => {
+self.infer_acc += 1;
+try self.inferNonterminal(67);
+},
+58 => {
+self.infer_acc += 0;
+try self.returnFromInfer(70);
+},
+59 => {
+self.infer_acc += 0;
+try self.inferNonterminal(75);
+},
+60 => {
+self.infer_acc += 0;
+try self.returnFromInfer(72);
+},
+61 => {
+self.infer_acc += 0;
+try self.returnFromInfer(73);
+},
+62 => {
+self.infer_acc += 0;
+try self.inferNonterminal(87);
+},
+63 => {
+self.infer_acc += 0;
+try self.inferNonterminal(75);
+},
+64 => {
+self.infer_acc += 0;
+try self.returnFromInfer(77);
+},
+65 => {
+self.infer_acc += 1;
+try self.inferNonterminal(75);
+},
+66 => {
+self.infer_acc += 0;
+try self.returnFromInfer(81);
+},
+67 => {
+self.infer_acc += 0;
+try self.inferNonterminal(141);
+},
+68 => {
+self.infer_acc += 0;
+try self.inferNonterminal(75);
+},
+69 => {
+self.infer_acc += 0;
+try self.returnFromInfer(84);
+},
+70 => {
+self.infer_acc += 0;
+try self.returnFromInfer(85);
+},
+71 => {
+self.infer_acc += 2;
+self.skipInferNonterminal(219);
+},
+72 => {
+self.infer_acc += 0;
+try self.returnFromInfer(89);
+},
+73 => {
+self.infer_acc += 3;
+self.skipInferNonterminal(214);
+},
+74 => {
+self.infer_acc += 0;
+try self.returnFromInfer(92);
+},
+75 => {
+self.infer_acc += 0;
+try self.inferNonterminal(99);
+},
+76 => {
+self.infer_acc += 0;
+try self.inferNonterminal(113);
+},
+77 => {
+self.infer_acc += 0;
+try self.inferNonterminal(105);
+},
+78 => {
+self.infer_acc += 0;
+try self.returnFromInfer(97);
+},
+79 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+80 => {
+self.infer_acc += 0;
+try self.returnFromInfer(100);
+},
+81 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+82 => {
+self.infer_acc += 0;
+try self.returnFromInfer(102);
+},
+83 => {
+self.infer_acc += 0;
+try self.returnFromInfer(103);
+},
+84 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+85 => {
+self.infer_acc += 0;
+try self.returnFromInfer(106);
+},
+86 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+87 => {
+self.infer_acc += 0;
+try self.returnFromInfer(108);
+},
+88 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+89 => {
+self.infer_acc += 0;
+try self.returnFromInfer(110);
+},
+90 => {
+self.infer_acc += 0;
+try self.returnFromInfer(111);
+},
+91 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+92 => {
+self.infer_acc += 0;
+try self.inferNonterminal(60);
+},
+93 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+94 => {
+self.infer_acc += 0;
+try self.returnFromInfer(116);
+},
+95 => {
+self.infer_acc += 0;
+try self.inferNonterminal(132);
+},
+96 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+97 => {
+self.infer_acc += 0;
+try self.returnFromInfer(119);
+},
+98 => {
+self.infer_acc += 0;
+try self.inferNonterminal(141);
+},
+99 => {
+self.infer_acc += 0;
+try self.returnFromInfer(121);
+},
+100 => {
+self.infer_acc += 1;
+try self.inferNonterminal(241);
+},
+101 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+102 => {
+self.infer_acc += 0;
+try self.returnFromInfer(124);
+},
+103 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+104 => {
+self.infer_acc += 0;
+try self.returnFromInfer(126);
+},
+105 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+106 => {
+self.infer_acc += 0;
+try self.returnFromInfer(128);
+},
+107 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+108 => {
+self.infer_acc += 0;
+try self.returnFromInfer(130);
+},
+109 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(224);
+},
+110 => {
+self.infer_acc += 0;
+try self.returnFromInfer(134);
+},
+111 => {
+self.infer_acc += 1;
+try self.returnFromInfer(137);
+},
+112 => {
+self.infer_acc += 1;
+try self.returnFromInfer(139);
+},
+113 => {
+self.infer_acc += 1;
+try self.inferNonterminal(235);
+},
+114 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+115 => {
+self.infer_acc += 0;
+try self.returnFromInfer(145);
+},
+116 => {
+self.infer_acc += 1;
+try self.inferNonterminal(229);
+},
+117 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+118 => {
+self.infer_acc += 0;
+try self.returnFromInfer(150);
+},
+119 => {
+self.infer_acc += 0;
+try self.inferNonterminal(158);
+},
+120 => {
+self.infer_acc += 1;
+try self.inferNonterminal(158);
+},
+121 => {
+self.infer_acc += 0;
+try self.returnFromInfer(154);
+},
+122 => {
+self.infer_acc += 0;
+try self.inferNonterminal(158);
+},
+123 => {
+self.infer_acc += 0;
+try self.returnFromInfer(156);
+},
+124 => {
+self.infer_acc += 2;
+try self.returnFromInfer(159);
+},
+125 => {
+self.infer_acc += 0;
+try self.inferNonterminal(163);
+},
+126 => {
+self.infer_acc += 0;
+try self.returnFromInfer(161);
+},
+127 => {
+self.infer_acc += 2;
+try self.returnFromInfer(164);
+},
+128 => {
+self.infer_acc += 4;
+try self.returnFromInfer(167);
+},
+129 => {
+self.infer_acc += 4;
+try self.returnFromInfer(169);
+},
+130 => {
+self.infer_acc += 1;
+try self.returnFromInfer(171);
+},
+131 => {
+self.infer_acc += 2;
+self.skipInferNonterminal(187);
+},
+132 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+133 => {
+self.infer_acc += 0;
+try self.returnFromInfer(175);
+},
+134 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(191);
+},
+135 => {
+self.infer_acc += 0;
+try self.returnFromInfer(178);
+},
+136 => {
+self.infer_acc += 2;
+self.skipInferNonterminal(251);
+},
+137 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(187);
+},
+138 => {
+self.infer_acc += 0;
+try self.returnFromInfer(182);
+},
+139 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(257);
+},
+140 => {
+self.infer_acc += 0;
+try self.returnFromInfer(185);
+},
+141 => {
+self.infer_acc += 2;
+try self.returnFromInfer(187);
+},
+142 => {
+self.infer_acc += 1;
+try self.returnFromInfer(188);
+},
+143 => {
+self.infer_acc += 1;
+try self.returnFromInfer(189);
+},
+144 => {
+self.infer_acc += 1;
+try self.returnFromInfer(191);
+},
+145 => {
+self.infer_acc += 1;
+try self.returnFromInfer(192);
+},
+146 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(187);
+},
+147 => {
+self.infer_acc += 0;
+try self.returnFromInfer(194);
+},
+148 => {
+self.infer_acc += 3;
+try self.inferNonterminal(184);
+},
+149 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(187);
+},
+150 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+151 => {
+self.infer_acc += 0;
+try self.inferNonterminal(196);
+},
+152 => {
+self.infer_acc += 0;
+try self.returnFromInfer(200);
+},
+153 => {
+self.infer_acc += 0;
+try self.returnFromInfer(201);
+},
+154 => {
+self.infer_acc += 0;
+try self.inferNonterminal(29);
+},
+155 => {
+self.infer_acc += 0;
+try self.inferNonterminal(203);
+},
+156 => {
+self.infer_acc += 0;
+try self.returnFromInfer(205);
+},
+157 => {
+self.infer_acc += 0;
+try self.returnFromInfer(206);
+},
+158 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(246);
+},
+159 => {
+self.infer_acc += 0;
+try self.inferNonterminal(53);
+},
+160 => {
+self.infer_acc += 0;
+try self.inferNonterminal(208);
+},
+161 => {
+self.infer_acc += 0;
+try self.returnFromInfer(211);
+},
+162 => {
+self.infer_acc += 0;
+try self.returnFromInfer(212);
+},
+163 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(214);
+},
+164 => {
+self.infer_acc += 0;
+try self.returnFromInfer(216);
+},
+165 => {
+self.infer_acc += 0;
+try self.returnFromInfer(217);
+},
+166 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(219);
+},
+167 => {
+self.infer_acc += 0;
+try self.returnFromInfer(221);
+},
+168 => {
+self.infer_acc += 0;
+try self.returnFromInfer(222);
+},
+169 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(136);
+},
+170 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(224);
+},
+171 => {
+self.infer_acc += 0;
+try self.returnFromInfer(226);
+},
+172 => {
+self.infer_acc += 0;
+try self.returnFromInfer(227);
+},
+173 => {
+self.infer_acc += 0;
+try self.inferNonterminal(163);
+},
+174 => {
+self.infer_acc += 0;
+try self.inferNonterminal(229);
+},
+175 => {
+self.infer_acc += 0;
+try self.returnFromInfer(232);
+},
+176 => {
+self.infer_acc += 0;
+try self.returnFromInfer(233);
+},
+177 => {
+self.infer_acc += 0;
+try self.inferNonterminal(163);
+},
+178 => {
+self.infer_acc += 0;
+try self.inferNonterminal(235);
+},
+179 => {
+self.infer_acc += 0;
+try self.returnFromInfer(238);
+},
+180 => {
+self.infer_acc += 0;
+try self.returnFromInfer(239);
+},
+181 => {
+self.infer_acc += 0;
+try self.inferNonterminal(152);
+},
+182 => {
+self.infer_acc += 0;
+try self.inferNonterminal(241);
+},
+183 => {
+self.infer_acc += 0;
+try self.returnFromInfer(243);
+},
+184 => {
+self.infer_acc += 0;
+try self.returnFromInfer(244);
+},
+185 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(177);
+},
+186 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+187 => {
+self.infer_acc += 0;
+try self.returnFromInfer(248);
+},
+188 => {
+self.infer_acc += 0;
+try self.returnFromInfer(249);
+},
+189 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(251);
+},
+190 => {
+self.infer_acc += 0;
+try self.returnFromInfer(254);
+},
+191 => {
+self.infer_acc += 0;
+try self.returnFromInfer(255);
+},
+192 => {
+self.infer_acc += 1;
+self.skipInferNonterminal(257);
+},
+193 => {
+self.infer_acc += 0;
+try self.returnFromInfer(260);
+},
+194 => {
+self.infer_acc += 0;
+try self.returnFromInfer(261);
+},
+195 => {
+self.infer_acc += 0;
+try self.inferNonterminal(35);
+},
+196 => {
+self.infer_acc += 0;
+try self.inferNonterminal(263);
+},
+197 => {
+self.infer_acc += 0;
+try self.returnFromInfer(265);
+},
+198 => {
+self.infer_acc += 0;
+try self.returnFromInfer(266);
+},
+199 => {
+self.infer_acc += 0;
+try self.inferNonterminal(94);
+},
+200 => {
+self.infer_acc += 0;
+try self.inferNonterminal(268);
+},
+201 => {
+self.infer_acc += 0;
+try self.returnFromInfer(270);
+},
+202 => {
+self.infer_acc += 0;
+try self.returnFromInfer(271);
+},
+203 => {
+self.infer_acc += 6;
+self.skipInferNonterminal(187);
+},
+204 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+205 => {
+self.infer_acc += 0;
+try self.inferNonterminal(26);
+},
+206 => {
+self.infer_acc += 2;
+self.skipInferNonterminal(187);
+},
+207 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+208 => {
+self.infer_acc += 0;
+try self.returnFromInfer(278);
+},
+209 => {
+self.infer_acc += 0;
+try self.returnFromInfer(279);
+},
+210 => {
+self.infer_acc += 9;
+self.skipInferNonterminal(187);
+},
+211 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+212 => {
+self.infer_acc += 0;
+try self.inferNonterminal(26);
+},
+213 => {
+self.infer_acc += 2;
+self.skipInferNonterminal(187);
+},
+214 => {
+self.infer_acc += 0;
+self.skipInferNonterminal(246);
+},
+215 => {
+self.infer_acc += 0;
+try self.returnFromInfer(286);
+},
+216 => {
+self.infer_acc += 0;
+try self.returnFromInfer(287);
+},
+        else => unreachable,
+    }
+}
+}
+fn infer(self: *@This()) !ParseReturn {
+    try self.finalizeInferInstrs();
+    for (self.infer_instrs.items) |instr| {
+        try self.callAction(instr.state, instr.start, instr.length);
+    }
+
+    const output: ParseReturn = if (self.did_fail) 
+        .{ .infer_fail = .{ 
+            .err = self.infer_fail_err, 
+            .msg = self.infer_fail_msg, 
+    } } else
+        .{ .pass = void{} };
+
+    assert(self.did_fail or self.calc_stack.items.len == 0);
+    return output;
+}};
 }

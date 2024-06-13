@@ -201,6 +201,7 @@ pub const BlockMeta = struct {
     regular: bool,
     finite: bool,
     nonterm_fail: bool,
+    has_actions: bool,
     moves_actions: bool,
 
     pub const Empty: BlockMeta = .{
@@ -209,6 +210,7 @@ pub const BlockMeta = struct {
         .regular = false,
         .finite = false,
         .nonterm_fail = false,
+        .has_actions = false,
         .moves_actions = false,
     };
 

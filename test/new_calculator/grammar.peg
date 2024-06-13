@@ -16,7 +16,7 @@
 
 %% NAME NewCalc
 
-Grammar: isize = Spacing Addition End { $2 };
+Grammar: isize = SPACING Addition End { $2 };
 
 Addition: isize = Neg (PLUS Neg)* {
     blk: {
@@ -73,34 +73,37 @@ Single: isize = L_PAREN Addition R_PAREN { $2 }
               ;
 
 // End Tokens
-PLUS = '+' Spacing;
-STAR = '*' Spacing;
-SLASH = '/' Spacing;
-MINUS = '-' Spacing;
-L_PAREN = '(' Spacing;
-R_PAREN = ')' Spacing;
+PLUS = '+' SPACING ;
+STAR = '*' SPACING ;
+SLASH = '/' SPACING ;
+MINUS = '-' SPACING ;
+L_PAREN = '(' SPACING ;
+R_PAREN = ')' SPACING ;
 
-Number: isize = NUMBER Spacing { $1 };
+Number: isize = NUMBER SPACING { $1 };
 NUMBER: isize = [0-9]+ {
     try std.fmt.parseInt(isize, $0, 10)
 };
 
 // Spacing
-Spacing = SpacingInner* ;
+SPACING = SPACING_INNER* ;
 
-SpacingInner = Comment 
-             | Space
-             ;
+SPACING_INNER 
+    = COMMENT 
+    | SPACE
+    ;
 
-Comment = '#' (!LineEnd .)* LineEnd ;
+COMMENT = '#' (!LINE_END .)* LINE_END;
 
-Space = [\t ]
-      | LineEnd
-      ;
+SPACE 
+    = [\t ]
+    | LINE_END
+    ;
 
-LineEnd = '\r\n'
-        | '\n'
-        | '\r'
-        ;
+LINE_END 
+    = '\r\n'
+    | '\n'
+    | '\r'
+    ;
 
 End = !. ;

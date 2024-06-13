@@ -1057,8 +1057,9 @@ fn memoInfer(self: *CodeGen) !void {
 
 fn inferAction(self: *CodeGen, action: lir.Action, count: *usize) !void {
     for (action.nonterms.items) |nonterm| {
-        const add = nonterm.calls.id;
-        const skip = !nonterm.calls.meta.moves_actions;
+        const blk = nonterm.calls;
+        const add = blk.id;
+        const skip = !blk.meta.moves_actions and !blk.meta.has_actions;
 
         if (skip) {
             try self.inferCall(count, nonterm.consumes, add, true, false);

@@ -30,7 +30,7 @@
 
 %% NAME Zig
 
-Root = skip container_doc_comment? ContainerMembers eof ;
+Root = SKIP CONTAINER_DOC_COMMENT? ContainerMembers EOF ;
 
 // *** Top level ***
 ContainerMembers = ContainerDeclarations (ContainerField COMMA ^)* ContainerMembersSuffix ;
@@ -43,75 +43,73 @@ ContainerMembersSuffix
 ContainerDeclarations = (&ContainerDeclarationPrefix ^ ContainerDeclaration)* ;
 
 ContainerDeclarationPrefix 
-    = KEYWORD_test
-    | KEYWORD_comptime LBRACE
-    | (&'///' ^ doc_comment)? KEYWORD_pub? DeclPrefix
+    = KEYWORD_TEST
+    | KEYWORD_COMPTIME LBRACE
+    | (&'///' ^ DOC_COMMENT)? KEYWORD_PUB? DeclPrefix
     ;
 
 DeclPrefix 
-    = FnSpecifier KEYWORD_fn
-    | KEYWORD_usingnamespace
-    | VarSpecifier KEYWORD_threadlocal? VarDeclKeyword
+    = FnSpecifier KEYWORD_FN
+    | KEYWORD_USINGNAMESPACE
+    | VarSpecifier KEYWORD_THREADLOCAL? VarDeclKeyword
     ;
 
 ContainerDeclaration 
-    = &KEYWORD_test ^ TestDecl 
-    | &KEYWORD_comptime ^ ComptimeDecl 
-    | doc_comment? KEYWORD_pub? Decl
+    = &KEYWORD_TEST ^ TestDecl 
+    | &KEYWORD_COMPTIME ^ ComptimeDecl 
+    | DOC_COMMENT? KEYWORD_PUB? Decl
     ;
 
-TestDecl = KEYWORD_test TestIdentifier Block ;
+TestDecl = KEYWORD_TEST TestIdentifier Block ;
 TestIdentifier 
     = STRINGLITERALSINGLE 
     | IDENTIFIER
     | @
     ;
 
-ComptimeDecl = KEYWORD_comptime Block ;
+ComptimeDecl = KEYWORD_COMPTIME Block ;
 
 Decl
     = FnSpecifier FnProto SEMICOLON 
     | FnSpecifier FnProto ^ Block
-    | KEYWORD_usingnamespace ^ Expr SEMICOLON
-    | VarSpecifier KEYWORD_threadlocal? GlobalVarDecl
+    | KEYWORD_USINGNAMESPACE ^ Expr SEMICOLON
+    | VarSpecifier KEYWORD_THREADLOCAL? GlobalVarDecl
     ;
 
-// TODO: find a better name 
 FnSpecifier 
-    = KEYWORD_inline
-    | KEYWORD_noinline
+    = KEYWORD_INLINE
+    | KEYWORD_NOINLINE
     | VarSpecifier
     ;
 
-// TODO: find a better name 
 VarSpecifier 
-    = KEYWORD_export 
-    | KEYWORD_extern STRINGLITERALSINGLE?
+    = KEYWORD_EXPORT 
+    | KEYWORD_EXTERN STRINGLITERALSINGLE?
     | @
     ;
 
-FnProto = KEYWORD_fn IDENTIFIER? LPAREN ParamDeclList RPAREN ByteAlign? AddrSpace? LinkSection? CallConv? EXCLAMATIONMARK? TypeExpr ;
+FnProto = KEYWORD_FN IDENTIFIER? LPAREN ParamDeclList RPAREN ByteAlign? AddrSpace? LinkSection? CallConv? EXCLAMATIONMARK? TypeExpr ;
 
 VarDeclProto = VarDeclKeyword IDENTIFIER (COLON ^ TypeExpr)? ByteAlign? AddrSpace? LinkSection? ;
 
 VarDeclKeyword 
-    = KEYWORD_const 
-    | KEYWORD_var
+    = KEYWORD_CONST 
+    | KEYWORD_VAR
     ;
 
 GlobalVarDecl = VarDeclProto (EQUAL ^ Expr)? SEMICOLON ;
 
-ContainerField = doc_comment? KEYWORD_comptime? !KEYWORD_fn (IDENTIFIER COLON)? TypeExpr ByteAlign? (EQUAL ^ Expr)? ;
+ContainerField = DOC_COMMENT? KEYWORD_COMPTIME? !KEYWORD_FN (IDENTIFIER COLON)? TypeExpr ByteAlign? (EQUAL ^ Expr)? ;
 
 // *** Block Level ***
 Statement
-    = KEYWORD_comptime ^ ComptimeStatement
-    | KEYWORD_nosuspend ^ BlockExprStatement
-    | KEYWORD_suspend ^ BlockExprStatement
-    | KEYWORD_defer ^ BlockExprStatement
-    | KEYWORD_errdefer ^ Payload? BlockExprStatement
-    | &KEYWORD_if ^ IfStatement
-    | &KEYWORD_switch ^ SwitchExpr
+    = KEYWORD_COMPTIME ^ ComptimeStatement
+    | KEYWORD_NOSUSPEND ^ BlockExprStatement
+    | KEYWORD_SUSPEND ^ BlockExprStatement
+    | KEYWORD_DEFER ^ BlockExprStatement
+    | KEYWORD_ERRDEFER ^ Payload? BlockExprStatement
+    | &KEYWORD_IF ^ IfStatement
+    | &KEYWORD_SWITCH ^ SwitchExpr
     | &LabeledStatementPrefix ^ LabeledStatement
     | VarDeclExprStatement
     ;
@@ -122,19 +120,19 @@ ComptimeStatement
     ;
 
 IfStatement
-    = IfPrefix &(BlockLabel? LBRACE) ^ BlockExpr ( KEYWORD_else ^ Payload? Statement )?
+    = IfPrefix &(BlockLabel? LBRACE) ^ BlockExpr ( KEYWORD_ELSE ^ Payload? Statement )?
     | IfPrefix AssignExpr IfStatementAssignSuffix
     ;
 
 IfStatementAssignSuffix
-    = KEYWORD_else ^ Payload? Statement 
+    = KEYWORD_ELSE ^ Payload? Statement 
     | SEMICOLON
     ;
 
 LabeledStatementPrefix 
     = BlockLabel? LBRACE
-    | BlockLabel? KEYWORD_inline? KEYWORD_for
-    | BlockLabel? KEYWORD_inline? KEYWORD_while
+    | BlockLabel? KEYWORD_INLINE? KEYWORD_FOR
+    | BlockLabel? KEYWORD_INLINE? KEYWORD_WHILE
     ;
 
 LabeledStatement 
@@ -143,27 +141,27 @@ LabeledStatement
     ;
 
 LoopStatement 
-    = KEYWORD_inline? &KEYWORD_for ^ ForStatement 
-    | KEYWORD_inline? WhileStatement
+    = KEYWORD_INLINE? &KEYWORD_FOR ^ ForStatement 
+    | KEYWORD_INLINE? WhileStatement
     ;
 
 ForStatement
-    = ForPrefix &(BlockLabel? LBRACE) ^ BlockExpr ( KEYWORD_else ^ Statement )? 
+    = ForPrefix &(BlockLabel? LBRACE) ^ BlockExpr ( KEYWORD_ELSE ^ Statement )? 
     | ForPrefix AssignExpr ForAssignSuffix
     ;
 
 ForAssignSuffix
-    = KEYWORD_else ^ Statement
+    = KEYWORD_ELSE ^ Statement
     | SEMICOLON
     ;
 
 WhileStatement
-    = WhilePrefix &(BlockLabel? LBRACE) ^ BlockExpr ( KEYWORD_else ^ Payload? Statement )?
+    = WhilePrefix &(BlockLabel? LBRACE) ^ BlockExpr ( KEYWORD_ELSE ^ Payload? Statement )?
     | WhilePrefix AssignExpr WhileStatementAssignSuffix
     ;
 
 WhileStatementAssignSuffix
-    = KEYWORD_else ^ Payload? Statement
+    = KEYWORD_ELSE ^ Payload? Statement
     | SEMICOLON
     ;
 
@@ -207,9 +205,9 @@ SingleAssignExpr = Expr (AssignOp Expr)? ;
 
 Expr = BoolOrExpr ;
 
-BoolOrExpr = BoolAndExpr (KEYWORD_or ^ BoolAndExpr)* ;
+BoolOrExpr = BoolAndExpr (KEYWORD_OR ^ BoolAndExpr)* ;
 
-BoolAndExpr = CompareExpr (KEYWORD_and ^ CompareExpr)* ;
+BoolAndExpr = CompareExpr (KEYWORD_AND ^ CompareExpr)* ;
 
 CompareExpr = BitwiseExpr (CompareOp ^ BitwiseExpr)? ;
 
@@ -224,36 +222,36 @@ MultiplyExpr = PrefixExpr (MultiplyOp ^ PrefixExpr)* ;
 PrefixExpr = (PrefixOp ^)* PrimaryExpr ;
 
 PrimaryExpr
-    = &KEYWORD_asm ^ AsmExpr
-    | &KEYWORD_if ^ IfExpr
-    | KEYWORD_break ^ BreakLabel? Expr?
-    | KEYWORD_comptime ^ Expr
-    | KEYWORD_nosuspend ^ Expr
-    | KEYWORD_continue ^ BreakLabel?
-    | KEYWORD_resume ^ Expr
-    | KEYWORD_return ^ Expr?
-    | BlockLabel? &(KEYWORD_inline? LoopPrefix) ^ LoopExpr
+    = &KEYWORD_ASM ^ AsmExpr
+    | &KEYWORD_IF ^ IfExpr
+    | KEYWORD_BREAK ^ BreakLabel? Expr?
+    | KEYWORD_COMPTIME ^ Expr
+    | KEYWORD_NOSUSPEND ^ Expr
+    | KEYWORD_CONTINUE ^ BreakLabel?
+    | KEYWORD_RESUME ^ Expr
+    | KEYWORD_RETURN ^ Expr?
+    | BlockLabel? &(KEYWORD_INLINE? LoopPrefix) ^ LoopExpr
     | &LBRACE ^ Block
     | CurlySuffixExpr
     ;
 
-IfExpr = IfPrefix Expr (KEYWORD_else ^ Payload? Expr)? ;
+IfExpr = IfPrefix Expr (KEYWORD_ELSE ^ Payload? Expr)? ;
 
 Block = LBRACE (!RBRACE ^ Statement)* RBRACE ;
 
 LoopExpr 
-    = KEYWORD_inline? &KEYWORD_for ^ ForExpr
-    | KEYWORD_inline? WhileExpr
+    = KEYWORD_INLINE? &KEYWORD_FOR ^ ForExpr
+    | KEYWORD_INLINE? WhileExpr
     ;
 
 LoopPrefix
-    = KEYWORD_for
-    | KEYWORD_while
+    = KEYWORD_FOR
+    | KEYWORD_WHILE
     ;
 
-ForExpr = ForPrefix Expr (KEYWORD_else ^ Expr)? ;
+ForExpr = ForPrefix Expr (KEYWORD_ELSE ^ Expr)? ;
 
-WhileExpr = WhilePrefix Expr (KEYWORD_else ^ Payload? Expr)? ;
+WhileExpr = WhilePrefix Expr (KEYWORD_ELSE ^ Payload? Expr)? ;
 
 CurlySuffixExpr = TypeExpr (&LBRACE ^ InitList)? ;
 
@@ -268,7 +266,7 @@ TypeExpr = (PrefixTypeOp ^)* ErrorUnionExpr ;
 ErrorUnionExpr = SuffixExpr (EXCLAMATIONMARK ^ TypeExpr)? ;
 
 SuffixExpr
-    = KEYWORD_async ^ PrimaryTypeExpr (SuffixOp ^)* FnCallArguments 
+    = KEYWORD_ASYNC ^ PrimaryTypeExpr (SuffixOp ^)* FnCallArguments 
     | PrimaryTypeExpr (!EXCLAMATIONMARK SuffixOpOrCallArgs)*
     ;
 
@@ -283,39 +281,39 @@ PrimaryTypeExpr
     | &ContainerDeclPrefix ^ ContainerDecl
     | DOT IDENTIFIER
     | DOT ^ InitList
-    | &(KEYWORD_error LBRACE) ^ ErrorSetDecl
+    | &(KEYWORD_ERROR LBRACE) ^ ErrorSetDecl
     | FLOAT
-    | &KEYWORD_fn ^ FnProto
+    | &KEYWORD_FN ^ FnProto
     | &LPAREN ^ GroupedExpr
     | LabeledTypeExpr
     | IDENTIFIER
-    | &KEYWORD_if ^ IfTypeExpr
+    | &KEYWORD_IF ^ IfTypeExpr
     | INTEGER
-    | KEYWORD_comptime ^ TypeExpr
-    | KEYWORD_error DOT ^ IDENTIFIER
-    | KEYWORD_anyframe
-    | KEYWORD_unreachable
+    | KEYWORD_COMPTIME ^ TypeExpr
+    | KEYWORD_ERROR DOT ^ IDENTIFIER
+    | KEYWORD_ANYFRAME
+    | KEYWORD_UNREACHABLE
     | STRINGLITERAL
     | SwitchExpr
     ;
 
 ContainerDecl 
-    = KEYWORD_extern ^ ContainerDeclAuto
-    | KEYWORD_packed ^ ContainerDeclAuto
+    = KEYWORD_EXTERN ^ ContainerDeclAuto
+    | KEYWORD_PACKED ^ ContainerDeclAuto
     | ContainerDeclAuto 
     ;
 
 ContainerDeclPrefix
-    = KEYWORD_extern ^ ContainerDeclType
-    | KEYWORD_packed ^ ContainerDeclType
+    = KEYWORD_EXTERN ^ ContainerDeclType
+    | KEYWORD_PACKED ^ ContainerDeclType
     | ContainerDeclType
     ;
 
-ErrorSetDecl = KEYWORD_error LBRACE IdentifierList RBRACE ;
+ErrorSetDecl = KEYWORD_ERROR LBRACE IdentifierList RBRACE ;
 
 GroupedExpr = LPAREN Expr RPAREN ;
 
-IfTypeExpr = IfPrefix TypeExpr (KEYWORD_else ^ Payload? TypeExpr)? ;
+IfTypeExpr = IfPrefix TypeExpr (KEYWORD_ELSE ^ Payload? TypeExpr)? ;
 
 LabeledTypeExpr
     = BlockLabel &LBRACE ^ Block
@@ -323,18 +321,18 @@ LabeledTypeExpr
     ;
 
 LoopTypeExpr 
-    = KEYWORD_inline? &KEYWORD_for ^ ForTypeExpr 
-    | KEYWORD_inline? WhileTypeExpr
+    = KEYWORD_INLINE? &KEYWORD_FOR ^ ForTypeExpr 
+    | KEYWORD_INLINE? WhileTypeExpr
     ;
 
-ForTypeExpr = ForPrefix TypeExpr (KEYWORD_else ^ TypeExpr)? ;
+ForTypeExpr = ForPrefix TypeExpr (KEYWORD_ELSE ^ TypeExpr)? ;
 
-WhileTypeExpr = WhilePrefix TypeExpr (KEYWORD_else ^ Payload? TypeExpr)? ;
+WhileTypeExpr = WhilePrefix TypeExpr (KEYWORD_ELSE ^ Payload? TypeExpr)? ;
 
-SwitchExpr = KEYWORD_switch LPAREN Expr RPAREN LBRACE SwitchProngList RBRACE ;
+SwitchExpr = KEYWORD_SWITCH LPAREN Expr RPAREN LBRACE SwitchProngList RBRACE ;
 
 // *** Assembly ***
-AsmExpr = KEYWORD_asm KEYWORD_volatile? LPAREN Expr AsmOutput? RPAREN ;
+AsmExpr = KEYWORD_ASM KEYWORD_VOLATILE? LPAREN Expr AsmOutput? RPAREN ;
 
 AsmOutput = COLON AsmOutputList AsmInput? ;
 
@@ -360,31 +358,31 @@ FieldInit = DOT IDENTIFIER EQUAL Expr ;
 
 WhileContinueExpr = COLON LPAREN AssignExpr RPAREN ;
 
-LinkSection = KEYWORD_linksection LPAREN Expr RPAREN ;
+LinkSection = KEYWORD_LINKSECTION LPAREN Expr RPAREN ;
 
-AddrSpace = KEYWORD_addrspace LPAREN Expr RPAREN ;
+AddrSpace = KEYWORD_ADDRSPACE LPAREN Expr RPAREN ;
 
 // Fn specific
-CallConv = KEYWORD_callconv LPAREN Expr RPAREN ;
+CallConv = KEYWORD_CALLCONV LPAREN Expr RPAREN ;
 
 ParamDecl
-    = doc_comment? KEYWORD_noalias ^ (IDENTIFIER COLON)? ParamType
-    | doc_comment? KEYWORD_comptime ^ (IDENTIFIER COLON)? ParamType
-    | doc_comment? (IDENTIFIER COLON)? ParamType
+    = DOC_COMMENT? KEYWORD_NOALIAS ^ (IDENTIFIER COLON)? ParamType
+    | DOC_COMMENT? KEYWORD_COMPTIME ^ (IDENTIFIER COLON)? ParamType
+    | DOC_COMMENT? (IDENTIFIER COLON)? ParamType
     | DOT3
     ;
 
 ParamType
-    = KEYWORD_anytype
+    = KEYWORD_ANYTYPE
     | TypeExpr
     ;
 
 // Control flow prefixes
-IfPrefix = KEYWORD_if LPAREN Expr RPAREN PtrPayload? ;
+IfPrefix = KEYWORD_IF LPAREN Expr RPAREN PtrPayload? ;
 
-WhilePrefix = KEYWORD_while LPAREN Expr RPAREN PtrPayload? WhileContinueExpr? ;
+WhilePrefix = KEYWORD_WHILE LPAREN Expr RPAREN PtrPayload? WhileContinueExpr? ;
 
-ForPrefix = KEYWORD_for LPAREN ForArgumentsList RPAREN PtrListPayload ;
+ForPrefix = KEYWORD_FOR LPAREN ForArgumentsList RPAREN PtrListPayload ;
 
 // Payloads
 Payload = PIPE IDENTIFIER PIPE ;
@@ -396,11 +394,11 @@ PtrIndexPayload = PIPE ASTERISK? IDENTIFIER (COMMA ^ IDENTIFIER)? PIPE ;
 PtrListPayload = PIPE ASTERISK? IDENTIFIER (COMMA ^ ASTERISK? IDENTIFIER )* COMMA? PIPE ;
 
 // Switch specific
-SwitchProng = KEYWORD_inline? SwitchCase EQUALRARROW PtrIndexPayload? SingleAssignExpr ;
+SwitchProng = KEYWORD_INLINE? SwitchCase EQUALRARROW PtrIndexPayload? SingleAssignExpr ;
 
 SwitchCase
     = SwitchItem ^ (COMMA SwitchItem ^)* COMMA?
-    | KEYWORD_else
+    | KEYWORD_ELSE
     ;
 
 SwitchItem = Expr (DOT3 ^ Expr)? ;
@@ -445,8 +443,8 @@ BitwiseOp
     = AMPERSAND
     | CARET
     | PIPE
-    | KEYWORD_orelse
-    | KEYWORD_catch Payload?
+    | KEYWORD_ORELSE
+    | KEYWORD_CATCH Payload?
     ;
 
 BitShiftOp
@@ -481,13 +479,13 @@ PrefixOp
     | TILDE
     | MINUSPERCENT
     | AMPERSAND
-    | KEYWORD_try
-    | KEYWORD_await
+    | KEYWORD_TRY
+    | KEYWORD_AWAIT
     ;
 
 PrefixTypeOp
     = QUESTIONMARK
-    | KEYWORD_anyframe ^ MINUSRARROW
+    | KEYWORD_ANYFRAME ^ MINUSRARROW
     | SliceTypeStart ^ (SliceTypeSpecifier ^)*
     | PtrTypeStart ^ (PtrTypeSpecifier ^)*
     | ArrayTypeStart
@@ -495,16 +493,16 @@ PrefixTypeOp
 
 PtrTypeSpecifier
     // Would like to find an example of that one
-    = KEYWORD_align LPAREN Expr COLON ^ Expr COLON Expr RPAREN
+    = KEYWORD_ALIGN LPAREN Expr COLON ^ Expr COLON Expr RPAREN
     | SliceTypeSpecifier
     ;
 
 SliceTypeSpecifier 
     = ByteAlign 
     | AddrSpace 
-    | KEYWORD_const 
-    | KEYWORD_volatile 
-    | KEYWORD_allowzero 
+    | KEYWORD_CONST 
+    | KEYWORD_VOLATILE 
+    | KEYWORD_ALLOWZERO 
     ;
 
 SuffixOp
@@ -530,25 +528,25 @@ PtrTypeStart
 ArrayTypeStart = LBRACKET Expr (COLON ^ Expr)? RBRACKET ;
 
 // ContainerDecl specific
-ContainerDeclAuto = ContainerDeclType LBRACE container_doc_comment? ContainerMembers RBRACE ;
+ContainerDeclAuto = ContainerDeclType LBRACE CONTAINER_DOC_COMMENT? ContainerMembers RBRACE ;
 
 ContainerDeclType
-    = KEYWORD_struct ^ (LPAREN ^ Expr RPAREN)?
-    | KEYWORD_opaque
-    | KEYWORD_enum ^ (LPAREN ^ Expr RPAREN)?
-    | KEYWORD_union (LPAREN ^ UnionTypeArg RPAREN)?
+    = KEYWORD_STRUCT ^ (LPAREN ^ Expr RPAREN)?
+    | KEYWORD_OPAQUE
+    | KEYWORD_ENUM ^ (LPAREN ^ Expr RPAREN)?
+    | KEYWORD_UNION (LPAREN ^ UnionTypeArg RPAREN)?
     ;
 
 UnionTypeArg 
-    = KEYWORD_enum ^ (LPAREN ^ Expr RPAREN)? 
+    = KEYWORD_ENUM ^ (LPAREN ^ Expr RPAREN)? 
     | Expr 
     ;
 
 // Alignment
-ByteAlign = KEYWORD_align LPAREN Expr RPAREN ;
+ByteAlign = KEYWORD_ALIGN LPAREN Expr RPAREN ;
 
 // Lists
-IdentifierList = (doc_comment? IDENTIFIER COMMA ^)* (doc_comment? IDENTIFIER)? ;
+IdentifierList = (DOC_COMMENT? IDENTIFIER COMMA ^)* (DOC_COMMENT? IDENTIFIER)? ;
 
 SwitchProngList = (SwitchProng COMMA ^)* SwitchProng? ;
 
@@ -563,23 +561,23 @@ ParamDeclList = (ParamDecl COMMA ^)* ParamDecl? ;
 ExprList = (Expr COMMA ^)* Expr? ;
 
 // *** Tokens ***
-eof = !. ;
-bin = [01] ;
-bin_ = '_'? bin ;
-oct = [0-7] ;
-oct_ = '_'? oct ;
-hex = [0-9a-fA-F] ;
-hex_ = '_'? hex ;
-dec = [0-9] ;
-dec_ = '_'? dec ;
+EOF = !. ;
+BIN = [01] ;
+BIN_ = '_'? BIN ;
+OCT = [0-7] ;
+OCT_ = '_'? OCT ;
+HEX = [0-9a-fA-F] ;
+HEX_ = '_'? HEX ;
+DEC = [0-9] ;
+DEC_ = '_'? DEC ;
 
-bin_int = bin (bin_ ^)* ;
-oct_int = oct (oct_ ^)* ;
-dec_int = dec (dec_ ^)* ;
-hex_int = hex (hex_ ^)* ;
+BIN_INT = BIN (BIN_ ^)* ;
+OCT_INT = OCT (OCT_ ^)* ;
+DEC_INT = DEC (DEC_ ^)* ;
+HEX_INT = HEX (HEX_ ^)* ;
 
 // From https://lemire.me/blog/2018/05/09/how-quickly-can-you-check-that-a-string-is-valid-unicode-utf-8/
-mb_utf8_literal
+MB_UTF8_LITERAL
     = '\xF4'      [\x80-\x8F] [\x80-\xBF] [\x80-\xBF]    
     | [\xF1-\xF3] [\x80-\xBF] [\x80-\xBF] [\x80-\xBF]     
     | '\xF0'      [\x90-\xBF] [\x80-\xBF] [\x80-\xBF]    
@@ -591,196 +589,196 @@ mb_utf8_literal
     ;
 
 // No null allowed in the generator (maybe look at how the zig parser handles this)
-ascii_char_not_nl_slash_squote = [\x01-\x09\x0B-\x26\x28-\x5B\x5D-\x7F] ;
+ASCII_CHAR_NOT_NL_SLASH_SQUOTE = [\x01-\x09\x0B-\x26\x28-\x5B\x5D-\x7F] ;
 
-char_escape
-    = "\\x" ^ hex hex
-    | "\\u{" ^ hex+ "}"
+CHAR_ESCAPE
+    = "\\x" ^ HEX HEX
+    | "\\u{" ^ HEX+ "}"
     | "\\" [nr\\t'"]
     ;
 
-char_char
-    = mb_utf8_literal
-    | char_escape
-    | ascii_char_not_nl_slash_squote
+CHAR_CHAR
+    = MB_UTF8_LITERAL
+    | CHAR_ESCAPE
+    | ASCII_CHAR_NOT_NL_SLASH_SQUOTE
     ;
 
-string_char
-    = char_escape
+STRING_CHAR
+    = CHAR_ESCAPE
     | ![\\"\n] .
     ;
 
-container_doc_comment = ('//!' (!'\n' . ^)* [ \n]* skip)+ ;
-doc_comment = ('///' (!'\n' . ^)* ([ \n] ^)* skip)+ ; 
-line_comment
+CONTAINER_DOC_COMMENT = ('//!' (!'\n' . ^)* [ \n]* SKIP)+ ;
+DOC_COMMENT = ('///' (!'\n' . ^)* ([ \n] ^)* SKIP)+ ; 
+LINE_COMMENT
     = '//' ![!/] ^ (!'\n' . ^)*
     | '////' (!'\n' . ^)* 
     ;
 
-line_string = ("\\\\" (!'\n' . ^)* ([ \n] ^)*)+ ;
-skip = (whitespace ^)* ;
+LINE_STRING = ("\\\\" (!'\n' . ^)* ([ \n] ^)*)+ ;
+SKIP = (WHITESPACE ^)* ;
 
-whitespace 
+WHITESPACE
     = [ \n]
-    | line_comment
+    | LINE_COMMENT
     ;
 
-CHAR_LITERAL = "'" char_char "'" skip ;
+CHAR_LITERAL = "'" CHAR_CHAR "'" SKIP;
 
 FLOAT
-    = "0x" hex_int "." ^ hex_int ([pP] [-+]? dec_int)? skip
-    |      dec_int "." ^ dec_int ([eE] [-+]? dec_int)? skip
-    | "0x" hex_int [pP] ^ [-+]? dec_int skip
-    |      dec_int [eE] [-+]? dec_int skip
+    = "0x" HEX_INT "." ^ HEX_INT ([pP] [-+]? DEC_INT)? SKIP
+    |      DEC_INT "." ^ DEC_INT ([eE] [-+]? DEC_INT)? SKIP
+    | "0x" DEC_INT [pP] ^ [-+]? DEC_INT SKIP
+    |      DEC_INT [eE] [-+]? DEC_INT SKIP
     ;
 
 INTEGER
-    = "0b" ^ bin_int skip
-    | "0o" ^ oct_int skip
-    | "0x" ^ hex_int skip
-    |        dec_int skip 
+    = "0b" ^ BIN_INT SKIP 
+    | "0o" ^ OCT_INT SKIP
+    | "0x" ^ HEX_INT SKIP
+    |        DEC_INT SKIP
     ;
 
-STRINGLITERALSINGLE = "\"" (string_char ^)* "\"" skip ;
+STRINGLITERALSINGLE = "\"" (STRING_CHAR ^)* "\"" SKIP;
 STRINGLITERAL
     = STRINGLITERALSINGLE
-    | (line_string                 skip)+ 
+    | (LINE_STRING                 SKIP)+ 
     ;
 
 IDENTIFIER
-    = !keyword [A-Za-z_] ([A-Za-z0-9_] ^)* skip
+    = !KEYWORD [A-Za-z_] ([A-Za-z0-9_] ^)* SKIP
     | "@" STRINGLITERALSINGLE
     ;
 
-BUILTINIDENTIFIER = "@"[A-Za-z_]([A-Za-z0-9_] ^)* skip ;
+BUILTINIDENTIFIER = "@"[A-Za-z_]([A-Za-z0-9_] ^)* SKIP;
 
 
-AMPERSAND            = '&'      ![=]      skip ;
-AMPERSANDEQUAL       = '&='               skip ;
-ASTERISK             = '*'      ![*%=|]   skip ;
-ASTERISK2            = '**'               skip ;
-ASTERISKEQUAL        = '*='               skip ;
-ASTERISKPERCENT      = '*%'     ![=]      skip ;
-ASTERISKPERCENTEQUAL = '*%='              skip ;
-ASTERISKPIPE         = '*|'     ![=]      skip ;
-ASTERISKPIPEEQUAL    = '*|='              skip ;
-CARET                = '^'      ![=]      skip ;
-CARETEQUAL           = '^='               skip ;
-COLON                = ':'                skip ;
-COMMA                = ','                skip ;
-DOT                  = '.'      ![*.?]    skip ;
-DOT2                 = '..'     ![.]      skip ;
-DOT3                 = '...'              skip ;
-DOTASTERISK          = '.*'               skip ;
-DOTQUESTIONMARK      = '.?'               skip ;
-EQUAL                = '='      ![>=]     skip ;
-EQUALEQUAL           = '=='               skip ;
-EQUALRARROW          = '=>'               skip ;
-EXCLAMATIONMARK      = '!'      ![=]      skip ;
-EXCLAMATIONMARKEQUAL = '!='               skip ;
-LARROW               = '<'      ![<=]     skip ;
-LARROW2              = '<<'     ![=|]     skip ;
-LARROW2EQUAL         = '<<='              skip ;
-LARROW2PIPE          = '<<|'    ![=]      skip ;
-LARROW2PIPEEQUAL     = '<<|='             skip ;
-LARROWEQUAL          = '<='               skip ;
-LBRACE               = '{'                skip ;
-LBRACKET             = '['                skip ;
-LPAREN               = '('                skip ;
-MINUS                = '-'      ![%=>|]   skip ;
-MINUSEQUAL           = '-='               skip ;
-MINUSPERCENT         = '-%'     ![=]      skip ;
-MINUSPERCENTEQUAL    = '-%='              skip ;
-MINUSPIPE            = '-|'     ![=]      skip ;
-MINUSPIPEEQUAL       = '-|='              skip ;
-MINUSRARROW          = '->'               skip ;
-PERCENT              = '%'      ![=]      skip ;
-PERCENTEQUAL         = '%='               skip ;
-PIPE                 = '|'      ![|=]     skip ;
-PIPE2                = '||'               skip ;
-PIPEEQUAL            = '|='               skip ;
-PLUS                 = '+'      ![%+=|]   skip ;
-PLUS2                = '++'               skip ;
-PLUSEQUAL            = '+='               skip ;
-PLUSPERCENT          = '+%'     ![=]      skip ;
-PLUSPERCENTEQUAL     = '+%='              skip ;
-PLUSPIPE             = '+|'     ![=]      skip ;
-PLUSPIPEEQUAL        = '+|='              skip ;
-LETTERC              = 'c'                skip ;
-QUESTIONMARK         = '?'                skip ;
-RARROW               = '>'      ![>=]     skip ;
-RARROW2              = '>>'     ![=]      skip ;
-RARROW2EQUAL         = '>>='              skip ;
-RARROWEQUAL          = '>='               skip ;
-RBRACE               = '}'                skip ;
-RBRACKET             = ']'                skip ;
-RPAREN               = ')'                skip ;
-SEMICOLON            = ';'                skip ;
-SLASH                = '/'      ![=]      skip ;
-SLASHEQUAL           = '/='               skip ;
-TILDE                = '~'                skip ;
+AMPERSAND            = '&'      ![=]      SKIP;
+AMPERSANDEQUAL       = '&='               SKIP;
+ASTERISK             = '*'      ![*%=|]   SKIP;
+ASTERISK2            = '**'               SKIP;
+ASTERISKEQUAL        = '*='               SKIP;
+ASTERISKPERCENT      = '*%'     ![=]      SKIP;
+ASTERISKPERCENTEQUAL = '*%='              SKIP;
+ASTERISKPIPE         = '*|'     ![=]      SKIP;
+ASTERISKPIPEEQUAL    = '*|='              SKIP;
+CARET                = '^'      ![=]      SKIP;
+CARETEQUAL           = '^='               SKIP;
+COLON                = ':'                SKIP;
+COMMA                = ','                SKIP;
+DOT                  = '.'      ![*.?]    SKIP;
+DOT2                 = '..'     ![.]      SKIP;
+DOT3                 = '...'              SKIP;
+DOTASTERISK          = '.*'               SKIP;
+DOTQUESTIONMARK      = '.?'               SKIP;
+EQUAL                = '='      ![>=]     SKIP;
+EQUALEQUAL           = '=='               SKIP;
+EQUALRARROW          = '=>'               SKIP;
+EXCLAMATIONMARK      = '!'      ![=]      SKIP;
+EXCLAMATIONMARKEQUAL = '!='               SKIP;
+LARROW               = '<'      ![<=]     SKIP;
+LARROW2              = '<<'     ![=|]     SKIP;
+LARROW2EQUAL         = '<<='              SKIP;
+LARROW2PIPE          = '<<|'    ![=]      SKIP;
+LARROW2PIPEEQUAL     = '<<|='             SKIP;
+LARROWEQUAL          = '<='               SKIP;
+LBRACE               = '{'                SKIP;
+LBRACKET             = '['                SKIP;
+LPAREN               = '('                SKIP;
+MINUS                = '-'      ![%=>|]   SKIP;
+MINUSEQUAL           = '-='               SKIP;
+MINUSPERCENT         = '-%'     ![=]      SKIP;
+MINUSPERCENTEQUAL    = '-%='              SKIP;
+MINUSPIPE            = '-|'     ![=]      SKIP;
+MINUSPIPEEQUAL       = '-|='              SKIP;
+MINUSRARROW          = '->'               SKIP;
+PERCENT              = '%'      ![=]      SKIP;
+PERCENTEQUAL         = '%='               SKIP;
+PIPE                 = '|'      ![|=]     SKIP;
+PIPE2                = '||'               SKIP;
+PIPEEQUAL            = '|='               SKIP;
+PLUS                 = '+'      ![%+=|]   SKIP;
+PLUS2                = '++'               SKIP;
+PLUSEQUAL            = '+='               SKIP;
+PLUSPERCENT          = '+%'     ![=]      SKIP;
+PLUSPERCENTEQUAL     = '+%='              SKIP;
+PLUSPIPE             = '+|'     ![=]      SKIP;
+PLUSPIPEEQUAL        = '+|='              SKIP;
+LETTERC              = 'c'                SKIP;
+QUESTIONMARK         = '?'                SKIP;
+RARROW               = '>'      ![>=]     SKIP;
+RARROW2              = '>>'     ![=]      SKIP;
+RARROW2EQUAL         = '>>='              SKIP;
+RARROWEQUAL          = '>='               SKIP;
+RBRACE               = '}'                SKIP;
+RBRACKET             = ']'                SKIP;
+RPAREN               = ')'                SKIP;
+SEMICOLON            = ';'                SKIP;
+SLASH                = '/'      ![=]      SKIP;
+SLASHEQUAL           = '/='               SKIP;
+TILDE                = '~'                SKIP;
  
-end_of_word = ![a-zA-Z0-9_] skip ;
-KEYWORD_addrspace   = 'addrspace'   end_of_word ;
-KEYWORD_align       = 'align'       end_of_word ;
-KEYWORD_allowzero   = 'allowzero'   end_of_word ;
-KEYWORD_and         = 'and'         end_of_word ;
-KEYWORD_anyframe    = 'anyframe'    end_of_word ;
-KEYWORD_anytype     = 'anytype'     end_of_word ;
-KEYWORD_asm         = 'asm'         end_of_word ;
-KEYWORD_async       = 'async'       end_of_word ;
-KEYWORD_await       = 'await'       end_of_word ;
-KEYWORD_break       = 'break'       end_of_word ;
-KEYWORD_callconv    = 'callconv'    end_of_word ;
-KEYWORD_catch       = 'catch'       end_of_word ;
-KEYWORD_comptime    = 'comptime'    end_of_word ; 
-KEYWORD_const       = 'const'       end_of_word ;
-KEYWORD_continue    = 'continue'    end_of_word ;
-KEYWORD_defer       = 'defer'       end_of_word ;
-KEYWORD_else        = 'else'        end_of_word ;
-KEYWORD_enum        = 'enum'        end_of_word ;
-KEYWORD_errdefer    = 'errdefer'    end_of_word ;
-KEYWORD_error       = 'error'       end_of_word ;
-KEYWORD_export      = 'export'      end_of_word ;
-KEYWORD_extern      = 'extern'      end_of_word ;
-KEYWORD_fn          = 'fn'          end_of_word ;
-KEYWORD_for         = 'for'         end_of_word ;
-KEYWORD_if          = 'if'          end_of_word ;
-KEYWORD_inline      = 'inline'      end_of_word ;
-KEYWORD_noalias     = 'noalias'     end_of_word ;
-KEYWORD_nosuspend   = 'nosuspend'   end_of_word ;
-KEYWORD_noinline    = 'noinline'    end_of_word ;
-KEYWORD_opaque      = 'opaque'      end_of_word ;
-KEYWORD_or          = 'or'          end_of_word ;
-KEYWORD_orelse      = 'orelse'      end_of_word ;
-KEYWORD_packed      = 'packed'      end_of_word ;
-KEYWORD_pub         = 'pub'         end_of_word ;
-KEYWORD_resume      = 'resume'      end_of_word ;
-KEYWORD_return      = 'return'      end_of_word ;
-KEYWORD_linksection = 'linksection' end_of_word ;
-KEYWORD_struct      = 'struct'      end_of_word ;
-KEYWORD_suspend     = 'suspend'     end_of_word ;
-KEYWORD_switch      = 'switch'      end_of_word ;
-KEYWORD_test        = 'test'        end_of_word ;
-KEYWORD_threadlocal = 'threadlocal' end_of_word ;
-KEYWORD_try         = 'try'         end_of_word ;
-KEYWORD_union       = 'union'       end_of_word ;
-KEYWORD_unreachable = 'unreachable' end_of_word ;
-KEYWORD_usingnamespace = 'usingnamespace' end_of_word ;
-KEYWORD_var         = 'var'         end_of_word ;
-KEYWORD_volatile    = 'volatile'    end_of_word ;
-KEYWORD_while       = 'while'       end_of_word ;
+END_OF_WORD = ![a-zA-Z0-9_] SKIP;
+KEYWORD_ADDRSPACE   = 'addrspace'   END_OF_WORD ;
+KEYWORD_ALIGN       = 'align'       END_OF_WORD ;
+KEYWORD_ALLOWZERO   = 'allowzero'   END_OF_WORD ;
+KEYWORD_AND         = 'and'         END_OF_WORD ;
+KEYWORD_ANYFRAME    = 'anyframe'    END_OF_WORD ;
+KEYWORD_ANYTYPE     = 'anytype'     END_OF_WORD ;
+KEYWORD_ASM         = 'asm'         END_OF_WORD ;
+KEYWORD_ASYNC       = 'async'       END_OF_WORD ;
+KEYWORD_AWAIT       = 'await'       END_OF_WORD ;
+KEYWORD_BREAK       = 'break'       END_OF_WORD ;
+KEYWORD_CALLCONV    = 'callconv'    END_OF_WORD ;
+KEYWORD_CATCH       = 'catch'       END_OF_WORD ;
+KEYWORD_COMPTIME    = 'comptime'    END_OF_WORD ; 
+KEYWORD_CONST       = 'const'       END_OF_WORD ;
+KEYWORD_CONTINUE    = 'continue'    END_OF_WORD ;
+KEYWORD_DEFER       = 'defer'       END_OF_WORD ;
+KEYWORD_ELSE        = 'else'        END_OF_WORD ;
+KEYWORD_ENUM        = 'enum'        END_OF_WORD ;
+KEYWORD_ERRDEFER    = 'errdefer'    END_OF_WORD ;
+KEYWORD_ERROR       = 'error'       END_OF_WORD ;
+KEYWORD_EXPORT      = 'export'      END_OF_WORD ;
+KEYWORD_EXTERN      = 'extern'      END_OF_WORD ;
+KEYWORD_FN          = 'fn'          END_OF_WORD ;
+KEYWORD_FOR         = 'for'         END_OF_WORD ;
+KEYWORD_IF          = 'if'          END_OF_WORD ;
+KEYWORD_INLINE      = 'inline'      END_OF_WORD ;
+KEYWORD_NOALIAS     = 'noalias'     END_OF_WORD ;
+KEYWORD_NOSUSPEND   = 'nosuspend'   END_OF_WORD ;
+KEYWORD_NOINLINE    = 'noinline'    END_OF_WORD ;
+KEYWORD_OPAQUE      = 'opaque'      END_OF_WORD ;
+KEYWORD_OR          = 'or'          END_OF_WORD ;
+KEYWORD_ORELSE      = 'orelse'      END_OF_WORD ;
+KEYWORD_PACKED      = 'packed'      END_OF_WORD ;
+KEYWORD_PUB         = 'pub'         END_OF_WORD ;
+KEYWORD_RESUME      = 'resume'      END_OF_WORD ;
+KEYWORD_RETURN      = 'return'      END_OF_WORD ;
+KEYWORD_LINKSECTION = 'linksection' END_OF_WORD ;
+KEYWORD_STRUCT      = 'struct'      END_OF_WORD ;
+KEYWORD_SUSPEND     = 'suspend'     END_OF_WORD ;
+KEYWORD_SWITCH      = 'switch'      END_OF_WORD ;
+KEYWORD_TEST        = 'test'        END_OF_WORD ;
+KEYWORD_THREADLOCAL = 'threadlocal' END_OF_WORD ;
+KEYWORD_TRY         = 'try'         END_OF_WORD ;
+KEYWORD_UNION       = 'union'       END_OF_WORD ;
+KEYWORD_UNREACHABLE = 'unreachable' END_OF_WORD ;
+KEYWORD_USINGNAMESPACE = 'usingnamespace' END_OF_WORD ;
+KEYWORD_VAR         = 'var'         END_OF_WORD ;
+KEYWORD_VOLATILE    = 'volatile'    END_OF_WORD ;
+KEYWORD_WHILE       = 'while'       END_OF_WORD ;
  
-keyword = KEYWORD_addrspace | KEYWORD_align | KEYWORD_allowzero | KEYWORD_and
-         | KEYWORD_anyframe | KEYWORD_anytype | KEYWORD_asm | KEYWORD_async
-         | KEYWORD_await | KEYWORD_break | KEYWORD_callconv | KEYWORD_catch
-         | KEYWORD_comptime | KEYWORD_const | KEYWORD_continue | KEYWORD_defer
-         | KEYWORD_else | KEYWORD_enum | KEYWORD_errdefer | KEYWORD_error | KEYWORD_export
-         | KEYWORD_extern | KEYWORD_fn | KEYWORD_for | KEYWORD_if
-         | KEYWORD_inline | KEYWORD_noalias | KEYWORD_nosuspend | KEYWORD_noinline
-         | KEYWORD_opaque | KEYWORD_or | KEYWORD_orelse | KEYWORD_packed
-         | KEYWORD_pub | KEYWORD_resume | KEYWORD_return | KEYWORD_linksection
-         | KEYWORD_struct | KEYWORD_suspend | KEYWORD_switch | KEYWORD_test
-         | KEYWORD_threadlocal | KEYWORD_try | KEYWORD_union | KEYWORD_unreachable
-         | KEYWORD_usingnamespace | KEYWORD_var | KEYWORD_volatile | KEYWORD_while
+KEYWORD = KEYWORD_ADDRSPACE | KEYWORD_ALIGN | KEYWORD_ALLOWZERO | KEYWORD_AND
+         | KEYWORD_ANYFRAME | KEYWORD_ANYTYPE | KEYWORD_ASM | KEYWORD_ASYNC
+         | KEYWORD_AWAIT | KEYWORD_BREAK | KEYWORD_CALLCONV | KEYWORD_CATCH
+         | KEYWORD_COMPTIME | KEYWORD_CONST | KEYWORD_CONTINUE | KEYWORD_DEFER
+         | KEYWORD_ELSE | KEYWORD_ENUM | KEYWORD_ERRDEFER | KEYWORD_ERROR | KEYWORD_EXPORT
+         | KEYWORD_EXTERN | KEYWORD_FN | KEYWORD_FOR | KEYWORD_IF
+         | KEYWORD_INLINE | KEYWORD_NOALIAS | KEYWORD_NOSUSPEND | KEYWORD_NOINLINE
+         | KEYWORD_OPAQUE | KEYWORD_OR | KEYWORD_ORELSE | KEYWORD_PACKED
+         | KEYWORD_PUB | KEYWORD_RESUME | KEYWORD_RETURN | KEYWORD_LINKSECTION
+         | KEYWORD_STRUCT | KEYWORD_SUSPEND | KEYWORD_SWITCH | KEYWORD_TEST
+         | KEYWORD_THREADLOCAL | KEYWORD_TRY | KEYWORD_UNION | KEYWORD_UNREACHABLE
+         | KEYWORD_USINGNAMESPACE | KEYWORD_VAR | KEYWORD_VOLATILE | KEYWORD_WHILE
          ;
