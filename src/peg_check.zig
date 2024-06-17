@@ -121,6 +121,7 @@ pub fn optimize(
 
     try self.seqPass(checkDoubledCut, "check for doubled cut ops");
     try self.defPass(false, checkLastSeqCut, "check for cuts in ending sequences");
+    try self.defPass(false, checkTerminalsRegular, "check that terminals are regular");
 
     return self.pass;
 }
@@ -137,6 +138,27 @@ fn errorOnEmptyRules(self: *PegPassManager, def: *ir.Definition) anyerror!void {
         &.{.{
             .place = def.identifier,
             .msg = "cannot match anything",
+            .t = .ERROR,
+        }},
+    );
+}
+
+/// needs:
+///     * none
+/// asserts:
+///     * no terminal that is nonregular
+fn checkTerminalsRegular(self: *PegPassManager, def: *ir.Definition) anyerror!void {
+    assert(!def.finite or def.regular);
+    if (!def.is_terminal or def.regular) return;
+
+    self.pass = false;
+    try Error.print(
+        "nonregular terminal",
+        self.ir.file_name,
+        self.ir.chars,
+        &.{.{
+            .place = def.identifier,
+            .msg = "this is not a regular terminal",
             .t = .ERROR,
         }},
     );
@@ -1521,6 +1543,7 @@ fn inlineOneSeqDefs(self: *PegPassManager, def: *ir.Definition) anyerror!void {
             if (op.prefix_op != .NONE) continue;
 
             to_inline = self.getDefinition(id);
+            //if (to_inline.is_terminal and !def.is_terminal) continue;
 
             const inline_seqs = to_inline.sequences.items;
             if (inline_seqs.len != 1) continue;

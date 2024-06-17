@@ -24,6 +24,7 @@ const Error = @import("errors.zig");
 const Parser = @import("peg_parser.zig").Zapp(.{});
 const graphGen = @import("graphviz_gen.zig").generate;
 const lower = @import("lowering.zig").lower;
+const LirOptim = @import("lir_optim.zig");
 const CodeGen = @import("new_gen.zig");
 const config = @import("config");
 
@@ -207,15 +208,21 @@ fn parserGen(
     defer lir.deinit();
     lower_node.end();
 
+    // optimize lir
+    var optimize_node = root_node.start("optimize lir", 0);
+    try LirOptim.optimize(&lir);
+    optimize_node.end();
+
+    _ = dst_path;
     // generate
-    var codegen_progress = root_node.start("codegen", 0);
-    const f = std.fs.cwd().createFile(dst_path, .{}) catch {
-        try Error.print("could not create the destination file", null, "", &.{});
-        return;
-    };
-    var ngen: CodeGen = undefined;
-    try ngen.generate(lir, f.writer());
-    codegen_progress.end();
+    // var codegen_progress = root_node.start("codegen", 0);
+    // const f = std.fs.cwd().createFile(dst_path, .{}) catch {
+    //     try Error.print("could not create the destination file", null, "", &.{});
+    //     return;
+    // };
+    // var ngen: CodeGen = undefined;
+    // try ngen.generate(lir, f.writer());
+    // codegen_progress.end();
 }
 
 fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type {

@@ -48,9 +48,13 @@ pub const LowIr = struct {
     }
 
     pub fn appendBlock(self: *LowIr, block: *Block, label: Label) !void {
-        block.id = self.blocks.items.len;
-        block.base = label.def;
+        try self.appendDefBlock(block, label.def);
         try self.place_to_block.put(label, block);
+    }
+
+    pub fn appendDefBlock(self: *LowIr, block: *Block, def: usize) !void {
+        block.id = self.blocks.items.len;
+        block.base = def;
         try self.blocks.append(block);
     }
 
@@ -125,17 +129,17 @@ pub const Block = struct {
         return b;
     }
 
-    pub fn clone(self: Block, new_id: usize, allocator: Allocator) !*Block {
+    pub fn clone(self: *Block, allocator: Allocator) !*Block {
         const b = try allocator.create(Block);
         var insts = std.ArrayList(Instr).init(allocator);
         for (self.insts.items) |instr| {
-            try insts.append(instr.clone(allocator));
+            try insts.append(try instr.clone(allocator));
         }
 
         b.* = .{
             .fail = self.fail,
             .insts = insts,
-            .id = new_id,
+            .id = 0,
             .base = 0,
             .meta = self.meta,
         };
@@ -195,14 +199,16 @@ pub const Block = struct {
     }
 };
 
-pub const BlockMeta = struct {
+pub const BlockMeta = packed struct {
     mid_recurse: bool,
     right_recurse: bool,
     regular: bool,
     finite: bool,
+    is_terminal: bool,
     nonterm_fail: bool,
     has_actions: bool,
     moves_actions: bool,
+    is_target: bool,
 
     pub const Empty: BlockMeta = .{
         .mid_recurse = false,
@@ -212,6 +218,8 @@ pub const BlockMeta = struct {
         .nonterm_fail = false,
         .has_actions = false,
         .moves_actions = false,
+        .is_terminal = false,
+        .is_target = false,
     };
 
     pub fn format(
@@ -220,11 +228,13 @@ pub const BlockMeta = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        try writer.print("{s}{s}{s}", .{
+        try writer.print("{s}{s}{s}{s}{s}{s}", .{
             if (self.mid_recurse) " (mr)" else if (self.right_recurse) " (rr)" else "",
             if (self.regular) " (reg)" else if (self.finite) " (fin)" else "",
             if (self.nonterm_fail) " (fail)" else "",
             if (self.moves_actions) " (act)" else "",
+            if (self.is_terminal) " (ter)" else "",
+            if (self.is_target) " (tgt)" else "",
         });
     }
 };
@@ -293,6 +303,29 @@ pub const Instr = struct {
             .STRING => allocator.free(self.data.str),
             else => {},
         }
+    }
+
+    pub fn clone(self: Instr, allocator: Allocator) !Instr {
+        return .{
+            .tag = self.tag,
+            .meta = self.meta,
+            .data = switch (self.tag) {
+                .MATCH => blk: {
+                    const match = self.data.match;
+                    var clone_list = std.ArrayList(MatchProng)
+                        .init(allocator);
+
+                    for (match.items) |prong| {
+                        try clone_list.append(try prong.clone());
+                    }
+                    break :blk .{ .match = clone_list };
+                },
+                .STRING => blk: {
+                    break :blk .{ .str = try allocator.dupe(u8, self.data.str) };
+                },
+                else => return self,
+            },
+        };
     }
 
     pub fn format(
@@ -365,6 +398,10 @@ pub const InstrData = union {
 pub const InstrMeta = struct {
     pos: bool,
     neg: bool,
+
+    pub fn isConsuming(self: InstrMeta) bool {
+        return !self.pos and !self.neg;
+    }
 
     pub const Empty: InstrMeta = .{
         .pos = false,
@@ -502,6 +539,13 @@ pub const MatchProng = struct {
 pub const Range = struct {
     from: u8,
     to: u8,
+
+    pub fn initChar(char: u8) Range {
+        return .{
+            .from = char,
+            .to = char,
+        };
+    }
 
     pub fn isChar(self: Range) bool {
         assert(self.to != 0 or self.from == 0);

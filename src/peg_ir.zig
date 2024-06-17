@@ -75,13 +75,10 @@ pub const PegIr = struct {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try writer.print("acceptor: {}\n", .{self.is_acceptor});
         try writer.print(
             "NAME: {s}\nTOP START:\n{s}\nTOP END\nFIELD START:\n{s}FIELD END\n\n",

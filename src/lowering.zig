@@ -166,6 +166,8 @@ fn lowerSeq(
         .nonterm_fail = last_branch,
         .has_actions = def.has_actions,
         .moves_actions = def.moves_actions,
+        .is_terminal = def.is_terminal,
+        .is_target = label.choice == 0,
     };
 
     for (0..ops.len) |i| {
@@ -205,6 +207,8 @@ fn lowerSeq(
             .nonterm_fail = last_branch or has_cut,
             .has_actions = def.has_actions,
             .moves_actions = def.moves_actions,
+            .is_terminal = def.is_terminal,
+            .is_target = false,
         };
     }
 

@@ -1,0 +1,14 @@
+%% NAME Test
+
+ROOT
+    = A
+    | B
+    | [a-zA-Z0-9]
+    ;
+
+A = "Hello World"* ;
+
+B   
+    = "Nice Time" A
+    | "Nice"
+    ;
