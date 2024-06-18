@@ -23,7 +23,7 @@ pub const AcceptanceSet = struct {
     values: [4]u64 = .{0} ** 4,
 
     const RangeIterator = struct {
-        set: *const AcceptanceSet,
+        set: AcceptanceSet,
         index: u8,
 
         pub fn next(self: *RangeIterator) ?ir.Range {
@@ -54,7 +54,11 @@ pub const AcceptanceSet = struct {
         }
     };
 
-    pub fn rangeIter(self: *const AcceptanceSet) RangeIterator {
+    pub fn eql(self: AcceptanceSet, other: AcceptanceSet) bool {
+        return std.mem.eql(u64, &self.values, &other.values);
+    }
+
+    pub fn rangeIter(self: AcceptanceSet) RangeIterator {
         return .{
             .set = self,
             .index = 0,
@@ -62,7 +66,7 @@ pub const AcceptanceSet = struct {
     }
 
     /// merges two acceptance sets
-    pub fn merge(self: *AcceptanceSet, other: *AcceptanceSet) void {
+    pub fn merge(self: *AcceptanceSet, other: AcceptanceSet) void {
         for (&self.values, &other.values) |*main_val, incoming_val| {
             main_val.* |= incoming_val;
         }
@@ -72,19 +76,19 @@ pub const AcceptanceSet = struct {
         for (&self.values) |*value| value.* = ~value.*;
     }
 
-    pub fn cut(self: *AcceptanceSet, other: *const AcceptanceSet) void {
+    pub fn cut(self: *AcceptanceSet, other: AcceptanceSet) void {
         for (&self.values, &other.values) |*main_val, incoming_val| {
             main_val.* &= ~incoming_val;
         }
     }
 
-    pub fn disjoint(self: *const AcceptanceSet, other: *const AcceptanceSet) bool {
-        var clone = self.*;
+    pub fn disjoint(self: AcceptanceSet, other: AcceptanceSet) bool {
+        var clone = self;
         clone.intersect(other);
         return clone.isEmpty();
     }
 
-    pub fn intersect(self: *AcceptanceSet, other: *const AcceptanceSet) void {
+    pub fn intersect(self: *AcceptanceSet, other: AcceptanceSet) void {
         for (&self.values, &other.values) |*main_val, incoming_val| {
             main_val.* &= incoming_val;
         }
@@ -99,24 +103,30 @@ pub const AcceptanceSet = struct {
         self.values[char >> 6] |= @as(u64, 1) << @as(u6, @intCast(char & 0x3F));
     }
 
-    pub fn matchesChar(self: *const AcceptanceSet, char: u8) bool {
+    pub fn matchesChar(self: AcceptanceSet, char: u8) bool {
         return self.values[char >> 6] & (@as(u64, 1) << @as(u6, @intCast(char & 0x3F))) != 0;
     }
 
     /// inclusive range
-    pub fn matchesRange(self: *const AcceptanceSet, from: u8, to: u8) bool {
+    pub fn matchesRange(self: AcceptanceSet, from: u8, to: u8) bool {
         for (from..to + 1) |char| if (!self.matchesChar(char)) return false;
         return true;
     }
 
-    pub fn isFull(self: *const AcceptanceSet) bool {
+    pub fn isFull(self: AcceptanceSet) bool {
         for (0..4) |i| if (self.values[i] != std.math.maxInt(u64)) return false;
         return true;
     }
 
-    pub fn isEmpty(self: *const AcceptanceSet) bool {
+    pub fn isEmpty(self: AcceptanceSet) bool {
         for (0..4) |i| if (self.values[i] != 0) return false;
         return true;
+    }
+
+    pub fn subSet(self: AcceptanceSet, other: AcceptanceSet) bool {
+        var cp = self;
+        cp.cut(other);
+        return cp.isEmpty();
     }
 
     pub fn format(

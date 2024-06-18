@@ -50,7 +50,10 @@ pub fn optimize(lir: *ir.LowIr) !void {
         }
     }
 
-    try dfa_state.getBranches();
+    const analysis = try dfa_state.getBranches();
+    defer analysis.deinit();
+    std.debug.print("fail_branch: {s}\n", .{analysis.fail_set});
+    for (analysis.prongs.items) |*branch| _ = dfa_state.splitOn(branch);
 }
 
 fn generateDfa(self: *PassManager, block: *ir.Block) !void {
@@ -191,47 +194,106 @@ const DfaState = struct {
         return false;
     }
 
-    pub fn getBranches(self: *DfaState) !void {
+    pub fn splitOn(self: *const DfaState, branch: *const SplitBranch) DfaState {
+        _ = self;
+        std.debug.print("split on {s}\n", .{branch});
+        return undefined;
+    }
+
+    const BranchResult = struct {
+        fail_set: AcceptanceSet,
+        prongs: std.ArrayList(SplitBranch),
+
+        pub fn deinit(self: BranchResult) void {
+            self.prongs.deinit();
+        }
+    };
+
+    pub fn getBranches(self: *DfaState) !BranchResult {
         var prongs = std.ArrayList(SplitBranch)
             .init(self.sub_states.allocator);
-        defer prongs.deinit();
         for (self.sub_states.items) |*state| {
             try state.addBranches(&prongs);
         }
 
-        for (prongs.items) |prong| std.debug.print("{s}\n", .{prong});
-
         // augment the prongs
-        // the goal is to get sets that are disjoint
-        var disjoint_prongs = std.ArrayList(SplitBranch)
-            .init(self.sub_states.allocator);
+        var normal_match: AcceptanceSet = .{};
+        try self.canonicalizeBranches(&prongs, &normal_match);
 
-        // merge all normal prongs
-        for (prongs.items) |prong| {
-            if (prong.accept) continue;
+        // this strategy does not follow peg orderedness
+        // and is essentially random.
+        // maybe it would be nice to add a warning to the user or an error
+        var i: usize = 1;
+        while (i <= prongs.items.len) : (i += 1) {
+            const prong = &prongs.items[i - 1];
+            if (!prong.accept) continue;
+            prong.set.cut(normal_match);
+            if (prong.set.isEmpty()) {
+                _ = prongs.swapRemove(i);
+                i -= 1;
+            } else {
+                normal_match.merge(prong.set);
+            }
         }
 
+        // next emit the block
+        var fail_match = normal_match;
+        fail_match.invert();
+
+        return .{
+            .fail_set = fail_match,
+            .prongs = prongs,
+        };
+    }
+
+    fn canonicalizeBranches(
+        _: *DfaState,
+        prongs: *std.ArrayList(SplitBranch),
+        normal_match: *AcceptanceSet,
+    ) !void {
         var i: usize = 1;
-        var normal_match: AcceptanceSet = .{};
         while (i <= prongs.items.len) : (i += 1) {
-            const prong = &prongs[i - 1];
+            const prong = &prongs.items[i - 1];
             if (prong.accept) continue;
             normal_match.merge(prong.set);
 
-            for (prongs.items) |*other_prong| {
+            var j: usize = i;
+            while (j < prongs.items.len) : (j += 1) {
+                const other_prong = &prongs.items[j];
+
                 if (other_prong.accept) continue;
                 if (prong.set.disjoint(other_prong.set)) continue;
-                var prong_cp = prong.*;
+                if (prong.set.eql(other_prong.set)) {
+                    _ = prongs.swapRemove(j);
+                    j -= 1; // no problem as j > i - 1 >= 0
+                    continue;
+                }
 
-                prong_cp.set.intersect(other_prong.set);
-                prong.cut(prong_cp.set);
-                other_prong.cut(prong_cp.set);
+                var prong_cp: SplitBranch = undefined;
+                if (prong.set.subSet(other_prong.set)) {
+                    prong_cp = other_prong.*;
+                    prong_cp.set.cut(prong.set);
+                    _ = prongs.swapRemove(j);
+                    j -= 1;
+                } else if (other_prong.set.subSet(prong.set)) {
+                    std.mem.swap(SplitBranch, prong, other_prong);
+                    prong_cp = other_prong.*;
+                    prong_cp.set.cut(prong.set);
+                    _ = prongs.swapRemove(j);
+                    j -= 1;
+                } else {
+                    prong_cp = prong.*;
+                    prong_cp.set.intersect(other_prong.set);
+                    prong.set.cut(prong_cp.set);
+                    other_prong.set.cut(prong_cp.set);
 
-                assert(prong.set.disjoint(prong_cp.set) and
-                    prong.set.disjoint(other_prong.set) and
-                    prong_cp.set.disjoint(other_prong.set));
+                    assert(prong.set.disjoint(prong_cp.set) and
+                        prong.set.disjoint(other_prong.set) and
+                        prong_cp.set.disjoint(other_prong.set));
+                }
 
-                try disjoint_prongs.append(prong_cp);
+                assert(!prong_cp.set.isEmpty());
+                try prongs.append(prong_cp);
             }
         }
     }
