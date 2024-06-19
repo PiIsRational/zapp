@@ -108,7 +108,7 @@ fn cutSeq(op: pir.Operated) bool {
         .DOT, // goes to a match
         .CLASS, // goes to a match
         .ID, // contextful branching resumes after the jump
-        .CUT, // no branching but the meta changes
+        .CUT, // branching (contextless jump)
         => true,
         .LITERAL, // no branching
         => false,

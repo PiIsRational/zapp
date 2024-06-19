@@ -53,7 +53,7 @@ pub fn optimize(lir: *ir.LowIr) !void {
     const analysis = try dfa_state.getBranches();
     defer analysis.deinit();
     std.debug.print("fail_branch: {s}\n", .{analysis.fail_set});
-    for (analysis.prongs.items) |*branch| _ = dfa_state.splitOn(branch);
+    for (analysis.prongs.items) |*branch| _ = try dfa_state.splitOn(branch.set);
 }
 
 fn generateDfa(self: *PassManager, block: *ir.Block) !void {
@@ -194,10 +194,22 @@ const DfaState = struct {
         return false;
     }
 
-    pub fn splitOn(self: *const DfaState, branch: *const SplitBranch) DfaState {
-        _ = self;
-        std.debug.print("split on {s}\n", .{branch});
-        return undefined;
+    pub fn splitOn(self: *DfaState, set: AcceptanceSet) !DfaState {
+        std.debug.print("split on {s}\n", .{set});
+        var new_dfa_state: DfaState = .{
+            .sub_states = std.ArrayList(ExecState)
+                .init(self.sub_states.allocator),
+        };
+
+        for (self.sub_states.items) |sub| {
+            if (try sub.splitOn(set)) |new_state| {
+                try new_dfa_state.sub_states.append(new_state);
+            }
+        }
+
+        std.debug.print("adding new state\n", .{});
+
+        return new_dfa_state;
     }
 
     const BranchResult = struct {
@@ -374,6 +386,44 @@ const ExecState = struct {
         };
     }
 
+    pub fn splitOn(self: *const ExecState, set: AcceptanceSet) !?ExecState {
+        if (self.blocks.items.len == 0) return null;
+        const last = self.blocks.getLast();
+        const instr = last.insts.items[self.instr];
+        assert(instr.meta.isConsuming());
+        assert(!set.isEmpty());
+
+        switch (instr.tag) {
+            // this only works because the set was built using add branches and
+            // therefore cannot contain more characters in itself if it accepts the string
+            // TODO: make this more robust
+            .STRING => if (set.matchesChar(instr.data.str[self.instr_sub_idx])) {
+                var new_state = try self.clone();
+                if (self.instr_sub_idx + 1 == instr.data.str.len) {
+                    new_state.instr += 1;
+                    new_state.instr_sub_idx = 0;
+                } else {
+                    new_state.instr_sub_idx += 1;
+                }
+
+                return new_state;
+            },
+            .MATCH => for (instr.data.match.items) |prong| {
+                var prong_set: AcceptanceSet = .{};
+                for (prong.labels.items) |range| prong_set.addRange(range.from, range.to);
+                if (!set.subSet(prong_set)) continue;
+
+                var new_state = try self.clone();
+                new_state.instr += 1;
+
+                return new_state;
+            },
+            else => unreachable,
+        }
+
+        return null;
+    }
+
     pub const Key = struct {
         instr: usize,
         instr_sub_idx: usize,
@@ -416,15 +466,8 @@ const ExecState = struct {
         switch (instr.tag) {
             .STRING => try list.append(SplitBranch
                 .initChar(instr.data.str[self.instr_sub_idx])),
-            .MATCH => {
-                for (instr.data.match.items) |prong| {
-                    const fail = switch (prong.dest.insts.items[0].tag) {
-                        .FAIL, .EXIT_FAIL => true,
-                        else => false,
-                    };
-
-                    if (!fail) try list.append(SplitBranch.initProng(prong));
-                }
+            .MATCH => for (instr.data.match.items) |prong| {
+                try list.append(SplitBranch.initProng(prong));
             },
             else => unreachable,
         }
