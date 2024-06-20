@@ -32,33 +32,17 @@ pub fn optimize(lir: *ir.LowIr) !void {
         .ir = lir,
     };
 
-    var dfa_state = try DfaState.init(self.ir.allocator, self.ir.blocks.items[0]);
-    defer dfa_state.deinit();
+    var dfa_gen = DfaGen.init(self.ir.allocator);
+    defer dfa_gen.deinit();
 
-    std.debug.print("first variant\n\n", .{});
-    for (dfa_state.sub_states.items, 0..) |state, i| {
-        if (state.defaultPass()) |action| {
-            std.debug.print(
-                "state {d}:\naccepting!\nexecuting action {d}\n\n",
-                .{ i, action },
-            );
-        } else {
-            std.debug.print(
-                "state {d}:\n{s}\n",
-                .{ i, state.blocks.items[state.blocks.items.len - 1] },
-            );
-        }
-    }
-
-    const analysis = try dfa_state.getBranches();
-    defer analysis.deinit();
-    std.debug.print("fail_branch: {s}\n", .{analysis.fail_set});
-    for (analysis.prongs.items) |*branch| _ = try dfa_state.splitOn(branch.set);
+    const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
+    defer dfa.deinit(self.ir.allocator);
 }
 
 fn generateDfa(self: *PassManager, block: *ir.Block) !void {
     assert(block.meta.is_terminal);
     assert(block.meta.is_target);
+
     _ = self;
 }
 
@@ -129,11 +113,33 @@ fn blockPass(
     }
 }
 
-const MultiState = struct {
-    const Context = DfaCtx(std.hash.Whyhash);
+const Dfa = struct {
+    blocks: std.ArrayList(*ir.Block),
+
+    pub fn init(allocator: Allocator) Dfa {
+        return .{
+            .blocks = std.ArrayList(*ir.Block).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: Dfa, allocator: Allocator) void {
+        for (self.blocks.items) |block| block.deinit(allocator);
+        self.blocks.deinit();
+    }
+
+    pub fn getNew(self: *Dfa) !*ir.Block {
+        const block = try ir.Block.init(self.blocks.allocator);
+        block.id = self.blocks.items.len;
+        try self.blocks.append(block);
+        return block;
+    }
+};
+
+const DfaGen = struct {
+    const Context = DfaCtx(std.hash.Wyhash);
     pub const DfaMap = std.HashMap(
         *const DfaState.Key,
-        ExecState.Key,
+        *ir.Block,
         Context,
         std.hash_map.default_max_load_percentage,
     );
@@ -141,25 +147,95 @@ const MultiState = struct {
     dfa_states: std.ArrayList(DfaState),
     map: DfaMap,
     map_keys: std.ArrayList(DfaState.Key),
+    allocator: Allocator,
 
-    pub fn init(allocator: Allocator) MultiState {
+    pub fn init(allocator: Allocator) DfaGen {
         return .{
             .dfa_states = std.ArrayList(DfaState).init(allocator),
             .map = DfaMap.init(allocator),
             .map_keys = std.ArrayList(DfaState.Key).init(allocator),
+            .allocator = allocator,
         };
     }
 
-    pub fn put(self: MultiState, key: DfaState.Key, value: ExecState.Key) !void {
+    pub fn gen(self: *DfaGen, start_block: *ir.Block) !Dfa {
+        var dfa = Dfa.init(self.allocator);
+        const start_state = try DfaState.init(self.allocator, start_block);
+        try self.dfa_states.append(start_state);
+        try self.put(try start_state.toKey(), try dfa.getNew());
+
+        const fail_block = try dfa.getNew();
+        try fail_block.insts.append(ir.Instr.initTag(.FAIL));
+
+        while (self.dfa_states.items.len != 0) {
+            for (self.dfa_states.items) |*state| try state.goEps();
+
+            var i: usize = 1;
+            while (i < self.dfa_states.items.len) : (i += 1) {
+                var state = self.dfa_states.items[i];
+                const branches = try state.getBranches();
+                defer branches.deinit();
+
+                // get the block
+                const curr_key = try state.toKey();
+                defer curr_key.deinit(self.allocator);
+
+                const block = self.map.get(&curr_key).?;
+                try block.insts.append(ir.Instr.initTag(.MATCH));
+                const instr = &block.insts.items[0];
+                instr.data.match = std.ArrayList(ir.MatchProng)
+                    .init(self.allocator);
+
+                if (!branches.fail_set.isEmpty()) {
+                    block.fail = fail_block;
+                }
+
+                // add the prongs and get the destination block
+                for (branches.prongs.items) |prong| {
+                    const split_state = try state.splitOn(prong.set);
+                    const key = try split_state.toKey();
+                    defer key.deinit(self.allocator);
+                    var labels = std.ArrayList(ir.Range).init(self.allocator);
+                    var iter = prong.set.rangeIter();
+                    while (iter.next()) |range| try labels.append(range);
+
+                    const dst_blk = self.map.get(&key) orelse blk: {
+                        const dst_blk = try dfa.getNew();
+
+                        // if the prong is not consuming the state of
+                        // the block will be accepting
+                        if (prong.final_action) |action| {
+                            var pass_instr = ir.Instr.initTag(.RET);
+                            pass_instr.data.action = action;
+                            dst_blk.insts.append(pass_instr);
+                        }
+
+                        try self.put(try key.clone(self.allocator), dst_blk);
+                        break :blk dst_blk;
+                    };
+
+                    try instr.data.match.append(.{
+                        .labels = labels,
+                        .dest = dst_blk,
+                        .consuming = prong.final_action == null,
+                    });
+                }
+            }
+        }
+
+        return dfa;
+    }
+
+    fn put(self: *DfaGen, key: DfaState.Key, value: *ir.Block) !void {
         try self.map_keys.append(key);
         const keys = self.map_keys.items;
         const key_ptr = &keys[keys.len - 1];
         try self.map.put(key_ptr, value);
     }
 
-    pub fn deinit(self: MultiState) void {
+    pub fn deinit(self: *DfaGen) void {
         for (self.dfa_states.items) |dfa_state| dfa_state.deinit();
-        for (self.map_keys.items) |key| key.deinit();
+        for (self.map_keys.items) |key| key.deinit(self.allocator);
 
         self.dfa_states.deinit();
         self.map_keys.deinit();
@@ -194,8 +270,16 @@ const DfaState = struct {
         return false;
     }
 
+    pub fn clone(self: *const DfaState) !DfaState {
+        var sub_states = std.ArrayList(ExecState)
+            .init(self.sub_states.allocator);
+
+        for (self.sub_states.items) |sub_state| try sub_states.append(sub_state);
+
+        return .{ .sub_states = sub_states };
+    }
+
     pub fn splitOn(self: *DfaState, set: AcceptanceSet) !DfaState {
-        std.debug.print("split on {s}\n", .{set});
         var new_dfa_state: DfaState = .{
             .sub_states = std.ArrayList(ExecState)
                 .init(self.sub_states.allocator),
@@ -206,8 +290,6 @@ const DfaState = struct {
                 try new_dfa_state.sub_states.append(new_state);
             }
         }
-
-        std.debug.print("adding new state\n", .{});
 
         return new_dfa_state;
     }
@@ -238,7 +320,7 @@ const DfaState = struct {
         var i: usize = 1;
         while (i <= prongs.items.len) : (i += 1) {
             const prong = &prongs.items[i - 1];
-            if (!prong.accept) continue;
+            if (prong.final_action == null) continue;
             prong.set.cut(normal_match);
             if (prong.set.isEmpty()) {
                 _ = prongs.swapRemove(i);
@@ -266,14 +348,14 @@ const DfaState = struct {
         var i: usize = 1;
         while (i <= prongs.items.len) : (i += 1) {
             const prong = &prongs.items[i - 1];
-            if (prong.accept) continue;
+            if (prong.final_action != null) continue;
             normal_match.merge(prong.set);
 
             var j: usize = i;
             while (j < prongs.items.len) : (j += 1) {
                 const other_prong = &prongs.items[j];
 
-                if (other_prong.accept) continue;
+                if (other_prong.final_action != null) continue;
                 if (prong.set.disjoint(other_prong.set)) continue;
                 if (prong.set.eql(other_prong.set)) {
                     _ = prongs.swapRemove(j);
@@ -342,6 +424,11 @@ const DfaState = struct {
     const Key = struct {
         sub_states: []const ExecState.Key,
 
+        pub fn clone(self: Key, allocator: Allocator) !Key {
+            const sub_states = try allocator.dupe(ExecState.Key, self.sub_states);
+            return .{ .sub_states = sub_states };
+        }
+
         pub fn deinit(self: Key, allocator: Allocator) void {
             allocator.free(self.sub_states);
         }
@@ -351,7 +438,7 @@ const DfaState = struct {
         var sub_states = try self.sub_states.allocator
             .alloc(ExecState.Key, self.sub_states.items.len);
 
-        for (self.sub_states, 0..) |state, i| {
+        for (self.sub_states.items, 0..) |state, i| {
             sub_states[i] = state.toKey();
         }
 
@@ -435,13 +522,13 @@ const ExecState = struct {
                 self.block == other.block;
         }
 
-        pub fn hash(self: *const Key, hasher: anytype) void {
+        pub fn hash(self: Key, hasher: anytype) void {
             assert(std.meta.hasUniqueRepresentation(usize));
-            assert(std.meta.hasUniqueRepresentation(@intFromPtr(*ir.Block)));
+            assert(std.meta.hasUniqueRepresentation(*ir.Block));
 
-            hasher.update(std.mem.asBytes(&self.instr));
-            hasher.update(std.mem.asBytes(&self.instr_sub_idx));
-            hasher.update(std.mem.asBytes(&@intFromPtr(self.block)));
+            hasher.*.update(std.mem.asBytes(&self.instr));
+            hasher.*.update(std.mem.asBytes(&self.instr_sub_idx));
+            hasher.*.update(std.mem.asBytes(&@intFromPtr(self.block)));
         }
     };
 
@@ -456,7 +543,7 @@ const ExecState = struct {
         const blocks = self.blocks.items;
         if (blocks.len == 0) {
             // passing state
-            try list.append(SplitBranch.initMatchAll(true));
+            try list.append(SplitBranch.initMatchAll(self.last_action));
             return;
         }
         const last = blocks[blocks.len - 1];
@@ -561,24 +648,24 @@ const ExecState = struct {
 
 const SplitBranch = struct {
     set: AcceptanceSet,
-    accept: bool,
+    final_action: ?usize,
 
-    pub fn init(accept: bool) SplitBranch {
+    pub fn init(final_action: ?usize) SplitBranch {
         return .{
             .set = .{},
-            .accept = accept,
+            .final_action = final_action,
         };
     }
 
-    pub fn initMatchAll(accept: bool) SplitBranch {
-        var self = init(accept);
+    pub fn initMatchAll(final_action: ?usize) SplitBranch {
+        var self = init(final_action);
         self.set.invert();
         return self;
     }
 
     pub fn initProng(prong: ir.MatchProng) SplitBranch {
         assert(prong.consuming);
-        var self = init(false);
+        var self = init(null);
 
         for (prong.labels.items) |range| {
             self.set.addRange(range.from, range.to);
@@ -588,7 +675,7 @@ const SplitBranch = struct {
     }
 
     pub fn initChar(char: u8) SplitBranch {
-        var self = init(false);
+        var self = init(null);
         self.set.addChar(char);
         return self;
     }
@@ -601,7 +688,7 @@ const SplitBranch = struct {
     ) !void {
         try writer.print("(branch: {s}{s})", .{
             self.set,
-            if (self.accept) "; (acc)" else "",
+            if (self.final_action != null) "; (acc)" else "",
         });
     }
 };
@@ -609,7 +696,7 @@ const SplitBranch = struct {
 pub fn DfaCtx(comptime Hasher: type) type {
     return struct {
         pub fn eql(_: @This(), pseudo: *const DfaState.Key, key: *const DfaState.Key) bool {
-            for (key.sub_states.items, pseudo.sub_states.items) |key_sub, pseudo_sub| {
+            for (key.sub_states, pseudo.sub_states) |key_sub, pseudo_sub| {
                 if (!key_sub.eql(pseudo_sub)) return false;
             }
 
@@ -618,8 +705,8 @@ pub fn DfaCtx(comptime Hasher: type) type {
 
         pub fn hash(_: @This(), key: *const DfaState.Key) u64 {
             var hasher = Hasher.init(0);
-            for (key.sub_states.items) |sub_state| {
-                sub_state.hash(hasher);
+            for (key.sub_states) |sub_state| {
+                sub_state.hash(&hasher);
             }
 
             return hasher.final();
