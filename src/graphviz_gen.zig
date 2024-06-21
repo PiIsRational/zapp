@@ -56,7 +56,7 @@ pub fn genDfa(
     dfa: Dfa,
     name: []const u8,
 ) !void {
-    try w.print("digraph {s} {{\n", .{name});
+    try w.print("digraph {s} {{ \n", .{name});
     try w.print("node [shape = doublecircle]; ", .{});
     try getTerminals(w, dfa);
     try w.print(";\nnode [shape = circle];\n", .{});

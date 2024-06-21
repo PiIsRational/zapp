@@ -221,13 +221,15 @@ const DfaGen = struct {
 
                         // if the prong is not consuming the state of
                         // the block will be accepting
-                        if (prong.final_action) |action| {
+                        if (split_state.isEmpty()) {
+                            const action = split_state.action.?;
                             var pass_instr = ir.Instr.initTag(.RET);
                             pass_instr.data = .{ .action = action };
                             try dst_blk.insts.append(pass_instr);
                         }
 
                         try self.put(try key.clone(self.allocator), dst_blk);
+
                         break :blk dst_blk;
                     };
 
