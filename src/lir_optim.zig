@@ -112,7 +112,7 @@ fn blockPass(
     const blocks = &self.ir.blocks.items;
     var i: usize = 0;
     while (i < blocks.len) : (i += 1) {
-        try pass(self, blocks.*[i]);
+        try pass(self, blocks[i]);
     }
 }
 
@@ -301,9 +301,32 @@ const DfaState = struct {
         while (try self.fillBranches() or try self.execJumps()) {}
         self.resetHadFill();
 
+        self.deduplicate();
         if (self.isEmpty()) {
             assert(self.sub_states.items.len > 0);
             self.action = self.sub_states.items[0].last_action;
+        }
+    }
+
+    fn deduplicate(self: *DfaState) void {
+        var i: usize = 1;
+        var found = false;
+        while (i < self.sub_states.items.len) : (i += 1) {
+            const sub = self.sub_states.items[i - 1];
+
+            for (self.sub_states.items[i..]) |next| {
+                if (!next.eql(sub)) continue;
+                found = true;
+                break;
+            }
+
+            if (found) {
+                i -= 1;
+                _ = self.sub_states.swapRemove(i);
+                sub.deinit();
+            }
+
+            found = false;
         }
     }
 
@@ -729,6 +752,12 @@ const ExecState = struct {
             });
         }
     };
+
+    pub fn eql(self: ExecState, other: ExecState) bool {
+        return self.blocks.getLastOrNull() == other.blocks.getLastOrNull() and
+            self.instr == other.instr and
+            self.instr_sub_idx == other.instr_sub_idx;
+    }
 
     pub fn toKey(self: ExecState) ?Key {
         if (self.blocks.items.len == 0) return null;

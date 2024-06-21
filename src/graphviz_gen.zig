@@ -21,6 +21,7 @@ const Writer = std.fs.File.Writer;
 const ir = @import("peg_ir.zig");
 const lir = @import("low_ir.zig");
 const Dfa = @import("lir_optim.zig").Dfa;
+const su = @import("string_utils.zig");
 
 pub fn generate(w: Writer, p_ir: ir.PegIr) !void {
     try w.print("digraph {s} {{\n", .{p_ir.name});
@@ -86,7 +87,17 @@ fn genDfaEdge(w: Writer, start: *lir.Block, prong: lir.MatchProng) !void {
     try w.print(" -> ", .{});
     try w.print("{d} [label = \"", .{prong.dest.id});
     for (prong.labels.items) |range| {
-        try w.print("{s}, ", .{range});
+        try genRange(w, range);
+        try w.print(", ", .{});
     }
     try w.print("\"];\n", .{});
+}
+
+fn genRange(w: Writer, range: lir.Range) !void {
+    try su.writeEscapeChar(w, range.from);
+
+    if (range.isChar()) return;
+
+    try w.print(" .. ", .{});
+    try su.writeEscapeChar(w, range.to);
 }

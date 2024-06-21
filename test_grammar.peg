@@ -1,14 +1,22 @@
 %% NAME Test
 
-ROOT
-    = A
-    | B
-    | [a-zA-Z0-9]
+SPACING = SPACE_UNIT* ;
+
+SPACE_UNIT
+    = SPACE 
+ //   | COMMENT
     ;
 
-A = "Hello World"* ;
+//COMMENT = '//' (!LINE_END .)* LINE_END ;
 
-B   
-    = "Nice Time" A
-    | "Nice"
+LINE_END 
+    = '\r\n'
+    | '\n'
+    | '\r'
+    ;
+
+SPACE 
+    = ' '
+    | '\t'
+    | LINE_END 
     ;

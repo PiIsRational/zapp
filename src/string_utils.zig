@@ -84,6 +84,12 @@ pub fn writeChar(writer: anytype, char: u8) !void {
     try writer.print("'", .{});
 }
 
+pub fn writeEscapeChar(writer: anytype, char: u8) !void {
+    try writer.print("'", .{});
+    try writeEscapeCharacter(writer, char);
+    try writer.print("'", .{});
+}
+
 pub fn writeString(writer: anytype, string: []const u8) !void {
     try writer.print("\"", .{});
 
@@ -94,17 +100,25 @@ pub fn writeString(writer: anytype, string: []const u8) !void {
     try writer.print("\"", .{});
 }
 
+pub fn writeEscapeCharacter(writer: anytype, char: u8) !void {
+    try writeCharBase(writer, char, "\\");
+}
+
 pub fn writeCharacter(writer: anytype, char: u8) !void {
+    try writeCharBase(writer, char, "");
+}
+
+fn writeCharBase(writer: anytype, char: u8, escape: []const u8) !void {
     switch (char) {
-        '\n' => try writer.print("\\n", .{}),
-        '\t' => try writer.print("\\t", .{}),
-        '\r' => try writer.print("\\r", .{}),
+        '\n' => try writer.print("{s}\\n", .{escape}),
+        '\t' => try writer.print("{s}\\t", .{escape}),
+        '\r' => try writer.print("{s}\\r", .{escape}),
         '\'',
         '"',
         '\\',
-        => try writer.print("\\{c}", .{char}),
+        => try writer.print("{s}\\{c}", .{ escape, char }),
         else => if ((char < 33 or char >= 127) and char != ' ')
-            try writer.print("\\x{x:0>2}", .{char})
+            try writer.print("{s}\\x{x:0>2}", .{ escape, char })
         else
             try writer.print("{c}", .{char}),
     }
