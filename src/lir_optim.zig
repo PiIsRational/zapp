@@ -20,6 +20,7 @@ const Allocator = std.mem.Allocator;
 
 const ir = @import("low_ir.zig");
 const AcceptanceSet = @import("rule_analyzer.zig").AcceptanceSet;
+const gvgen = @import("graphviz_gen.zig");
 
 const PassManager = @This();
 
@@ -36,6 +37,8 @@ pub fn optimize(lir: *ir.LowIr) !void {
     defer dfa_gen.deinit();
 
     const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
+    const stdout = std.io.getStdOut().writer();
+    try gvgen.genDfa(stdout, dfa, "dfa");
     defer dfa.deinit(self.ir.allocator);
 }
 
@@ -113,7 +116,7 @@ fn blockPass(
     }
 }
 
-const Dfa = struct {
+pub const Dfa = struct {
     blocks: std.ArrayList(*ir.Block),
 
     pub fn init(allocator: Allocator) Dfa {
@@ -133,12 +136,23 @@ const Dfa = struct {
         try self.blocks.append(block);
         return block;
     }
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        for (self.blocks.items) |blk| {
+            try writer.print("{s}\n", .{blk});
+        }
+    }
 };
 
 const DfaGen = struct {
     const Context = DfaCtx(std.hash.Wyhash);
     pub const DfaMap = std.HashMap(
-        *const DfaState.Key,
+        DfaState.Key,
         *ir.Block,
         Context,
         std.hash_map.default_max_load_percentage,
@@ -166,13 +180,12 @@ const DfaGen = struct {
 
         const fail_block = try dfa.getNew();
         try fail_block.insts.append(ir.Instr.initTag(.FAIL));
+        var new_states = std.ArrayList(DfaState).init(self.allocator);
+        defer new_states.deinit();
 
         while (self.dfa_states.items.len != 0) {
-            for (self.dfa_states.items) |*state| try state.goEps();
-
-            var i: usize = 1;
-            while (i < self.dfa_states.items.len) : (i += 1) {
-                var state = self.dfa_states.items[i];
+            for (self.dfa_states.items) |*state| {
+                defer state.deinit();
                 const branches = try state.getBranches();
                 defer branches.deinit();
 
@@ -180,11 +193,13 @@ const DfaGen = struct {
                 const curr_key = try state.toKey();
                 defer curr_key.deinit(self.allocator);
 
-                const block = self.map.get(&curr_key).?;
+                const block = self.map.get(curr_key).?;
+                if (block.insts.items.len != 0) continue;
+
                 try block.insts.append(ir.Instr.initTag(.MATCH));
                 const instr = &block.insts.items[0];
-                instr.data.match = std.ArrayList(ir.MatchProng)
-                    .init(self.allocator);
+                instr.data = .{ .match = std.ArrayList(ir.MatchProng)
+                    .init(self.allocator) };
 
                 if (!branches.fail_set.isEmpty()) {
                     block.fail = fail_block;
@@ -192,22 +207,24 @@ const DfaGen = struct {
 
                 // add the prongs and get the destination block
                 for (branches.prongs.items) |prong| {
-                    const split_state = try state.splitOn(prong.set);
+                    var split_state = try state.splitOn(prong);
+                    try split_state.goEps();
+
                     const key = try split_state.toKey();
                     defer key.deinit(self.allocator);
                     var labels = std.ArrayList(ir.Range).init(self.allocator);
                     var iter = prong.set.rangeIter();
                     while (iter.next()) |range| try labels.append(range);
 
-                    const dst_blk = self.map.get(&key) orelse blk: {
+                    const dst_blk = self.map.get(key) orelse blk: {
                         const dst_blk = try dfa.getNew();
 
                         // if the prong is not consuming the state of
                         // the block will be accepting
                         if (prong.final_action) |action| {
                             var pass_instr = ir.Instr.initTag(.RET);
-                            pass_instr.data.action = action;
-                            dst_blk.insts.append(pass_instr);
+                            pass_instr.data = .{ .action = action };
+                            try dst_blk.insts.append(pass_instr);
                         }
 
                         try self.put(try key.clone(self.allocator), dst_blk);
@@ -219,8 +236,18 @@ const DfaGen = struct {
                         .dest = dst_blk,
                         .consuming = prong.final_action == null,
                     });
+
+                    if (dst_blk.insts.items.len == 0) {
+                        try new_states.append(split_state);
+                    } else {
+                        split_state.deinit();
+                    }
                 }
             }
+
+            self.dfa_states.clearRetainingCapacity();
+            try self.dfa_states.appendSlice(new_states.items);
+            new_states.clearRetainingCapacity();
         }
 
         return dfa;
@@ -228,9 +255,7 @@ const DfaGen = struct {
 
     fn put(self: *DfaGen, key: DfaState.Key, value: *ir.Block) !void {
         try self.map_keys.append(key);
-        const keys = self.map_keys.items;
-        const key_ptr = &keys[keys.len - 1];
-        try self.map.put(key_ptr, value);
+        try self.map.put(key, value);
     }
 
     pub fn deinit(self: *DfaGen) void {
@@ -245,6 +270,7 @@ const DfaGen = struct {
 
 const DfaState = struct {
     sub_states: std.ArrayList(ExecState),
+    action: ?usize,
 
     pub fn init(allocator: Allocator, block: *ir.Block) !DfaState {
         var sub_states = std.ArrayList(ExecState).init(allocator);
@@ -252,22 +278,31 @@ const DfaState = struct {
 
         var self: DfaState = .{
             .sub_states = sub_states,
+            .action = null,
         };
 
         try self.goEps();
         return self;
     }
 
-    pub fn goEps(self: *DfaState) !void {
-        while (try self.fillBranches() or try self.execJumps()) {}
-        self.resetHadFill();
+    pub fn isEmpty(self: *const DfaState) bool {
+        for (self.sub_states.items) |sub| {
+            if (sub.blocks.items.len != 0) return false;
+        }
+
+        return true;
     }
 
-    pub fn acceptingState(self: *const DfaState) bool {
-        for (self.sub_states.items) |sub| {
-            if (sub.defaultPass()) return true;
+    pub fn goEps(self: *DfaState) !void {
+        if (self.isEmpty()) return;
+
+        while (try self.fillBranches() or try self.execJumps()) {}
+        self.resetHadFill();
+
+        if (self.isEmpty()) {
+            assert(self.sub_states.items.len > 0);
+            self.action = self.sub_states.items[0].last_action;
         }
-        return false;
     }
 
     pub fn clone(self: *const DfaState) !DfaState {
@@ -279,16 +314,22 @@ const DfaState = struct {
         return .{ .sub_states = sub_states };
     }
 
-    pub fn splitOn(self: *DfaState, set: AcceptanceSet) !DfaState {
+    pub fn splitOn(self: *DfaState, branch: SplitBranch) !DfaState {
         var new_dfa_state: DfaState = .{
             .sub_states = std.ArrayList(ExecState)
                 .init(self.sub_states.allocator),
+            .action = null,
         };
 
         for (self.sub_states.items) |sub| {
-            if (try sub.splitOn(set)) |new_state| {
+            if (try sub.splitOn(branch.set)) |new_state| {
                 try new_dfa_state.sub_states.append(new_state);
             }
+        }
+
+        if (new_dfa_state.isEmpty()) {
+            assert(branch.final_action != null);
+            new_dfa_state.action = branch.final_action;
         }
 
         return new_dfa_state;
@@ -323,7 +364,7 @@ const DfaState = struct {
             if (prong.final_action == null) continue;
             prong.set.cut(normal_match);
             if (prong.set.isEmpty()) {
-                _ = prongs.swapRemove(i);
+                _ = prongs.swapRemove(i - 1);
                 i -= 1;
             } else {
                 normal_match.merge(prong.set);
@@ -423,33 +464,73 @@ const DfaState = struct {
 
     const Key = struct {
         sub_states: []const ExecState.Key,
+        action: ?usize,
 
         pub fn clone(self: Key, allocator: Allocator) !Key {
             const sub_states = try allocator.dupe(ExecState.Key, self.sub_states);
-            return .{ .sub_states = sub_states };
+            return .{ .sub_states = sub_states, .action = self.action };
         }
 
         pub fn deinit(self: Key, allocator: Allocator) void {
             allocator.free(self.sub_states);
         }
+
+        pub fn format(
+            self: @This(),
+            comptime _: []const u8,
+            _: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            if (self.sub_states.len == 0) {
+                try writer.print("(∅ , {d})", .{self.action.?});
+                return;
+            }
+
+            try writer.print("{{ ", .{});
+            for (self.sub_states) |sub_key| {
+                try writer.print("{s} ", .{sub_key});
+            }
+            try writer.print("}}", .{});
+        }
     };
 
     pub fn toKey(self: DfaState) !Key {
-        var sub_states = try self.sub_states.allocator
-            .alloc(ExecState.Key, self.sub_states.items.len);
+        var sub_states = std.ArrayList(ExecState.Key)
+            .init(self.sub_states.allocator);
 
-        for (self.sub_states.items, 0..) |state, i| {
-            sub_states[i] = state.toKey();
+        for (self.sub_states.items) |state| {
+            if (state.toKey()) |key| {
+                try sub_states.append(key);
+            }
         }
 
         return .{
-            .sub_states = sub_states,
+            .sub_states = try sub_states.toOwnedSlice(),
+            .action = self.action,
         };
     }
 
     pub fn deinit(self: DfaState) void {
         for (self.sub_states.items) |sub_state| sub_state.deinit();
         self.sub_states.deinit();
+    }
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        if (self.isEmpty()) {
+            try writer.print("(∅ , {d})", .{self.action.?});
+            return;
+        }
+
+        try writer.print("{{ ", .{});
+        for (self.sub_states.items) |sub_state| {
+            try writer.print("{s} ", .{sub_state});
+        }
+        try writer.print("}}", .{});
     }
 };
 
@@ -501,7 +582,9 @@ const ExecState = struct {
                 if (!set.subSet(prong_set)) continue;
 
                 var new_state = try self.clone();
-                new_state.instr += 1;
+                const blocks = new_state.blocks.items;
+                blocks[blocks.len - 1] = prong.dest;
+                new_state.instr = 0;
 
                 return new_state;
             },
@@ -510,27 +593,6 @@ const ExecState = struct {
 
         return null;
     }
-
-    pub const Key = struct {
-        instr: usize,
-        instr_sub_idx: usize,
-        block: *ir.Block,
-
-        pub fn eql(self: Key, other: Key) bool {
-            return self.instr == other.instr and
-                self.instr_sub_idx == other.instr_sub_idx and
-                self.block == other.block;
-        }
-
-        pub fn hash(self: Key, hasher: anytype) void {
-            assert(std.meta.hasUniqueRepresentation(usize));
-            assert(std.meta.hasUniqueRepresentation(*ir.Block));
-
-            hasher.*.update(std.mem.asBytes(&self.instr));
-            hasher.*.update(std.mem.asBytes(&self.instr_sub_idx));
-            hasher.*.update(std.mem.asBytes(&@intFromPtr(self.block)));
-        }
-    };
 
     pub fn defaultPass(self: *const ExecState) ?usize {
         return if (self.blocks.items.len == 0) self.last_action else null;
@@ -620,6 +682,8 @@ const ExecState = struct {
             else => return false,
         }
 
+        self.instr = 0;
+
         return true;
     }
 
@@ -633,12 +697,61 @@ const ExecState = struct {
         };
     }
 
-    pub fn toKey(self: ExecState) Key {
+    pub const Key = struct {
+        instr: usize,
+        instr_sub_idx: usize,
+        block: *ir.Block,
+
+        pub fn eql(self: Key, other: Key) bool {
+            return self.instr == other.instr and
+                self.instr_sub_idx == other.instr_sub_idx and
+                self.block == other.block;
+        }
+
+        pub fn hash(self: Key, hasher: anytype) void {
+            hasher.update(std.mem.asBytes(&self.instr));
+            hasher.update(std.mem.asBytes(&self.instr_sub_idx));
+            hasher.update(std.mem.asBytes(&@intFromPtr(self.block)));
+        }
+
+        pub fn format(
+            self: @This(),
+            comptime _: []const u8,
+            _: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            try writer.print("({d}, {d}, {d})", .{
+                self.block.id,
+                self.instr,
+                self.instr_sub_idx,
+            });
+        }
+    };
+
+    pub fn toKey(self: ExecState) ?Key {
+        if (self.blocks.items.len == 0) return null;
         return .{
             .instr_sub_idx = self.instr_sub_idx,
             .block = self.blocks.getLast(),
             .instr = self.instr,
         };
+    }
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        if (self.blocks.items.len == 0) {
+            try writer.print("∅ ", .{});
+        } else {
+            try writer.print("({d}, {d}, {d})", .{
+                self.blocks.getLast().id,
+                self.instr,
+                self.instr_sub_idx,
+            });
+        }
     }
 
     pub fn deinit(self: ExecState) void {
@@ -695,7 +808,12 @@ const SplitBranch = struct {
 
 pub fn DfaCtx(comptime Hasher: type) type {
     return struct {
-        pub fn eql(_: @This(), pseudo: *const DfaState.Key, key: *const DfaState.Key) bool {
+        pub fn eql(_: @This(), pseudo: DfaState.Key, key: DfaState.Key) bool {
+            if (key.sub_states.len != pseudo.sub_states.len) return false;
+            if (key.sub_states.len == 0) {
+                return pseudo.action == key.action;
+            }
+
             for (key.sub_states, pseudo.sub_states) |key_sub, pseudo_sub| {
                 if (!key_sub.eql(pseudo_sub)) return false;
             }
@@ -703,8 +821,15 @@ pub fn DfaCtx(comptime Hasher: type) type {
             return true;
         }
 
-        pub fn hash(_: @This(), key: *const DfaState.Key) u64 {
+        pub fn hash(_: @This(), key: DfaState.Key) u64 {
             var hasher = Hasher.init(0);
+
+            if (key.action) |val| {
+                hasher.update(std.mem.asBytes(&val));
+            } else {
+                hasher.update(std.mem.asBytes(&@as(usize, 0)));
+            }
+
             for (key.sub_states) |sub_state| {
                 sub_state.hash(&hasher);
             }

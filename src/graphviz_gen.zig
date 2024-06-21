@@ -19,22 +19,10 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Writer = std.fs.File.Writer;
 const ir = @import("peg_ir.zig");
-const PegIr = ir.PegIr;
-const ReturnType = ir.ReturnType;
-const ZigHeader = ir.ZigHeader;
-const PegGrammar = ir.PegGrammar;
-const Definition = ir.Definition;
-const Sequence = ir.Sequence;
-const Action = ir.Action;
-const ActionVar = ir.ActionVar;
-const Operated = ir.Operated;
-const PrefixOp = ir.PrefixOp;
-const PostfixOp = ir.PostfixOp;
-const Primary = ir.Primary;
-const Class = ir.Class;
-const Range = ir.Range;
+const lir = @import("low_ir.zig");
+const Dfa = @import("lir_optim.zig").Dfa;
 
-pub fn generate(w: Writer, p_ir: PegIr) !void {
+pub fn generate(w: Writer, p_ir: ir.PegIr) !void {
     try w.print("digraph {s} {{\n", .{p_ir.name});
     for (p_ir.grammar.defs.items) |def| {
         try genDef(w, def, p_ir);
@@ -42,7 +30,7 @@ pub fn generate(w: Writer, p_ir: PegIr) !void {
     try w.print("}}\n", .{});
 }
 
-pub fn genDef(w: Writer, def: Definition, p_ir: PegIr) !void {
+fn genDef(w: Writer, def: ir.Definition, p_ir: ir.PegIr) !void {
     for (def.sequences.items) |seq| for (seq.operateds.items) |op| switch (op.value) {
         .ID => |id| {
             try genNode(def.id, w, p_ir);
@@ -54,11 +42,51 @@ pub fn genDef(w: Writer, def: Definition, p_ir: PegIr) !void {
     };
 }
 
-pub fn genNode(id: usize, w: Writer, p_ir: PegIr) !void {
+fn genNode(id: usize, w: Writer, p_ir: ir.PegIr) !void {
     const def = &p_ir.grammar.defs.items[id];
     if (def.generated()) {
         try w.print("node_{d}", .{id});
     } else {
         try w.print("{s}", .{def.identifier});
     }
+}
+
+pub fn genDfa(
+    w: Writer,
+    dfa: Dfa,
+    name: []const u8,
+) !void {
+    try w.print("digraph {s} {{\n", .{name});
+    try w.print("node [shape = doublecircle]; ", .{});
+    try getTerminals(w, dfa);
+    try w.print(";\nnode [shape = circle];\n", .{});
+    for (dfa.blocks.items) |block| {
+        try genDfaNode(w, block);
+    }
+    try w.print("}}\n", .{});
+}
+
+fn getTerminals(w: Writer, dfa: Dfa) !void {
+    for (dfa.blocks.items) |block| if (block.insts.items[0].tag == .RET) {
+        try w.print(" {d}", .{block.id});
+    };
+}
+
+fn genDfaNode(w: Writer, block: *lir.Block) !void {
+    assert(block.insts.items.len == 1);
+    const instr = block.insts.items[0];
+    if (instr.tag != .MATCH) return;
+    for (instr.data.match.items) |prong| {
+        try genDfaEdge(w, block, prong);
+    }
+}
+
+fn genDfaEdge(w: Writer, start: *lir.Block, prong: lir.MatchProng) !void {
+    try w.print("{d}", .{start.id});
+    try w.print(" -> ", .{});
+    try w.print("{d} [label = \"", .{prong.dest.id});
+    for (prong.labels.items) |range| {
+        try w.print("{s}, ", .{range});
+    }
+    try w.print("\"];\n", .{});
 }
