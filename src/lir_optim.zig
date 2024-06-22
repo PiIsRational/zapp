@@ -38,6 +38,7 @@ pub fn optimize(lir: *ir.LowIr) !void {
 
     const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
     const stdout = std.io.getStdOut().writer();
+
     try gvgen.genDfa(stdout, dfa, "dfa");
     defer dfa.deinit(self.ir.allocator);
 }
@@ -300,6 +301,9 @@ const DfaState = struct {
 
         while (try self.fillBranches() or try self.execJumps()) {}
         self.resetHadFill();
+        for (self.sub_states.items) |*sub| {
+            try sub.lookaheadGoEps();
+        }
 
         self.deduplicate();
         if (self.isEmpty()) {
@@ -336,7 +340,7 @@ const DfaState = struct {
 
         for (self.sub_states.items) |sub_state| try sub_states.append(sub_state);
 
-        return .{ .sub_states = sub_states };
+        return .{ .sub_states = sub_states, .action = self.action };
     }
 
     pub fn splitOn(self: *DfaState, branch: SplitBranch) !DfaState {
@@ -360,7 +364,7 @@ const DfaState = struct {
         return new_dfa_state;
     }
 
-    const BranchResult = struct {
+    pub const BranchResult = struct {
         fail_set: AcceptanceSet,
         prongs: std.ArrayList(SplitBranch),
 
@@ -487,7 +491,7 @@ const DfaState = struct {
         return had_change;
     }
 
-    const Key = struct {
+    pub const Key = struct {
         sub_states: []const ExecState.Key,
         action: ?usize,
 
@@ -498,6 +502,31 @@ const DfaState = struct {
 
         pub fn deinit(self: Key, allocator: Allocator) void {
             allocator.free(self.sub_states);
+        }
+
+        pub fn eql(self: Key, other: Key) bool {
+            if (self.sub_states.len != other.sub_states.len) return false;
+            if (other.sub_states.len == 0) {
+                return other.action == self.action;
+            }
+
+            for (self.sub_states, other.sub_states) |self_sub, other_sub| {
+                if (!self_sub.eql(other_sub)) return false;
+            }
+
+            return true;
+        }
+
+        pub fn hash(self: Key, hasher: anytype) void {
+            if (self.action) |val| {
+                hasher.update(std.mem.asBytes(&val));
+            } else {
+                hasher.update(std.mem.asBytes(&@as(usize, 0)));
+            }
+
+            for (self.sub_states) |sub_state| {
+                sub_state.hash(hasher);
+            }
         }
 
         pub fn format(
@@ -524,7 +553,7 @@ const DfaState = struct {
             .init(self.sub_states.allocator);
 
         for (self.sub_states.items) |state| {
-            if (state.toKey()) |key| {
+            if (try state.toKey()) |key| {
                 try sub_states.append(key);
             }
         }
@@ -559,8 +588,88 @@ const DfaState = struct {
     }
 };
 
+const LookaheadState = struct {
+    base: DfaState,
+    is_positive: bool,
+
+    pub const Key = struct {
+        base: DfaState.Key,
+        is_positive: bool,
+
+        pub fn deinit(self: Key) void {
+            self.base.deinit();
+        }
+
+        pub fn eql(self: *const Key, other: *const Key) bool {
+            return self.base.eql(other.base) and
+                self.is_positive == other.is_positive;
+        }
+
+        pub fn hash(self: Key, hasher: anytype) void {
+            self.base.hash(hasher);
+            assert(std.meta.hasUniqueRepresentation(bool));
+            hasher.update(std.mem.asBytes(&self.is_positive));
+        }
+    };
+
+    pub fn toKey(self: LookaheadState) Allocator.Error!Key {
+        return .{
+            .base = try self.base.toKey(),
+            .is_positive = self.is_positive,
+        };
+    }
+
+    const BranchResult = struct {
+        fail_sets: std.ArrayList(AcceptanceSet),
+        acc_sets: std.ArrayList(AcceptanceSet),
+    };
+
+    pub fn getBranches(self: *LookaheadState) !BranchResult {
+        const base_branches = try self.base.getBranches();
+        defer base_branches.deinit();
+
+        var base_fail = std.ArrayList(AcceptanceSet)
+            .init(self.base.sub_states.allocator);
+        try base_fail.append(base_branches.fail_set);
+        var base_acc = std.ArrayList(AcceptanceSet)
+            .init(self.base.sub_states.allocator);
+        for (base_branches.prongs.items) |prong| {
+            try base_acc.append(prong.set);
+        }
+
+        return if (self.is_positive) .{
+            .fail_sets = base_fail,
+            .acc_sets = base_acc,
+        } else .{
+            .fail_sets = base_acc,
+            .acc_sets = base_fail,
+        };
+    }
+
+    pub fn clone(self: LookaheadState) !LookaheadState {
+        return .{
+            .base = try self.base.clone(),
+            .is_positive = self.is_positive,
+        };
+    }
+
+    pub fn goEps(self: *LookaheadState) Allocator.Error!void {
+        try self.base.goEps();
+    }
+
+    pub fn splitOn(self: LookaheadState, set: AcceptanceSet) !?LookaheadState {
+        _ = self;
+        _ = set;
+    }
+
+    pub fn deinit(self: LookaheadState) void {
+        self.base.deinit();
+    }
+};
+
 const ExecState = struct {
     blocks: std.ArrayList(*ir.Block),
+    lookahead: std.ArrayList(LookaheadState),
     last_action: usize,
     instr: usize,
     instr_sub_idx: usize,
@@ -571,6 +680,7 @@ const ExecState = struct {
         try blocks.append(block);
 
         return .{
+            .lookahead = std.ArrayList(LookaheadState).init(allocator),
             .instr_sub_idx = 0,
             .last_action = 0,
             .had_fill = false,
@@ -658,6 +768,12 @@ const ExecState = struct {
             last.fail.?.fail != null;
     }
 
+    pub fn lookaheadGoEps(self: *ExecState) !void {
+        for (self.lookahead.items) |*lookahead| {
+            try lookahead.goEps();
+        }
+    }
+
     /// generates one exec state per branch
     pub fn fillBranches(self: *ExecState) !?ExecState {
         if (self.blocks.items.len == 0) return null;
@@ -713,10 +829,18 @@ const ExecState = struct {
     }
 
     fn clone(self: ExecState) !ExecState {
+        var lookahead = std.ArrayList(LookaheadState)
+            .init(self.blocks.allocator);
+
+        for (self.lookahead.items) |state| {
+            try lookahead.append(try state.clone());
+        }
+
         return .{
             .instr_sub_idx = self.instr_sub_idx,
             .blocks = try self.blocks.clone(),
             .had_fill = self.had_fill,
+            .lookahead = lookahead,
             .instr = self.instr,
             .last_action = 0,
         };
@@ -726,14 +850,23 @@ const ExecState = struct {
         instr: usize,
         instr_sub_idx: usize,
         block: *ir.Block,
+        lookahead: []LookaheadState.Key,
 
         pub fn eql(self: Key, other: Key) bool {
+            for (self.lookahead, other.lookahead) |*s, *o| {
+                if (!s.eql(o)) return false;
+            }
+
             return self.instr == other.instr and
                 self.instr_sub_idx == other.instr_sub_idx and
                 self.block == other.block;
         }
 
         pub fn hash(self: Key, hasher: anytype) void {
+            for (self.lookahead) |look| {
+                look.hash(hasher);
+            }
+
             hasher.update(std.mem.asBytes(&self.instr));
             hasher.update(std.mem.asBytes(&self.instr_sub_idx));
             hasher.update(std.mem.asBytes(&@intFromPtr(self.block)));
@@ -759,11 +892,19 @@ const ExecState = struct {
             self.instr_sub_idx == other.instr_sub_idx;
     }
 
-    pub fn toKey(self: ExecState) ?Key {
+    pub fn toKey(self: ExecState) !?Key {
         if (self.blocks.items.len == 0) return null;
+
+        const lookahead = try self.blocks.allocator.alloc(
+            LookaheadState.Key,
+            self.lookahead.items.len,
+        );
+        for (lookahead, self.lookahead.items) |*to, from| to.* = try from.toKey();
+
         return .{
             .instr_sub_idx = self.instr_sub_idx,
             .block = self.blocks.getLast(),
+            .lookahead = lookahead,
             .instr = self.instr,
         };
     }
@@ -840,31 +981,12 @@ const SplitBranch = struct {
 pub fn DfaCtx(comptime Hasher: type) type {
     return struct {
         pub fn eql(_: @This(), pseudo: DfaState.Key, key: DfaState.Key) bool {
-            if (key.sub_states.len != pseudo.sub_states.len) return false;
-            if (key.sub_states.len == 0) {
-                return pseudo.action == key.action;
-            }
-
-            for (key.sub_states, pseudo.sub_states) |key_sub, pseudo_sub| {
-                if (!key_sub.eql(pseudo_sub)) return false;
-            }
-
-            return true;
+            return pseudo.eql(key);
         }
 
         pub fn hash(_: @This(), key: DfaState.Key) u64 {
             var hasher = Hasher.init(0);
-
-            if (key.action) |val| {
-                hasher.update(std.mem.asBytes(&val));
-            } else {
-                hasher.update(std.mem.asBytes(&@as(usize, 0)));
-            }
-
-            for (key.sub_states) |sub_state| {
-                sub_state.hash(&hasher);
-            }
-
+            key.hash(&hasher);
             return hasher.final();
         }
     };

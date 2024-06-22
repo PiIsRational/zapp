@@ -58,9 +58,9 @@ pub fn genDfa(
     name: []const u8,
 ) !void {
     try w.print("digraph {s} {{ \n", .{name});
-    try w.print("node [shape = doublecircle]; ", .{});
+    try w.print("    node [shape = doublecircle]; ", .{});
     try getTerminals(w, dfa);
-    try w.print(";\nnode [shape = circle];\n", .{});
+    try w.print(";\n    node [shape = circle];\n", .{});
     for (dfa.blocks.items) |block| {
         try genDfaNode(w, block);
     }
@@ -83,7 +83,7 @@ fn genDfaNode(w: Writer, block: *lir.Block) !void {
 }
 
 fn genDfaEdge(w: Writer, start: *lir.Block, prong: lir.MatchProng) !void {
-    try w.print("{d}", .{start.id});
+    try w.print("    {d}", .{start.id});
     try w.print(" -> ", .{});
     try w.print("{d} [label = \"", .{prong.dest.id});
     for (prong.labels.items) |range| {
