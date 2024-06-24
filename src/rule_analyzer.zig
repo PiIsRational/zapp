@@ -142,6 +142,39 @@ pub const AcceptanceSet = struct {
     }
 };
 
+pub const Automaton = struct {
+    blocks: std.ArrayList(*ir.Block),
+
+    pub fn init(allocator: Allocator) Automaton {
+        return .{
+            .blocks = std.ArrayList(*ir.Block).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: Automaton, allocator: Allocator) void {
+        for (self.blocks.items) |block| block.deinit(allocator);
+        self.blocks.deinit();
+    }
+
+    pub fn getNew(self: *Automaton) !*ir.Block {
+        const block = try ir.Block.init(self.blocks.allocator);
+        block.id = self.blocks.items.len;
+        try self.blocks.append(block);
+        return block;
+    }
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        for (self.blocks.items) |blk| {
+            try writer.print("{s}\n", .{blk});
+        }
+    }
+};
+
 pub const SplitBranch = struct {
     set: AcceptanceSet,
     final_action: ?usize,
@@ -295,10 +328,19 @@ pub const ExecState = struct {
         };
     }
 
+    pub fn setRoot(self: *ExecState) void {
+        if (self.blocks.items.len == 0) return;
+        const blk = self.blocks.getLast();
+        self.blocks.clearRetainingCapacity();
+
+        // blk was already in the stack
+        // so there is place for it
+        self.blocks.append(blk) catch unreachable;
+    }
+
     pub fn splitOn(self: *const ExecState, set: AcceptanceSet) !?ExecState {
-        if (self.blocks.items.len == 0) return null;
-        const last = self.blocks.getLast();
-        const instr = last.insts.items[self.instr];
+        const instr = self.getCurrInstr() orelse return;
+
         assert(instr.meta.isConsuming());
         assert(!set.isEmpty());
 
@@ -343,14 +385,14 @@ pub const ExecState = struct {
         self: *ExecState,
         list: *std.ArrayList(SplitBranch),
     ) !void {
-        const blocks = self.blocks.items;
-        if (blocks.len == 0) {
+        const wrapped_instr = self.getCurrInstr();
+        if (wrapped_instr == null) {
             // passing state
             try list.append(SplitBranch.initMatchAll(self.last_action));
             return;
         }
-        const last = blocks[blocks.len - 1];
-        const instr = last.insts.items[self.instr];
+
+        const instr = wrapped_instr.?;
         assert(instr.meta.isConsuming());
 
         switch (instr.tag) {
@@ -361,6 +403,13 @@ pub const ExecState = struct {
             },
             else => unreachable,
         }
+    }
+
+    pub fn getCurrInstr(self: ExecState) ?ir.Instr {
+        if (self.blocks.len == 0) return null;
+
+        const last = self.blocks.getLast();
+        return last.insts.items[self.instr];
     }
 
     pub fn canFillBranches(self: *ExecState) bool {
@@ -399,12 +448,11 @@ pub const ExecState = struct {
 
     // returns true if some jump could be executed
     pub fn execJumps(self: *ExecState) !ExecJmpsResult {
-        if (self.blocks.items.len == 0) return .NO_CHANGE;
-        const last = self.blocks.getLast();
+        const instr = self.getCurrInstr() orelse .NO_CHANGE;
         const blocks = self.blocks.items;
-        const instr = last.insts.items[self.instr];
 
-        if (!instr.meta.isConsuming()) return .LOOKAHEAD;
+        if (!instr.meta.isConsuming() or
+            instr.tag == .MATCH and ir.isMatchLookahead(instr)) return .LOOKAHEAD;
 
         switch (instr.tag) {
             .JMP => {
@@ -517,5 +565,14 @@ pub const ExecState = struct {
 
     pub fn deinit(self: ExecState) void {
         self.blocks.deinit();
+    }
+};
+
+pub const ExecStart = struct {
+    block_id: usize,
+    instr: usize,
+
+    pub fn init(id: usize, instr: usize) ExecStart {
+        return .{ .block_id = id, .instr = instr };
     }
 };

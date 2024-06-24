@@ -21,6 +21,7 @@ const Allocator = std.mem.Allocator;
 const ir = @import("low_ir.zig");
 const ra = @import("rule_analyzer.zig");
 const gvgen = @import("graphviz_gen.zig");
+const look = @import("lookaheads.zig");
 
 const PassManager = @This();
 
@@ -38,18 +39,26 @@ const PassError = Allocator.Error;
 // make all the analyses simpler and more reusable.
 
 pub fn optimize(lir: *ir.LowIr) !void {
+    const stdout = std.io.getStdOut().writer();
     const self: PassManager = .{
         .ir = lir,
     };
 
-    var dfa_gen = DfaGen.init(self.ir.allocator);
-    defer dfa_gen.deinit();
+    var emitter = look.LookaheadEmitter.init(self.ir.allocator);
+    defer emitter.deinit();
 
-    const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
-    const stdout = std.io.getStdOut().writer();
+    const nfa = try emitter.emit(self.ir.blocks.items[0]);
 
-    try gvgen.genDfa(stdout, dfa, "dfa");
-    defer dfa.deinit(self.ir.allocator);
+    defer nfa.deinit(self.ir.allocator);
+    try gvgen.genAutomaton(stdout, nfa, "nfa");
+
+    //var dfa_gen = DfaGen.init(self.ir.allocator);
+    //defer dfa_gen.deinit();
+
+    //const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
+
+    //try gvgen.genAutomaton(stdout, dfa, "dfa");
+    //defer dfa.deinit(self.ir.allocator);
 }
 
 fn generateDfa(self: *PassManager, block: *ir.Block) !void {
@@ -126,39 +135,6 @@ fn blockPass(
     }
 }
 
-pub const Dfa = struct {
-    blocks: std.ArrayList(*ir.Block),
-
-    pub fn init(allocator: Allocator) Dfa {
-        return .{
-            .blocks = std.ArrayList(*ir.Block).init(allocator),
-        };
-    }
-
-    pub fn deinit(self: Dfa, allocator: Allocator) void {
-        for (self.blocks.items) |block| block.deinit(allocator);
-        self.blocks.deinit();
-    }
-
-    pub fn getNew(self: *Dfa) !*ir.Block {
-        const block = try ir.Block.init(self.blocks.allocator);
-        block.id = self.blocks.items.len;
-        try self.blocks.append(block);
-        return block;
-    }
-
-    pub fn format(
-        self: @This(),
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        for (self.blocks.items) |blk| {
-            try writer.print("{s}\n", .{blk});
-        }
-    }
-};
-
 const DfaGen = struct {
     const Context = DfaCtx(std.hash.Wyhash);
     pub const DfaMap = std.HashMap(
@@ -182,8 +158,8 @@ const DfaGen = struct {
         };
     }
 
-    pub fn gen(self: *DfaGen, start_block: *ir.Block) !Dfa {
-        var dfa = Dfa.init(self.allocator);
+    pub fn gen(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
+        var dfa = ra.Automaton.init(self.allocator);
         var start_state = try DfaState.init(self.allocator, start_block);
         try self.dfa_states.append(start_state);
         try self.put(try start_state.toKey(), try dfa.getNew());

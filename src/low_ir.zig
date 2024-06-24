@@ -380,6 +380,16 @@ pub const InstrTag = enum {
     EXIT_FAIL, // exit and fail to parse
 };
 
+pub fn isMatchLookahead(instr: Instr) bool {
+    assert(instr.tag == .MATCH);
+
+    for (instr.data.match.items) |prong| {
+        if (prong.is_accepting) return false;
+    }
+
+    return true;
+}
+
 pub const InstrData = union {
     str: []const u8,
     match: std.ArrayList(MatchProng),

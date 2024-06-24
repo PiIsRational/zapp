@@ -20,7 +20,7 @@ const Allocator = std.mem.Allocator;
 const Writer = std.fs.File.Writer;
 const ir = @import("peg_ir.zig");
 const lir = @import("low_ir.zig");
-const Dfa = @import("lir_optim.zig").Dfa;
+const Automaton = @import("rule_analyzer.zig").Automaton;
 const su = @import("string_utils.zig");
 
 pub fn generate(w: Writer, p_ir: ir.PegIr) !void {
@@ -52,9 +52,9 @@ fn genNode(id: usize, w: Writer, p_ir: ir.PegIr) !void {
     }
 }
 
-pub fn genDfa(
+pub fn genAutomaton(
     w: Writer,
-    dfa: Dfa,
+    dfa: Automaton,
     name: []const u8,
 ) !void {
     try w.print("digraph {s} {{ \n", .{name});
@@ -62,18 +62,18 @@ pub fn genDfa(
     try getTerminals(w, dfa);
     try w.print(";\n    node [shape = circle];\n", .{});
     for (dfa.blocks.items) |block| {
-        try genDfaNode(w, block);
+        try genAutomatonNode(w, block);
     }
     try w.print("}}\n", .{});
 }
 
-fn getTerminals(w: Writer, dfa: Dfa) !void {
+fn getTerminals(w: Writer, dfa: Automaton) !void {
     for (dfa.blocks.items) |block| if (block.insts.items[0].tag == .RET) {
         try w.print(" {d}", .{block.id});
     };
 }
 
-fn genDfaNode(w: Writer, block: *lir.Block) !void {
+fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
     assert(block.insts.items.len == 1);
     const instr = block.insts.items[0];
     if (instr.tag != .MATCH) return;
