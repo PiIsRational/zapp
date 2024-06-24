@@ -19,7 +19,7 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 
 const ir = @import("low_ir.zig");
-const AcceptanceSet = @import("rule_analyzer.zig").AcceptanceSet;
+const ra = @import("rule_analyzer.zig");
 const gvgen = @import("graphviz_gen.zig");
 
 const PassManager = @This();
@@ -184,7 +184,7 @@ const DfaGen = struct {
 
     pub fn gen(self: *DfaGen, start_block: *ir.Block) !Dfa {
         var dfa = Dfa.init(self.allocator);
-        const start_state = try DfaState.init(self.allocator, start_block);
+        var start_state = try DfaState.init(self.allocator, start_block);
         try self.dfa_states.append(start_state);
         try self.put(try start_state.toKey(), try dfa.getNew());
 
@@ -281,15 +281,15 @@ const DfaGen = struct {
 };
 
 const DfaState = struct {
-    sub_states: std.ArrayList(ExecState),
+    sub_states: std.ArrayList(ra.ExecState),
     action: ?usize,
 
     pub fn init(allocator: Allocator, block: *ir.Block) !DfaState {
-        return try initFromExec(allocator, try ExecState.init(allocator, block));
+        return try initFromExec(allocator, try ra.ExecState.init(allocator, block));
     }
 
-    pub fn initFromExec(allocator: Allocator, exec: ExecState) !DfaState {
-        var sub_states = std.ArrayList(ExecState).init(allocator);
+    pub fn initFromExec(allocator: Allocator, exec: ra.ExecState) !DfaState {
+        var sub_states = std.ArrayList(ra.ExecState).init(allocator);
         try sub_states.append(exec);
 
         var self: DfaState = .{
@@ -321,6 +321,7 @@ const DfaState = struct {
         }
     }
 
+    /// deduplicates the sub states of the dfa state
     fn deduplicate(self: *DfaState) void {
         var i: usize = 1;
         var found = false;
@@ -343,8 +344,26 @@ const DfaState = struct {
         }
     }
 
+    /// reordering the sub states of the dfa state to get
+    /// a canonical representation of dfa states for hashing purposes
+    fn reorder(self: *DfaState) void {
+        const Ctx = struct {
+            pub fn less(_: @This(), lhs: ra.ExecState, rhs: ra.ExecState) bool {
+                const l_k = lhs.toKey();
+                const r_k = rhs.toKey();
+
+                if (l_k == null) return r_k != null;
+                if (r_k == null) return false;
+
+                return l_k.?.lessThan(r_k.?);
+            }
+        };
+
+        std.sort.pdq(ra.ExecState, self.sub_states.items, Ctx{}, Ctx.less);
+    }
+
     pub fn clone(self: *const DfaState) !DfaState {
-        var sub_states = std.ArrayList(ExecState)
+        var sub_states = std.ArrayList(ra.ExecState)
             .init(self.sub_states.allocator);
 
         for (self.sub_states.items) |sub_state| try sub_states.append(sub_state);
@@ -352,9 +371,9 @@ const DfaState = struct {
         return .{ .sub_states = sub_states, .action = self.action };
     }
 
-    pub fn splitOn(self: *DfaState, branch: SplitBranch) !DfaState {
+    pub fn splitOn(self: *DfaState, branch: ra.SplitBranch) !DfaState {
         var new_dfa_state: DfaState = .{
-            .sub_states = std.ArrayList(ExecState)
+            .sub_states = std.ArrayList(ra.ExecState)
                 .init(self.sub_states.allocator),
             .action = null,
         };
@@ -374,8 +393,8 @@ const DfaState = struct {
     }
 
     pub const BranchResult = struct {
-        fail_set: AcceptanceSet,
-        prongs: std.ArrayList(SplitBranch),
+        fail_set: ra.AcceptanceSet,
+        prongs: std.ArrayList(ra.SplitBranch),
 
         pub fn deinit(self: BranchResult) void {
             self.prongs.deinit();
@@ -383,92 +402,22 @@ const DfaState = struct {
     };
 
     pub fn getBranches(self: *DfaState) !BranchResult {
-        var prongs = std.ArrayList(SplitBranch)
+        var prongs = std.ArrayList(ra.SplitBranch)
             .init(self.sub_states.allocator);
         for (self.sub_states.items) |*state| {
             try state.addBranches(&prongs);
         }
 
-        // augment the prongs
-        var normal_match: AcceptanceSet = .{};
-        try self.canonicalizeBranches(&prongs, &normal_match);
-
-        // this strategy does not follow peg orderedness
-        // and is essentially random.
-        // maybe it would be nice to add a warning to the user or an error
-        var i: usize = 1;
-        while (i <= prongs.items.len) : (i += 1) {
-            const prong = &prongs.items[i - 1];
-            if (prong.final_action == null) continue;
-            prong.set.cut(normal_match);
-            if (prong.set.isEmpty()) {
-                _ = prongs.swapRemove(i - 1);
-                i -= 1;
-            } else {
-                normal_match.merge(prong.set);
-            }
-        }
+        const full_match = try ra.canonicalizeBranches(&prongs);
 
         // next emit the block
-        var fail_match = normal_match;
+        var fail_match = full_match;
         fail_match.invert();
 
         return .{
             .fail_set = fail_match,
             .prongs = prongs,
         };
-    }
-
-    fn canonicalizeBranches(
-        _: *DfaState,
-        prongs: *std.ArrayList(SplitBranch),
-        normal_match: *AcceptanceSet,
-    ) !void {
-        var i: usize = 1;
-        while (i <= prongs.items.len) : (i += 1) {
-            const prong = &prongs.items[i - 1];
-            if (prong.final_action != null) continue;
-            normal_match.merge(prong.set);
-
-            var j: usize = i;
-            while (j < prongs.items.len) : (j += 1) {
-                const other_prong = &prongs.items[j];
-
-                if (other_prong.final_action != null) continue;
-                if (prong.set.disjoint(other_prong.set)) continue;
-                if (prong.set.eql(other_prong.set)) {
-                    _ = prongs.swapRemove(j);
-                    j -= 1; // no problem as j > i - 1 >= 0
-                    continue;
-                }
-
-                var prong_cp: SplitBranch = undefined;
-                if (prong.set.subSet(other_prong.set)) {
-                    prong_cp = other_prong.*;
-                    prong_cp.set.cut(prong.set);
-                    _ = prongs.swapRemove(j);
-                    j -= 1;
-                } else if (other_prong.set.subSet(prong.set)) {
-                    std.mem.swap(SplitBranch, prong, other_prong);
-                    prong_cp = other_prong.*;
-                    prong_cp.set.cut(prong.set);
-                    _ = prongs.swapRemove(j);
-                    j -= 1;
-                } else {
-                    prong_cp = prong.*;
-                    prong_cp.set.intersect(other_prong.set);
-                    prong.set.cut(prong_cp.set);
-                    other_prong.set.cut(prong_cp.set);
-
-                    assert(prong.set.disjoint(prong_cp.set) and
-                        prong.set.disjoint(other_prong.set) and
-                        prong_cp.set.disjoint(other_prong.set));
-                }
-
-                assert(!prong_cp.set.isEmpty());
-                try prongs.append(prong_cp);
-            }
-        }
     }
 
     fn resetHadFill(self: *DfaState) void {
@@ -478,7 +427,9 @@ const DfaState = struct {
     fn execJumps(self: *DfaState) !bool {
         var had_change = false;
         for (self.sub_states.items) |*sub| {
-            had_change = try sub.execJumps() or had_change;
+            const jmp_result = try sub.execJumps();
+            assert(jmp_result != .LOOKAHEAD);
+            had_change = jmp_result == .CHANGE or had_change;
         }
 
         return had_change;
@@ -501,11 +452,11 @@ const DfaState = struct {
     }
 
     pub const Key = struct {
-        sub_states: []const ExecState.Key,
+        sub_states: []const ra.ExecState.Key,
         action: ?usize,
 
         pub fn clone(self: Key, allocator: Allocator) !Key {
-            const sub_states = try allocator.dupe(ExecState.Key, self.sub_states);
+            const sub_states = try allocator.dupe(ra.ExecState.Key, self.sub_states);
             return .{ .sub_states = sub_states, .action = self.action };
         }
 
@@ -557,12 +508,14 @@ const DfaState = struct {
         }
     };
 
-    pub fn toKey(self: DfaState) !Key {
-        var sub_states = std.ArrayList(ExecState.Key)
+    pub fn toKey(self: *DfaState) !Key {
+        self.reorder();
+
+        var sub_states = std.ArrayList(ra.ExecState.Key)
             .init(self.sub_states.allocator);
 
-        for (self.sub_states.items) |state| {
-            if (try state.toKey()) |key| {
+        for (self.sub_states.items) |*state| {
+            if (state.toKey()) |key| {
                 try sub_states.append(key);
             }
         }
@@ -594,285 +547,6 @@ const DfaState = struct {
             try writer.print("{s} ", .{sub_state});
         }
         try writer.print("}}", .{});
-    }
-};
-
-const ExecState = struct {
-    blocks: std.ArrayList(*ir.Block),
-    last_action: usize,
-    instr: usize,
-    instr_sub_idx: usize,
-    had_fill: bool,
-
-    pub fn init(allocator: Allocator, block: *ir.Block) !ExecState {
-        var blocks = std.ArrayList(*ir.Block).init(allocator);
-        try blocks.append(block);
-
-        return .{
-            .instr_sub_idx = 0,
-            .last_action = 0,
-            .had_fill = false,
-            .blocks = blocks,
-            .instr = 0,
-        };
-    }
-
-    pub fn splitOn(self: *const ExecState, set: AcceptanceSet) !?ExecState {
-        if (self.blocks.items.len == 0) return null;
-        const last = self.blocks.getLast();
-        const instr = last.insts.items[self.instr];
-        assert(instr.meta.isConsuming());
-        assert(!set.isEmpty());
-
-        switch (instr.tag) {
-            // this only works because the set was built using add branches and
-            // therefore cannot contain more characters in itself if it accepts the string
-            // TODO: make this more robust
-            .STRING => if (set.matchesChar(instr.data.str[self.instr_sub_idx])) {
-                var new_state = try self.clone();
-                if (self.instr_sub_idx + 1 == instr.data.str.len) {
-                    new_state.instr += 1;
-                    new_state.instr_sub_idx = 0;
-                } else {
-                    new_state.instr_sub_idx += 1;
-                }
-
-                return new_state;
-            },
-            .MATCH => for (instr.data.match.items) |prong| {
-                var prong_set: AcceptanceSet = .{};
-                for (prong.labels.items) |range| prong_set.addRange(range.from, range.to);
-                if (!set.subSet(prong_set)) continue;
-
-                var new_state = try self.clone();
-                const blocks = new_state.blocks.items;
-                blocks[blocks.len - 1] = prong.dest;
-                new_state.instr = 0;
-
-                return new_state;
-            },
-            else => unreachable,
-        }
-
-        return null;
-    }
-
-    pub fn defaultPass(self: *const ExecState) ?usize {
-        return if (self.blocks.items.len == 0) self.last_action else null;
-    }
-
-    pub fn addBranches(
-        self: *ExecState,
-        list: *std.ArrayList(SplitBranch),
-    ) !void {
-        const blocks = self.blocks.items;
-        if (blocks.len == 0) {
-            // passing state
-            try list.append(SplitBranch.initMatchAll(self.last_action));
-            return;
-        }
-        const last = blocks[blocks.len - 1];
-        const instr = last.insts.items[self.instr];
-        assert(instr.meta.isConsuming());
-
-        switch (instr.tag) {
-            .STRING => try list.append(SplitBranch
-                .initChar(instr.data.str[self.instr_sub_idx])),
-            .MATCH => for (instr.data.match.items) |prong| {
-                try list.append(SplitBranch.initProng(prong));
-            },
-            else => unreachable,
-        }
-    }
-
-    pub fn canFillBranches(self: *ExecState) bool {
-        if (self.blocks.items.len == 0) return false;
-        const last = self.blocks.getLast();
-        return !self.had_fill and
-            last.meta.is_target and
-            self.instr == 0 and
-            self.instr_sub_idx == 0 and
-            last.fail != null and
-            last.fail.?.fail != null;
-    }
-
-    /// generates one exec state per branch
-    pub fn fillBranches(self: *ExecState) !?ExecState {
-        if (self.blocks.items.len == 0) return null;
-        self.had_fill = true;
-        const last = self.blocks.getLast();
-        const next = last.fail.?;
-
-        // ignore the fail block
-        if (next.fail == null) return null;
-
-        const output = try self.clone();
-        const blocks = self.blocks.items;
-        blocks[blocks.len - 1] = next;
-
-        return output;
-    }
-
-    pub fn execJumps(self: *ExecState) !bool {
-        if (self.blocks.items.len == 0) return false;
-        const last = self.blocks.getLast();
-        const blocks = self.blocks.items;
-        const instr = last.insts.items[self.instr];
-
-        assert(instr.meta.isConsuming());
-        switch (instr.tag) {
-            .JMP => {
-                // the jump has no context
-                const next = instr.data.jmp;
-                blocks[blocks.len - 1] = next;
-            },
-            .NONTERM => {
-                // the jump has context
-                const jmp = instr.data.ctx_jmp;
-                blocks[blocks.len - 1] = jmp.returns;
-                try self.blocks.append(jmp.next);
-                self.had_fill = false;
-            },
-            .RET, .EXIT_PASS => {
-                // the jump has context
-                self.had_fill = false;
-                _ = self.blocks.pop();
-                self.last_action = instr.data.action;
-            },
-            // this would be a full fail
-            // should be unreachable as fill branches ignores the fail branch
-            .FAIL, .EXIT_FAIL => unreachable,
-            else => return false,
-        }
-
-        self.instr = 0;
-
-        return true;
-    }
-
-    fn clone(self: ExecState) !ExecState {
-        return .{
-            .instr_sub_idx = self.instr_sub_idx,
-            .blocks = try self.blocks.clone(),
-            .had_fill = self.had_fill,
-            .instr = self.instr,
-            .last_action = 0,
-        };
-    }
-
-    pub const Key = struct {
-        instr: usize,
-        instr_sub_idx: usize,
-        block: *ir.Block,
-
-        pub fn eql(self: Key, other: Key) bool {
-            return self.instr == other.instr and
-                self.instr_sub_idx == other.instr_sub_idx and
-                self.block == other.block;
-        }
-
-        pub fn hash(self: Key, hasher: anytype) void {
-            hasher.update(std.mem.asBytes(&self.instr));
-            hasher.update(std.mem.asBytes(&self.instr_sub_idx));
-            hasher.update(std.mem.asBytes(&@intFromPtr(self.block)));
-        }
-
-        pub fn format(
-            self: @This(),
-            comptime _: []const u8,
-            _: std.fmt.FormatOptions,
-            writer: anytype,
-        ) !void {
-            try writer.print("({d}, {d}, {d})", .{
-                self.block.id,
-                self.instr,
-                self.instr_sub_idx,
-            });
-        }
-    };
-
-    pub fn eql(self: ExecState, other: ExecState) bool {
-        return self.blocks.getLastOrNull() == other.blocks.getLastOrNull() and
-            self.instr == other.instr and
-            self.instr_sub_idx == other.instr_sub_idx;
-    }
-
-    pub fn toKey(self: ExecState) !?Key {
-        if (self.blocks.items.len == 0) return null;
-
-        return .{
-            .instr_sub_idx = self.instr_sub_idx,
-            .block = self.blocks.getLast(),
-            .instr = self.instr,
-        };
-    }
-
-    pub fn format(
-        self: @This(),
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        if (self.blocks.items.len == 0) {
-            try writer.print("∅ ", .{});
-        } else {
-            try writer.print("({d}, {d}, {d})", .{
-                self.blocks.getLast().id,
-                self.instr,
-                self.instr_sub_idx,
-            });
-        }
-    }
-
-    pub fn deinit(self: ExecState) void {
-        self.blocks.deinit();
-    }
-};
-
-const SplitBranch = struct {
-    set: AcceptanceSet,
-    final_action: ?usize,
-
-    pub fn init(final_action: ?usize) SplitBranch {
-        return .{
-            .set = .{},
-            .final_action = final_action,
-        };
-    }
-
-    pub fn initMatchAll(final_action: ?usize) SplitBranch {
-        var self = init(final_action);
-        self.set.invert();
-        return self;
-    }
-
-    pub fn initProng(prong: ir.MatchProng) SplitBranch {
-        assert(prong.consuming);
-        var self = init(null);
-
-        for (prong.labels.items) |range| {
-            self.set.addRange(range.from, range.to);
-        }
-
-        return self;
-    }
-
-    pub fn initChar(char: u8) SplitBranch {
-        var self = init(null);
-        self.set.addChar(char);
-        return self;
-    }
-
-    pub fn format(
-        self: @This(),
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        try writer.print("(branch: {s}{s})", .{
-            self.set,
-            if (self.final_action != null) "; (acc)" else "",
-        });
     }
 };
 
