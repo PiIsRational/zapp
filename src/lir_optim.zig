@@ -44,21 +44,21 @@ pub fn optimize(lir: *ir.LowIr) !void {
         .ir = lir,
     };
 
-    var emitter = look.LookaheadEmitter.init(self.ir.allocator);
-    defer emitter.deinit();
+    //var emitter = look.LookaheadEmitter.init(self.ir.allocator);
+    //defer emitter.deinit();
 
-    const nfa = try emitter.emit(self.ir.blocks.items[0]);
+    //const nfa = try emitter.emit(self.ir.blocks.items[0]);
 
-    defer nfa.deinit(self.ir.allocator);
-    try gvgen.genAutomaton(stdout, nfa, "nfa");
+    //defer nfa.deinit(self.ir.allocator);
+    //try gvgen.genAutomaton(stdout, nfa, "nfa");
 
-    //var dfa_gen = DfaGen.init(self.ir.allocator);
-    //defer dfa_gen.deinit();
+    var dfa_gen = DfaGen.init(self.ir.allocator);
+    defer dfa_gen.deinit();
 
-    //const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
+    const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
 
-    //try gvgen.genAutomaton(stdout, dfa, "dfa");
-    //defer dfa.deinit(self.ir.allocator);
+    try gvgen.genAutomaton(stdout, dfa, "dfa");
+    defer dfa.deinit(self.ir.allocator);
 }
 
 fn generateDfa(self: *PassManager, block: *ir.Block) !void {
@@ -158,6 +158,7 @@ const DfaGen = struct {
         };
     }
 
+    /// generates a Dfa (automaton with only match and ret/fail)
     pub fn gen(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
         var dfa = ra.Automaton.init(self.allocator);
         var start_state = try DfaState.init(self.allocator, start_block);
@@ -166,6 +167,10 @@ const DfaGen = struct {
 
         const fail_block = try dfa.getNew();
         try fail_block.insts.append(ir.Instr.initTag(.FAIL));
+
+        dfa.start = dfa.blocks.items[0];
+        dfa.fail = fail_block;
+
         var new_states = std.ArrayList(DfaState).init(self.allocator);
         defer new_states.deinit();
 

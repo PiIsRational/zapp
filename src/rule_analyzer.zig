@@ -144,6 +144,8 @@ pub const AcceptanceSet = struct {
 
 pub const Automaton = struct {
     blocks: std.ArrayList(*ir.Block),
+    start: *ir.Block = undefined,
+    fail: *ir.Block = undefined,
 
     pub fn init(allocator: Allocator) Automaton {
         return .{
@@ -161,6 +163,43 @@ pub const Automaton = struct {
         block.id = self.blocks.items.len;
         try self.blocks.append(block);
         return block;
+    }
+
+    pub fn isNfa(self: Automaton) bool {
+        for (self.blocks.items.len) |block| {
+            const instrs = block.insts.items;
+            if (instrs.len != 1) return false;
+            switch (instrs[0].tag) {
+                .MATCH,
+                .RET,
+                .FAIL,
+                .JMP,
+                => {},
+                else => return false,
+            }
+        }
+
+        return true;
+    }
+
+    pub fn isDfa(self: Automaton) bool {
+        for (self.blocks.items.len) |block| {
+            const instrs = block.insts.items;
+            if (instrs.len != 1) return false;
+            switch (instrs[0].tag) {
+                .MATCH,
+                .RET,
+                .FAIL,
+                => {},
+                else => return false,
+            }
+
+            if (block.fail != null and block.fail != self.fail) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     pub fn format(
@@ -339,7 +378,7 @@ pub const ExecState = struct {
     }
 
     pub fn splitOn(self: *const ExecState, set: AcceptanceSet) !?ExecState {
-        const instr = self.getCurrInstr() orelse return;
+        const instr = self.getCurrInstr() orelse return null;
 
         assert(instr.meta.isConsuming());
         assert(!set.isEmpty());
@@ -406,7 +445,7 @@ pub const ExecState = struct {
     }
 
     pub fn getCurrInstr(self: ExecState) ?ir.Instr {
-        if (self.blocks.len == 0) return null;
+        if (self.blocks.items.len == 0) return null;
 
         const last = self.blocks.getLast();
         return last.insts.items[self.instr];
@@ -448,7 +487,7 @@ pub const ExecState = struct {
 
     // returns true if some jump could be executed
     pub fn execJumps(self: *ExecState) !ExecJmpsResult {
-        const instr = self.getCurrInstr() orelse .NO_CHANGE;
+        const instr = self.getCurrInstr() orelse return .NO_CHANGE;
         const blocks = self.blocks.items;
 
         if (!instr.meta.isConsuming() or

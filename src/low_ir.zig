@@ -382,12 +382,9 @@ pub const InstrTag = enum {
 
 pub fn isMatchLookahead(instr: Instr) bool {
     assert(instr.tag == .MATCH);
+    assert(instr.data.match.items.len == 1);
 
-    for (instr.data.match.items) |prong| {
-        if (prong.is_accepting) return false;
-    }
-
-    return true;
+    return !instr.data.match.items[0].consuming;
 }
 
 pub const InstrData = union {

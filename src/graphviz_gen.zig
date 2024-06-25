@@ -61,6 +61,8 @@ pub fn genAutomaton(
     try w.print("    node [shape = doublecircle]; ", .{});
     try getTerminals(w, dfa);
     try w.print(";\n    node [shape = circle];\n", .{});
+    try w.print("    -1 [shape = point]\n", .{});
+    try w.print("    -1 -> {d}\n", .{dfa.start.id});
     for (dfa.blocks.items) |block| {
         try genAutomatonNode(w, block);
     }
@@ -83,9 +85,7 @@ fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
 }
 
 fn genDfaEdge(w: Writer, start: *lir.Block, prong: lir.MatchProng) !void {
-    try w.print("    {d}", .{start.id});
-    try w.print(" -> ", .{});
-    try w.print("{d} [label = \"", .{prong.dest.id});
+    try w.print("    {d} -> {d} [label = \"", .{ start.id, prong.dest.id });
     for (prong.labels.items) |range| {
         try genRange(w, range);
         try w.print(", ", .{});
