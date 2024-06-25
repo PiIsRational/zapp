@@ -655,7 +655,7 @@ fn deleteDef(self: *PegPassManager, def: usize) !void {
 
 fn sameAsRoot(self: *PegPassManager, def: *ir.Definition) anyerror!void {
     if (self.reachable[def.id]) return;
-    if (def.generated()) return;
+    if (def.generated) return;
     try Error.print(
         "unreachable definition",
         self.ir.file_name,
@@ -988,7 +988,7 @@ fn addRelation(
         "found left recursion",
         self.ir.file_name,
         self.ir.chars,
-        if (defs[from].generated())
+        if (defs[from].generated)
             &.{.{
                 .place = to_rule,
                 .msg = "cannot be matched",
@@ -1116,6 +1116,7 @@ fn desugarStarSequence(
             .has_actions = false,
             .moves_actions = false,
             .is_terminal = def.is_terminal,
+            .generated = true,
         };
 
         return new_def;
@@ -1430,6 +1431,7 @@ fn extractDefinition(
         name,
         return_type,
         defs.len,
+        true,
     );
     def.is_terminal = is_terminal;
 

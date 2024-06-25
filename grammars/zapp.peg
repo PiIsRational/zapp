@@ -83,6 +83,7 @@ Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequenc
         .has_actions = false,
         .moves_actions = false,
         .is_terminal = su.isScreamingSnakeCase($1),
+        .generated = false,
     });
 };
 

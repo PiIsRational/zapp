@@ -330,6 +330,7 @@ pub const Definition = struct {
     has_actions: bool,
     moves_actions: bool,
     is_terminal: bool,
+    generated: bool,
 
     pub fn init(
         allocator: Allocator,
@@ -337,6 +338,7 @@ pub const Definition = struct {
         identifier: []const u8,
         return_type: ReturnType,
         id: usize,
+        generated: bool,
     ) !Definition {
         var sequences = std.ArrayList(Sequence).init(allocator);
         try sequences.appendSlice(seqs);
@@ -354,6 +356,7 @@ pub const Definition = struct {
             .has_actions = false,
             .moves_actions = false,
             .is_terminal = false,
+            .generated = generated,
         };
     }
 
@@ -379,20 +382,13 @@ pub const Definition = struct {
         self.return_type.deinit(allocator);
     }
 
-    pub fn generated(self: *Definition) bool {
-        return self.identifier.len == 0;
-    }
-
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = fmt;
-        _ = options;
-
-        try writer.print("{s} (%{d}){s}{s}{s}{s}{s}", .{
+        try writer.print("{s} (%{d}){s}{s}{s}{s}{s}{s}", .{
             self.identifier,
             self.id,
             if (self.accepts_eps) " (ε)" else "",
@@ -400,6 +396,7 @@ pub const Definition = struct {
             if (self.regular) " (reg)" else if (self.finite) " (fin)" else "",
             if (self.moves_actions) " (act)" else "",
             if (self.is_terminal) " (ter)" else "",
+            if (self.generated) " (gen)" else "",
         });
         try writer.print(": {s}", .{self.return_type});
         try writer.print(" =\n", .{});
