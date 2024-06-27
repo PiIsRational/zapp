@@ -2,12 +2,7 @@
 
 SPACING = SPACE_UNIT* ;
 
-SPACE_UNIT
-    = SPACE 
- //   | COMMENT
-    ;
-
-//COMMENT = '//' (!LINE_END .)* LINE_END ;
+SPACE_UNIT = SPACE ;
 
 LINE_END 
     = '\r\n'

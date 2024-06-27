@@ -294,6 +294,14 @@ pub const Instr = struct {
         };
     }
 
+    pub fn initJmp(to: *Block) Instr {
+        return .{
+            .tag = .JMP,
+            .meta = InstrMeta.Empty,
+            .data = .{ .jmp = to },
+        };
+    }
+
     pub fn deinit(self: Instr, allocator: Allocator) void {
         switch (self.tag) {
             .MATCH => {

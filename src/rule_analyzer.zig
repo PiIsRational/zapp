@@ -522,7 +522,7 @@ pub const ExecState = struct {
         return .CHANGE;
     }
 
-    fn clone(self: ExecState) !ExecState {
+    pub fn clone(self: ExecState) !ExecState {
         return .{
             .instr_sub_idx = self.instr_sub_idx,
             .blocks = try self.blocks.clone(),
