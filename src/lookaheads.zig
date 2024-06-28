@@ -92,7 +92,7 @@ pub const LookaheadEmitter = struct {
         self.nfa = ra.Automaton.init(self.allocator);
         const start_block = try self.nfa.getNew();
         const start_state = try LookaheadState.blockInit(self.allocator, start);
-        try self.put((try start_state.toKey()).?, start_block);
+        try self.put(try start_state.toKey(), start_block);
         self.nfa.start = start_block;
 
         // the second state of the nfa is always the failing state (similar to dfa)
@@ -106,7 +106,7 @@ pub const LookaheadEmitter = struct {
             if (!try self.addEpsilons(&state)) continue;
 
             const key = try state.toKey();
-            defer key.deinit();
+            defer key.deinit(self.allocator);
 
             const block = self.map.get(key).?;
             if (block.insts.items.len != 0) continue;
@@ -122,12 +122,12 @@ pub const LookaheadEmitter = struct {
                 block.fail = fail_block;
             }
 
-            for (self.branches.items) |branch| {
-                var new_state = try state.splitOn(branch);
+            for (branches.prongs.items) |branch| {
+                var new_state = try state.splitOn(branch) orelse unreachable;
                 while (try new_state.execJumps()) {}
 
-                const new_key = try new_state.getKey();
-                defer new_key.deinit();
+                const new_key = try new_state.toKey();
+                defer new_key.deinit(self.allocator);
                 var labels = std.ArrayList(ir.Range).init(self.allocator);
                 var iter = branch.set.rangeIter();
                 while (iter.next()) |range| try labels.append(range);
@@ -135,8 +135,8 @@ pub const LookaheadEmitter = struct {
                 const new_block = self.map.get(new_key) orelse blk: {
                     const dst_block = try self.nfa.getNew();
 
-                    if (new_state.isEmpty() == .ACCEPT) {
-                        const action = new_state.base.action.?;
+                    if (new_state.isEmpty()) {
+                        const action = new_state.action.?;
                         var pass_instr = ir.Instr.initTag(.RET);
                         pass_instr.data = .{ .action = action };
                         try dst_block.insts.append(pass_instr);
@@ -171,7 +171,7 @@ pub const LookaheadEmitter = struct {
     /// the method returns true iff it was able to add epsilons for `base`
     fn addEpsilons(self: *LookaheadEmitter, base: *LookaheadState) !bool {
         if (!base.canFillBranches()) return false;
-        const base_key = (try base.toKey()).?;
+        const base_key = try base.toKey();
         var first_block = self.map.get(base_key).?;
 
         const start = self.states.items.len;
@@ -223,9 +223,112 @@ pub const LookaheadEmitter = struct {
 
 pub const LookaheadState = struct {
     base: ra.ExecState,
+    action: ?usize = null,
     look: LookaheadType,
     start: ra.ExecStart,
     sub_states: std.ArrayList(LookaheadState),
+
+    fn isLookFail(self: LookaheadState) bool {
+        assert(self.look == .NONE or self.action == null);
+
+        return switch (self.look) {
+            .NONE => {
+                if (self.action == null) return false;
+
+                for (self.sub_states.items) |sub| {
+                    if (sub.isLookFail()) return true;
+                }
+
+                return false;
+            },
+            .POSITIVE => {
+                if (!self.isDone()) return true;
+
+                for (self.sub_states.items) |sub| {
+                    if (sub.isLookFail()) return true;
+                }
+
+                return false;
+            },
+            .NEGATIVE => {
+                if (!self.isDone()) return false;
+
+                for (self.sub_states.items) |sub| {
+                    if (sub.isLookFail()) return false;
+                }
+
+                return true;
+            },
+        };
+    }
+
+    pub fn getBranches(self: LookaheadState) !ra.BranchResult {
+        assert(self.look == .NONE);
+
+        var prongs = std.ArrayList(ra.SplitBranch)
+            .init(self.sub_states.allocator);
+
+        try self.addBranches(&prongs);
+
+        var normal_match = try ra.canonicalizeBranches(&prongs);
+        normal_match.invert();
+
+        return .{
+            .fail_set = normal_match,
+            .prongs = prongs,
+        };
+    }
+
+    fn addBranches(
+        self: LookaheadState,
+        prongs: *std.ArrayList(ra.SplitBranch),
+    ) !void {
+        assert(self.look == .NONE or self.action == null);
+        const accepting = self.action != null;
+
+        var base_buffer = std.ArrayList(ra.SplitBranch)
+            .init(self.sub_states.allocator);
+        var sub_buffer = std.ArrayList(ra.SplitBranch)
+            .init(self.sub_states.allocator);
+        defer base_buffer.deinit();
+        defer sub_buffer.deinit();
+
+        if (!accepting) try self.base.addBranches(&base_buffer);
+
+        for (self.sub_states.items) |sub| {
+            assert(sub.look != .NONE);
+
+            try sub.addBranches(&sub_buffer);
+
+            for (sub_buffer.items) |*sub_branch| {
+                if (sub_branch.final_action == null) continue;
+
+                if (accepting) {
+                    continue;
+                }
+
+                for (base_buffer.items) |base_branch| {
+                    _ = base_branch;
+                    _ = prongs;
+                }
+            }
+
+            sub_buffer.clearRetainingCapacity();
+        }
+    }
+
+    pub fn splitOn(self: *LookaheadState, branch: ra.SplitBranch) !?LookaheadState {
+        _ = self;
+        _ = branch;
+        unreachable;
+    }
+
+    fn isDone(self: LookaheadState) bool {
+        assert(self.look != .NONE);
+
+        const blocks = self.base.blocks.items;
+        return blocks.len == 1 and self.base.instr != self.start.instr;
+    }
 
     pub fn blockInit(allocator: Allocator, block: *ir.Block) !LookaheadState {
         const base = try ra.ExecState.init(allocator, block);
@@ -236,11 +339,11 @@ pub const LookaheadState = struct {
     }
 
     pub fn baseInit(base: ra.ExecState, allocator: Allocator) LookaheadState {
-        return init(base, .NONE, .STANDARD, allocator);
+        return init(base, .NONE, .{}, allocator);
     }
 
     pub fn init(
-        base: ra.Execstate,
+        base: ra.ExecState,
         look: LookaheadType,
         start: ra.ExecStart,
         allocator: Allocator,
@@ -281,9 +384,9 @@ pub const LookaheadState = struct {
         return had_change;
     }
 
+    /// the state is accepting
     pub fn isEmpty(self: *const LookaheadState) bool {
-        _ = self;
-        unreachable;
+        return self.action != null and !self.isLookFail();
     }
 
     fn splitOff(self: *LookaheadState) !void {
@@ -361,6 +464,7 @@ pub const LookaheadState = struct {
 
     pub const Key = struct {
         base: ra.ExecState.Key,
+        action: ?usize,
         look: LookaheadType,
         sub_states: []const LookaheadState.Key,
 
@@ -370,17 +474,21 @@ pub const LookaheadState = struct {
             }
 
             if (self.look != other.look) return false;
-            if (self.base == null and other.base == null) return true;
-            if (self.base != null and other.base == null or
-                self.base == null and other.base != null) return false;
+            if (self.action != other.action) return false;
+            if (self.action != null) return true;
 
-            return self.base.?.eql(other.base.?);
+            return self.base.eql(other.base);
         }
 
         pub fn hash(self: Key, hasher: anytype) void {
-            self.base.hash(hasher);
-
             assert(std.meta.hasUniqueRepresentation(LookaheadType));
+            if (self.action) |action| {
+                hasher.update("1"); // action
+                hasher.update(std.mem.asBytes(&action));
+            } else {
+                hasher.update("0"); // no action
+                self.base.hash(hasher);
+            }
 
             hasher.update(std.mem.asBytes(&self.look));
             for (self.sub_states) |sub| {
@@ -389,33 +497,44 @@ pub const LookaheadState = struct {
             }
         }
 
+        pub fn clone(self: Key, allocator: Allocator) !Key {
+            const sub_states = try allocator.alloc(Key, self.sub_states.len);
+            for (self.sub_states, sub_states) |from, *to| to.* = try from.clone(allocator);
+
+            return .{
+                .base = self.base,
+                .action = self.action,
+                .look = self.look,
+                .sub_states = sub_states,
+            };
+        }
+
         pub fn deinit(self: Key, allocator: Allocator) void {
             for (self.sub_states) |sub| sub.deinit(allocator);
             allocator.free(self.sub_states);
         }
     };
 
-    pub fn toKey(self: LookaheadState) !?Key {
+    pub fn toKey(self: LookaheadState) !Key {
+        assert(!self.isLookFail());
+
         // TODO: make sure there is a canonical ordering for the states
-        const base_key = self.base.toKey();
-        if (base_key == null) {
-            assert(self.isEmpty());
-            return null;
-        }
 
-        var sub_states = std.ArrayList(LookaheadState.Key)
-            .init(self.sub_states.allocator);
+        // here undefined makes sense as accept is first inspected
+        const base_key = self.base.toKey() orelse undefined;
 
-        for (self.sub_states.items) |from| {
-            if (try from.toKey()) |from_key| {
-                try sub_states.append(from_key);
-            }
+        const sub_states = try self.sub_states.allocator
+            .alloc(Key, self.sub_states.items.len);
+
+        for (self.sub_states.items, sub_states) |from, *to| {
+            to.* = try from.toKey();
         }
 
         return .{
-            .base = base_key.?,
+            .action = self.action,
+            .base = base_key,
             .look = self.look,
-            .sub_states = try sub_states.toOwnedSlice(),
+            .sub_states = sub_states,
         };
     }
 
@@ -434,7 +553,7 @@ pub fn LookaheadCtx(comptime Hasher: type) type {
 
         pub fn hash(_: @This(), key: LookaheadState.Key) u64 {
             var hasher = Hasher.init(0);
-            key.hash(hasher);
+            key.hash(&hasher);
             return hasher.final();
         }
     };

@@ -214,6 +214,15 @@ pub const Automaton = struct {
     }
 };
 
+pub const BranchResult = struct {
+    fail_set: AcceptanceSet,
+    prongs: std.ArrayList(SplitBranch),
+
+    pub fn deinit(self: BranchResult) void {
+        self.prongs.deinit();
+    }
+};
+
 pub const SplitBranch = struct {
     set: AcceptanceSet,
     final_action: ?usize,
@@ -421,7 +430,7 @@ pub const ExecState = struct {
     }
 
     pub fn addBranches(
-        self: *ExecState,
+        self: *const ExecState,
         list: *std.ArrayList(SplitBranch),
     ) !void {
         const wrapped_instr = self.getCurrInstr();
@@ -451,7 +460,7 @@ pub const ExecState = struct {
         return last.insts.items[self.instr];
     }
 
-    pub fn canFillBranches(self: *ExecState) bool {
+    pub fn canFillBranches(self: *const ExecState) bool {
         if (self.blocks.items.len == 0) return false;
         const last = self.blocks.getLast();
         return !self.had_fill and
@@ -608,8 +617,8 @@ pub const ExecState = struct {
 };
 
 pub const ExecStart = struct {
-    block_id: usize,
-    instr: usize,
+    block_id: usize = 0,
+    instr: usize = 0,
 
     pub fn init(id: usize, instr: usize) ExecStart {
         return .{ .block_id = id, .instr = instr };
