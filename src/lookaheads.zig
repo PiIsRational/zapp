@@ -225,7 +225,7 @@ pub const LookaheadState = struct {
     base: ra.ExecState,
     action: ?usize = null,
     look: LookaheadType,
-    start: ra.ExecStart,
+    start: ra.ExecPlace,
     sub_states: std.ArrayList(LookaheadState),
 
     fn isLookFail(self: LookaheadState) bool {
@@ -262,6 +262,14 @@ pub const LookaheadState = struct {
         };
     }
 
+    fn lookaheadIsDoneOnSet(self: LookaheadState, set: ra.AcceptanceSet) bool {
+        assert(self.look != .NONE);
+        const next = self.base.nextPlace(set).?;
+
+        return self.base.blocks.items.len == 1 and
+            (next.block_id != self.start.block_id or next.instr != self.start.instr);
+    }
+
     pub fn getBranches(self: LookaheadState) !ra.BranchResult {
         assert(self.look == .NONE);
 
@@ -293,27 +301,67 @@ pub const LookaheadState = struct {
         defer base_buffer.deinit();
         defer sub_buffer.deinit();
 
-        if (!accepting) try self.base.addBranches(&base_buffer);
+        if (!accepting) {
+            try self.base.addBranches(&base_buffer);
+
+            if (self.look != .NONE) {
+                for (base_buffer.items) |*branch| {
+                    if (!self.lookaheadIsDoneOnSet(branch.set)) continue;
+                    branch.final_action = 0; // this is a terminal action
+                }
+            }
+
+            try appendAndReplace(prongs, &base_buffer, true);
+        } else {
+            try base_buffer.append(.{
+                .set = ra.AcceptanceSet.Full,
+                .final_action = self.action,
+            });
+        }
 
         for (self.sub_states.items) |sub| {
             assert(sub.look != .NONE);
 
             try sub.addBranches(&sub_buffer);
+            try appendAndReplace(prongs, &sub_buffer, false);
 
-            for (sub_buffer.items) |*sub_branch| {
-                if (sub_branch.final_action == null) continue;
-
-                if (accepting) {
-                    continue;
+            // finally analyze the accepting branches
+            for (sub_buffer.items) |sub_branch| for (base_buffer.items) |*base_branch| {
+                switch (sub.look) {
+                    .POSITIVE => base_branch.set.intersect(sub_branch.set),
+                    .NEGATIVE => base_branch.set.cut(sub_branch.set),
+                    else => unreachable,
                 }
-
-                for (base_buffer.items) |base_branch| {
-                    _ = base_branch;
-                    _ = prongs;
-                }
-            }
+            };
 
             sub_buffer.clearRetainingCapacity();
+        }
+
+        for (base_buffer.items) |branch| {
+            if (branch.set.isEmpty()) continue;
+            try prongs.append(branch);
+        }
+    }
+
+    fn appendAndReplace(
+        prongs: *std.ArrayList(ra.SplitBranch),
+        buf: *std.ArrayList(ra.SplitBranch),
+        free: bool,
+    ) !void {
+        var index: usize = 0;
+        for (buf.items) |branch| {
+            if (branch.final_action == null) {
+                try prongs.append(branch);
+                continue;
+            }
+            buf.items[index] = branch;
+            index += 1;
+        }
+
+        if (free) {
+            buf.shrinkAndFree(index);
+        } else {
+            buf.shrinkRetainingCapacity(index);
         }
     }
 
@@ -327,7 +375,8 @@ pub const LookaheadState = struct {
         assert(self.look != .NONE);
 
         const blocks = self.base.blocks.items;
-        return blocks.len == 1 and self.base.instr != self.start.instr;
+        return blocks.len == 1 and
+            (blocks[0].id != self.start.block_id or self.base.instr != self.start.instr);
     }
 
     pub fn blockInit(allocator: Allocator, block: *ir.Block) !LookaheadState {
@@ -345,7 +394,7 @@ pub const LookaheadState = struct {
     pub fn init(
         base: ra.ExecState,
         look: LookaheadType,
-        start: ra.ExecStart,
+        start: ra.ExecPlace,
         allocator: Allocator,
     ) LookaheadState {
         return .{
@@ -438,7 +487,7 @@ pub const LookaheadState = struct {
         assert(self.base.blocks.items.len > 0);
 
         self.base.setRoot();
-        self.start = ra.ExecStart.init(
+        self.start = ra.ExecPlace.init(
             self.base.blocks.items[0].id,
             self.base.instr,
         );

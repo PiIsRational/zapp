@@ -22,6 +22,12 @@ const ir = @import("low_ir.zig");
 pub const AcceptanceSet = struct {
     values: [4]u64 = .{0} ** 4,
 
+    pub const Full = blk: {
+        var set: AcceptanceSet = .{};
+        set.invert();
+        break :blk set;
+    };
+
     const RangeIterator = struct {
         set: AcceptanceSet,
         index: u8,
@@ -386,6 +392,40 @@ pub const ExecState = struct {
         self.blocks.append(blk) catch unreachable;
     }
 
+    pub fn nextPlace(self: *const ExecState, set: AcceptanceSet) ?ExecPlace {
+        const instr = self.getCurrInstr() orelse return null;
+
+        assert(instr.meta.isConsuming());
+        assert(!set.isEmpty());
+
+        switch (instr.tag) {
+            .STRING => if (set.matchesChar(instr.data.str[self.instr_sub_idx])) {
+                if (self.instr_sub_idx + 1 == instr.data.str.len) {
+                    return .{
+                        .block_id = self.blocks.getLast().id,
+                        .instr = self.instr + 1,
+                    };
+                } else {
+                    return .{
+                        .block_id = self.blocks.getLast().id,
+                        .instr = self.instr,
+                        .instr_sub_idx = self.instr_sub_idx + 1,
+                    };
+                }
+            },
+            .MATCH => for (instr.data.match.items) |prong| {
+                var prong_set: AcceptanceSet = .{};
+                for (prong.labels.items) |range| prong_set.addRange(range.from, range.to);
+                if (!set.subSet(prong_set)) continue;
+
+                return .{ .block_id = prong.dest.id };
+            },
+            else => unreachable,
+        }
+
+        return null;
+    }
+
     pub fn splitOn(self: *const ExecState, set: AcceptanceSet) !?ExecState {
         const instr = self.getCurrInstr() orelse return null;
 
@@ -616,11 +656,12 @@ pub const ExecState = struct {
     }
 };
 
-pub const ExecStart = struct {
+pub const ExecPlace = struct {
     block_id: usize = 0,
     instr: usize = 0,
+    instr_sub_idx: usize = 0,
 
-    pub fn init(id: usize, instr: usize) ExecStart {
+    pub fn init(id: usize, instr: usize) ExecPlace {
         return .{ .block_id = id, .instr = instr };
     }
 };
