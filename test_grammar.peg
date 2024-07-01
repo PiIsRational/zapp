@@ -1,17 +1,17 @@
 %% NAME Test
 
-SPACING = SPACE_UNIT* ;
+SPACINGS = SPACING * ;
 
-SPACE_UNIT = SPACE ;
+SPACING = SPACE ;
+
+SPACE 
+    = ' '
+    | '\t'
+    | LINE_END
+    ;
 
 LINE_END 
     = '\r\n'
     | '\n'
     | '\r'
-    ;
-
-SPACE 
-    = ' '
-    | '\t'
-    | LINE_END 
     ;

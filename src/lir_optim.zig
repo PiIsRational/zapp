@@ -44,22 +44,10 @@ pub fn optimize(lir: *ir.LowIr) !void {
         .ir = lir,
     };
 
-    for (lir.blocks.items) |blk| {
-        std.debug.print("{s}\n", .{blk});
-    }
-
     var emitter = look.LookaheadEmitter.init(self.ir.allocator);
     defer emitter.deinit();
 
     const nfa = try emitter.emit(self.ir.blocks.items[0]);
-
-    std.debug.print("{d} block incoming. {d} blocks generated\n", .{
-        self.ir.blocks.items.len,
-        nfa.blocks.items.len,
-    });
-    for (nfa.blocks.items) |blk| {
-        std.debug.print("{s}\n", .{blk});
-    }
 
     defer nfa.deinit(self.ir.allocator);
     try gvgen.genAutomaton(stdout, nfa, "nfa");

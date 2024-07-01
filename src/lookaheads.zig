@@ -106,23 +106,21 @@ pub const LookaheadEmitter = struct {
 
             const key = try state.toKey();
             defer key.deinit(self.allocator);
-            std.debug.print("popped {s}\n", .{state.base});
 
             const block = self.map.get(key).?;
+
             if (block.insts.items.len != 0) {
                 state.deinit();
                 continue;
             }
 
             if (try self.addEpsilons(&state)) {
-                std.debug.print("add s  {s}\n", .{state.base});
                 try self.states.append(state);
                 continue;
             }
 
             if (try state.execJumps()) {
                 const new_key = try state.toKey();
-                std.debug.print("{s}\n", .{state.base});
                 defer new_key.deinit(self.allocator);
                 const blk = try self.getBlockForState(state, new_key);
 
@@ -140,7 +138,7 @@ pub const LookaheadEmitter = struct {
             const instr = &block.insts.items[0];
             instr.data = .{ .match = std.ArrayList(ir.MatchProng).init(self.allocator) };
 
-            if (!branches.fail_set.isEmpty()) {
+            if (block.fail == null and !branches.fail_set.isEmpty()) {
                 block.fail = fail_block;
             }
 
@@ -199,15 +197,14 @@ pub const LookaheadEmitter = struct {
     /// the method returns true iff it was able to add epsilons for `base`
     fn addEpsilons(self: *LookaheadEmitter, base: *LookaheadState) !bool {
         if (!base.canFillBranches()) return false;
-        const base_key = try base.toKey();
-        var first_block = self.map.get(base_key).?;
 
+        const base_key = try base.toKey();
+        const first_block = self.map.get(base_key).?;
         const start = self.states.items.len;
-        var first = true;
-        var first_state: LookaheadState = undefined;
+        const first_state = (try base.fillBranches()).?;
+
         while (try base.fillBranches()) |state| {
-            if (first) first_state = state else try self.states.append(state);
-            first = false;
+            try self.states.append(state);
         }
 
         try self.states.append(base.*);
@@ -237,7 +234,6 @@ pub const LookaheadEmitter = struct {
     pub fn put(self: *LookaheadEmitter, key: LookaheadState.Key, value: *ir.Block) !void {
         try self.map_keys.append(key);
         try self.map.putNoClobber(key, value);
-        std.debug.print("put    {s}\n", .{key});
     }
 
     pub fn deinit(self: *LookaheadEmitter) void {
@@ -446,10 +442,7 @@ pub const LookaheadState = struct {
 
     pub fn blockInit(allocator: Allocator, block: *ir.Block) !LookaheadState {
         const base = try ra.ExecState.init(allocator, block);
-        var self = baseInit(base, allocator);
-        while (try self.execJumps()) {}
-
-        return self;
+        return baseInit(base, allocator);
     }
 
     pub fn baseInit(base: ra.ExecState, allocator: Allocator) LookaheadState {

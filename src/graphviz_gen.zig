@@ -64,6 +64,7 @@ pub fn genAutomaton(
     try w.print("    -1 [shape = point]\n", .{});
     try w.print("    -1 -> {d}\n", .{dfa.start.id});
     for (dfa.blocks.items) |block| {
+        try genAutomatonNodeEps(w, block);
         try genAutomatonNode(w, block);
     }
     try w.print("}}\n", .{});
@@ -75,16 +76,31 @@ fn getTerminals(w: Writer, dfa: Automaton) !void {
     };
 }
 
-fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
-    assert(block.insts.items.len == 1);
-    const instr = block.insts.items[0];
-    if (instr.tag != .MATCH) return;
-    for (instr.data.match.items) |prong| {
-        try genDfaEdge(w, block, prong);
+fn genAutomatonNodeEps(w: Writer, block: *lir.Block) !void {
+    if (!block.meta.is_target) return;
+    var curr = block;
+    while (curr.fail) |fail| : (curr = fail) {
+        if (fail.fail == null) break;
+        try w.print("    {d} -> {d} [label = \"ε\"];\n", .{ block.id, fail.id });
     }
 }
 
-fn genDfaEdge(w: Writer, start: *lir.Block, prong: lir.MatchProng) !void {
+fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
+    assert(block.insts.items.len == 1);
+    const instr = block.insts.items[0];
+    switch (instr.tag) {
+        .MATCH => for (instr.data.match.items) |prong| {
+            try genAutomatonEdge(w, block, prong);
+        },
+        .JMP => try w.print(
+            "    {d} -> {d} [label = \"ε\"];\n",
+            .{ block.id, instr.data.jmp.id },
+        ),
+        else => {},
+    }
+}
+
+fn genAutomatonEdge(w: Writer, start: *lir.Block, prong: lir.MatchProng) !void {
     try w.print("    {d} -> {d} [label = \"", .{ start.id, prong.dest.id });
     for (prong.labels.items) |range| {
         try genRange(w, range);

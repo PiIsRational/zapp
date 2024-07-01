@@ -553,11 +553,9 @@ pub const ExecState = struct {
                 const jmp = instr.data.ctx_jmp;
                 blocks[blocks.len - 1] = jmp.returns;
                 try self.blocks.append(jmp.next);
-                self.had_fill = false;
             },
             .RET, .EXIT_PASS => {
                 // the jump has context
-                self.had_fill = false;
                 _ = self.blocks.pop();
                 self.last_action = instr.data.action;
             },
@@ -567,6 +565,7 @@ pub const ExecState = struct {
             else => return .NO_CHANGE,
         }
 
+        self.had_fill = false;
         self.instr = 0;
         return .CHANGE;
     }
