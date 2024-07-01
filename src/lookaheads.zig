@@ -101,29 +101,39 @@ pub const LookaheadEmitter = struct {
         try fail_block.insts.append(ir.Instr.initTag(.FAIL));
         self.nfa.fail = fail_block;
 
-        std.debug.print("{d} states\n", .{self.states.items.len});
-
         while (self.states.popOrNull()) |popped_state| {
             var state = popped_state;
-            std.debug.print("popped state: {s}\n", .{state.base});
-
-            if (try self.addEpsilons(&state)) {
-                try self.states.append(state);
-                continue;
-            }
-            defer state.deinit();
-            std.debug.print("after adding eps: {s}\n", .{state.base});
 
             const key = try state.toKey();
             defer key.deinit(self.allocator);
+            std.debug.print("popped {s}\n", .{state.base});
 
             const block = self.map.get(key).?;
-            std.debug.print("the block: {s}\n", .{block});
-            if (block.insts.items.len != 0) continue;
+            if (block.insts.items.len != 0) {
+                state.deinit();
+                continue;
+            }
+
+            if (try self.addEpsilons(&state)) {
+                std.debug.print("add s  {s}\n", .{state.base});
+                try self.states.append(state);
+                continue;
+            }
+
+            if (try state.execJumps()) {
+                const new_key = try state.toKey();
+                std.debug.print("{s}\n", .{state.base});
+                defer new_key.deinit(self.allocator);
+                const blk = try self.getBlockForState(state, new_key);
+
+                try block.insts.append(ir.Instr.initJmp(blk));
+                try self.states.append(state);
+                continue;
+            }
+
+            defer state.deinit();
 
             const branches = try state.getBranches();
-            std.debug.print("the branches:\n", .{});
-            for (branches.prongs.items) |branch| std.debug.print("  {s}\n", .{branch});
             defer branches.deinit();
 
             try block.insts.append(ir.Instr.initTag(.MATCH));
@@ -136,33 +146,14 @@ pub const LookaheadEmitter = struct {
 
             for (branches.prongs.items) |branch| {
                 var new_state = try state.splitOn(branch) orelse unreachable;
-                std.debug.print("{s} => {s} [ {s} ]\n", .{ state.base, new_state.base, branch.set });
-
-                std.debug.print("before: {s}\n", .{new_state.base});
-                while (try new_state.execJumps()) {}
-                std.debug.print("after : {s}\n", .{new_state.base});
 
                 const new_key = try new_state.toKey();
-                std.debug.print("{s}\n", .{new_key.base});
                 defer new_key.deinit(self.allocator);
                 var labels = std.ArrayList(ir.Range).init(self.allocator);
                 var iter = branch.set.rangeIter();
                 while (iter.next()) |range| try labels.append(range);
 
-                const new_block = self.map.get(new_key) orelse blk: {
-                    const dst_block = try self.nfa.getNew();
-
-                    if (new_state.isEmpty()) {
-                        const action = new_state.action.?;
-                        var pass_instr = ir.Instr.initTag(.RET);
-                        pass_instr.data = .{ .action = action };
-                        try dst_block.insts.append(pass_instr);
-                    }
-
-                    try self.put(try new_key.clone(self.allocator), dst_block);
-                    break :blk dst_block;
-                };
-
+                const new_block = try self.getBlockForState(new_state, new_key);
                 try instr.data.match.append(.{
                     .labels = labels,
                     .dest = new_block,
@@ -177,8 +168,27 @@ pub const LookaheadEmitter = struct {
             }
         }
 
-        std.debug.print("returning\n", .{});
         return self.nfa;
+    }
+
+    fn getBlockForState(
+        self: *LookaheadEmitter,
+        state: LookaheadState,
+        key: LookaheadState.Key,
+    ) !*ir.Block {
+        return self.map.get(key) orelse blk: {
+            const dst_block = try self.nfa.getNew();
+
+            if (state.isEmpty()) {
+                const action = state.action.?;
+                var pass_instr = ir.Instr.initTag(.RET);
+                pass_instr.data = .{ .action = action };
+                try dst_block.insts.append(pass_instr);
+            }
+
+            try self.put(try key.clone(self.allocator), dst_block);
+            break :blk dst_block;
+        };
     }
 
     /// this method adds epsilon tansitions from `base` to all next states
@@ -195,18 +205,16 @@ pub const LookaheadEmitter = struct {
         const start = self.states.items.len;
         var first = true;
         var first_state: LookaheadState = undefined;
-        while (try base.fillBranches()) |pop_state| {
-            var state = pop_state;
-
-            while (try state.execJumps()) {}
+        while (try base.fillBranches()) |state| {
             if (first) first_state = state else try self.states.append(state);
             first = false;
         }
 
         try self.states.append(base.*);
+        base.* = first_state;
 
         var last_transition = self.nfa.fail;
-        for (self.states.items[start + 1 ..]) |state| {
+        for (self.states.items[start..]) |state| {
             const new_block = try self.nfa.getNew();
             try self.put(try state.toKey(), new_block);
 
@@ -219,10 +227,9 @@ pub const LookaheadEmitter = struct {
 
         // execute the loop body for `first_block`
         // the block is somewhat special as it does not contain a jmp instruction
-        // pretty certain that this should not cause any problems, but not certain
+        // pretty certain that this should not cause any problems, but not 100 %
         first_block.fail = last_transition;
         first_block.meta.is_target = true;
-        base.* = first_state;
 
         return true;
     }
@@ -230,6 +237,7 @@ pub const LookaheadEmitter = struct {
     pub fn put(self: *LookaheadEmitter, key: LookaheadState.Key, value: *ir.Block) !void {
         try self.map_keys.append(key);
         try self.map.putNoClobber(key, value);
+        std.debug.print("put    {s}\n", .{key});
     }
 
     pub fn deinit(self: *LookaheadEmitter) void {
@@ -244,7 +252,7 @@ pub const LookaheadEmitter = struct {
 
 pub const LookaheadState = struct {
     base: ra.ExecState,
-    action: ?usize = null,
+    action: ?usize,
     look: LookaheadType,
     start: ra.ExecPlace,
     sub_states: std.ArrayList(LookaheadState),
@@ -324,8 +332,6 @@ pub const LookaheadState = struct {
 
         if (!accepting) {
             try self.base.addBranches(&base_buffer);
-            for (base_buffer.items) |br|
-                std.debug.print("{s}\n", .{br});
 
             if (self.look != .NONE) {
                 for (base_buffer.items) |*branch| {
@@ -374,7 +380,6 @@ pub const LookaheadState = struct {
         var index: usize = 0;
         for (buf.items) |branch| {
             if (branch.final_action == null) {
-                std.debug.print("add {s}\n", .{branch});
                 try prongs.append(branch);
                 continue;
             } else {
@@ -394,7 +399,7 @@ pub const LookaheadState = struct {
         assert(self.look == .NONE);
         if (self.action != null) return null;
 
-        var new = .{
+        var new: LookaheadState = .{
             .base = try self.base.splitOn(branch.set) orelse undefined,
             .action = branch.final_action,
             .look = .NONE,
@@ -458,6 +463,7 @@ pub const LookaheadState = struct {
         allocator: Allocator,
     ) LookaheadState {
         return .{
+            .action = null,
             .base = base,
             .look = look,
             .start = start,
@@ -465,14 +471,17 @@ pub const LookaheadState = struct {
         };
     }
 
+    // TODO: complete
     pub fn canFillBranches(self: LookaheadState) bool {
         return self.base.canFillBranches();
     }
 
+    // TODO: complete
     pub fn fillBranches(self: *LookaheadState) !?LookaheadState {
         const result = try self.base.fillBranches() orelse return null;
 
         return .{
+            .action = null,
             .look = self.look,
             .start = self.start,
             .base = result,
@@ -482,11 +491,16 @@ pub const LookaheadState = struct {
 
     pub fn execJumps(self: *LookaheadState) !bool {
         const result = try self.base.execJumps();
+
         if (result == .LOOKAHEAD) try self.splitOff();
 
-        var had_change = result != .NO_CHANGE;
+        var had_change = result == .CHANGE;
         for (self.sub_states.items) |*sub| {
             had_change = try sub.execJumps() or had_change;
+        }
+
+        if (self.look == .NONE and self.base.blocks.items.len == 0) {
+            self.action = self.base.last_action;
         }
 
         return had_change;
@@ -563,6 +577,7 @@ pub const LookaheadState = struct {
 
     pub fn clone(self: LookaheadState) !LookaheadState {
         return .{
+            .action = self.action,
             .look = self.look,
             .start = self.start,
             .base = try self.base.clone(),
@@ -621,6 +636,20 @@ pub const LookaheadState = struct {
             for (self.sub_states) |sub| sub.deinit(allocator);
             allocator.free(self.sub_states);
         }
+
+        pub fn format(
+            self: Key,
+            comptime _: []const u8,
+            _: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            // TODO: maybe add the sub states here
+            if (self.action) |act| {
+                try writer.print("(act: {d})", .{act});
+            } else {
+                try writer.print("{s}", .{self.base});
+            }
+        }
     };
 
     pub fn toKey(self: LookaheadState) !Key {
@@ -629,7 +658,10 @@ pub const LookaheadState = struct {
         // TODO: make sure there is a canonical ordering for the states
 
         // here undefined makes sense as accept is first inspected
-        const base_key = self.base.toKey() orelse undefined;
+        const base_key = if (self.action == null)
+            self.base.toKey() orelse undefined
+        else
+            undefined;
 
         const sub_states = try self.sub_states.allocator
             .alloc(Key, self.sub_states.items.len);
