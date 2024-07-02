@@ -102,7 +102,8 @@ pub const AcceptanceSet = struct {
 
     /// inclusive range
     pub fn addRange(self: *AcceptanceSet, from: u8, to: u8) void {
-        for (from..to + 1) |char| self.addChar(@intCast(char));
+        for (from..to) |char| self.addChar(@intCast(char));
+        self.addChar(to);
     }
 
     pub fn addChar(self: *AcceptanceSet, char: u8) void {
@@ -115,7 +116,8 @@ pub const AcceptanceSet = struct {
 
     /// inclusive range
     pub fn matchesRange(self: AcceptanceSet, from: u8, to: u8) bool {
-        for (from..to + 1) |char| if (!self.matchesChar(char)) return false;
+        for (from..to) |char| if (!self.matchesChar(char)) return false;
+        if (!self.matchesChar(to)) return false;
         return true;
     }
 
@@ -247,7 +249,6 @@ pub const SplitBranch = struct {
     }
 
     pub fn initProng(prong: ir.MatchProng) SplitBranch {
-        assert(prong.consuming);
         var self = init(null);
 
         for (prong.labels.items) |range| {
@@ -395,7 +396,6 @@ pub const ExecState = struct {
     pub fn nextPlace(self: *const ExecState, set: AcceptanceSet) ?ExecPlace {
         const instr = self.getCurrInstr() orelse return null;
 
-        assert(instr.meta.isConsuming());
         assert(!set.isEmpty());
 
         switch (instr.tag) {
@@ -429,7 +429,6 @@ pub const ExecState = struct {
     pub fn splitOn(self: *const ExecState, set: AcceptanceSet) !?ExecState {
         const instr = self.getCurrInstr() orelse return null;
 
-        assert(instr.meta.isConsuming());
         assert(!set.isEmpty());
 
         switch (instr.tag) {
@@ -481,8 +480,6 @@ pub const ExecState = struct {
         }
 
         const instr = wrapped_instr.?;
-        assert(instr.meta.isConsuming());
-
         switch (instr.tag) {
             .STRING => try list.append(SplitBranch
                 .initChar(instr.data.str[self.instr_sub_idx])),

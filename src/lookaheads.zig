@@ -295,6 +295,14 @@ pub const LookaheadState = struct {
             (next.block_id != self.start.block_id or next.instr != self.start.instr);
     }
 
+    fn lookaheadOnStart(self: LookaheadState) bool {
+        const block = self.base.blocks.items[0];
+        return self.look != .NONE and
+            self.base.blocks.items.len == 1 and
+            block.id == self.start.block_id and
+            self.base.instr == self.start.instr;
+    }
+
     pub fn getBranches(self: LookaheadState) !ra.BranchResult {
         assert(self.look == .NONE);
 
@@ -335,8 +343,6 @@ pub const LookaheadState = struct {
                     branch.final_action = 0; // this is a terminal action
                 }
             }
-
-            try appendAndReplace(prongs, &base_buffer, true);
         } else {
             try base_buffer.append(.{
                 .set = ra.AcceptanceSet.Full,
@@ -348,7 +354,7 @@ pub const LookaheadState = struct {
             assert(sub.look != .NONE);
 
             try sub.addBranches(&sub_buffer);
-            try appendAndReplace(prongs, &sub_buffer, false);
+            try appendAndReplace(prongs, &sub_buffer);
 
             // finally analyze the accepting branches
             for (sub_buffer.items) |sub_branch| for (base_buffer.items) |*base_branch| {
@@ -371,7 +377,6 @@ pub const LookaheadState = struct {
     fn appendAndReplace(
         prongs: *std.ArrayList(ra.SplitBranch),
         buf: *std.ArrayList(ra.SplitBranch),
-        free: bool,
     ) !void {
         var index: usize = 0;
         for (buf.items) |branch| {
@@ -384,11 +389,7 @@ pub const LookaheadState = struct {
             }
         }
 
-        if (free) {
-            buf.shrinkAndFree(index);
-        } else {
-            buf.shrinkRetainingCapacity(index);
-        }
+        buf.shrinkRetainingCapacity(index);
     }
 
     pub fn splitOn(self: *const LookaheadState, branch: ra.SplitBranch) !?LookaheadState {
@@ -413,15 +414,20 @@ pub const LookaheadState = struct {
     }
 
     fn splitOnLook(self: *const LookaheadState, branch: ra.SplitBranch) !?LookaheadState {
-        assert(self.action != null and self.look != .NONE);
+        assert(self.action == null or self.look == .NONE);
 
-        var new = .{
+        var new: LookaheadState = .{
             .base = try self.base.splitOn(branch.set) orelse return null,
             .action = null,
             .look = self.look,
             .start = self.start,
             .sub_states = std.ArrayList(LookaheadState).init(self.sub_states.allocator),
         };
+
+        if (new.isDone()) {
+            new.deinit();
+            return null;
+        }
 
         for (self.sub_states.items) |sub| {
             if (try sub.splitOnLook(branch)) |split| {
@@ -464,13 +470,83 @@ pub const LookaheadState = struct {
         };
     }
 
-    // TODO: complete
     pub fn canFillBranches(self: LookaheadState) bool {
-        return self.base.canFillBranches();
+        if (self.look == .NONE and self.action != null or
+            self.look != .NONE and self.isDone())
+        {
+            return false;
+        }
+
+        if (self.base.canFillBranches()) return true;
+
+        for (self.sub_states.items) |sub| {
+            if (sub.canFillBranches()) return true;
+        }
+
+        return false;
     }
 
-    // TODO: complete
-    pub fn fillBranches(self: *LookaheadState) !?LookaheadState {
+    pub const StateFillIter = struct {
+        base: LookaheadState,
+        split: *LookaheadState = undefined,
+        stack: std.ArrayList(usize),
+
+        pub fn init(base: LookaheadState, allocator: Allocator) !StateFillIter {
+            var self = .{
+                .base = base,
+                .list = std.ArrayList(usize).init(allocator),
+            };
+
+            self.split = try self.getNext();
+            return self;
+        }
+
+        pub fn iter(self: *StateFillIter) !?LookaheadState {
+            _ = self;
+            unreachable;
+        }
+
+        fn getNext(self: *StateFillIter) !*LookaheadState {
+            var ancestors = std.ArrayList(LookaheadState)
+                .init(self.stack.allocator);
+            defer ancestors.deinit();
+
+            var curr = &self.base;
+            while (true) {
+                while (curr.sub_states.items.len != 0) {
+                    try self.stack.append(0);
+                    try ancestors.append(curr);
+                    curr = curr.sub_states.items[0];
+                }
+
+                if (curr.canFillBranches()) return curr;
+
+                var last_choice = self.stack.popOrNull() orelse break;
+                var ancestor = ancestors.pop();
+
+                while (last_choice + 1 == ancestor.sub_states.items.len) {
+                    last_choice = self.stack.popOrNull() orelse break;
+                    ancestor = ancestors.pop();
+                }
+
+                last_choice += 1;
+                curr = ancestor.sub_states.items[last_choice];
+                try self.stack.append(last_choice);
+                try ancestors.append(ancestor);
+            }
+
+            if (self.base.canFillBranches()) return &self.base;
+            unreachable;
+        }
+
+        pub fn finalize(self: *StateFillIter) LookaheadState {
+            self.stack.deinit();
+            return self.base;
+        }
+    };
+
+    // TODO: fix this
+    fn fillBranches(self: *LookaheadState) !?LookaheadState {
         const result = try self.base.fillBranches() orelse return null;
 
         return .{
@@ -483,11 +559,13 @@ pub const LookaheadState = struct {
     }
 
     pub fn execJumps(self: *LookaheadState) !bool {
-        const result = try self.base.execJumps();
+        var result = try self.base.execJumps();
 
-        if (result == .LOOKAHEAD) try self.splitOff();
+        if (result == .LOOKAHEAD and !try self.splitOff()) {
+            result = .NO_CHANGE;
+        }
 
-        var had_change = result == .CHANGE;
+        var had_change = result != .NO_CHANGE;
         for (self.sub_states.items) |*sub| {
             had_change = try sub.execJumps() or had_change;
         }
@@ -504,9 +582,9 @@ pub const LookaheadState = struct {
         return self.action != null and !self.isLookFail();
     }
 
-    fn splitOff(self: *LookaheadState) !void {
+    fn splitOff(self: *LookaheadState) !bool {
+        if (self.lookaheadOnStart()) return false;
         var new_branch = try self.clone();
-        new_branch.setRoot();
 
         const instr = self.base.getCurrInstr() orelse unreachable;
         const blocks = self.base.blocks.items;
@@ -529,7 +607,7 @@ pub const LookaheadState = struct {
                 self.base.instr += 1;
             },
             .MATCH => {
-                assert(instr.meta.isConsuming());
+                assert(!instr.meta.isConsuming());
                 new_branch.look = .POSITIVE;
 
                 // got to the next block
@@ -545,7 +623,9 @@ pub const LookaheadState = struct {
 
         self.base.instr_sub_idx = 0;
 
+        new_branch.setRoot();
         try self.sub_states.append(new_branch);
+        return true;
     }
 
     fn setRoot(self: *LookaheadState) void {
@@ -585,6 +665,7 @@ pub const LookaheadState = struct {
         sub_states: []const LookaheadState.Key,
 
         pub fn eql(self: Key, other: Key) bool {
+            if (self.sub_states.len != other.sub_states.len) return false;
             for (self.sub_states, other.sub_states) |s, o| {
                 if (!s.eql(o)) return false;
             }
@@ -640,14 +721,21 @@ pub const LookaheadState = struct {
             if (self.action) |act| {
                 try writer.print("(act: {d})", .{act});
             } else {
-                try writer.print("{s}", .{self.base});
+                try writer.print("{s}{s} {{", .{ if (self.look == .NONE)
+                    ""
+                else if (self.look == .POSITIVE)
+                    "&"
+                else
+                    "!", self.base });
+                for (self.sub_states) |sub| {
+                    try writer.print("{s}, ", .{sub});
+                }
+                try writer.print("}}", .{});
             }
         }
     };
 
     pub fn toKey(self: LookaheadState) !Key {
-        assert(!self.isLookFail());
-
         // TODO: make sure there is a canonical ordering for the states
 
         // here undefined makes sense as accept is first inspected
@@ -675,6 +763,24 @@ pub const LookaheadState = struct {
         self.base.deinit();
         for (self.sub_states.items) |sub| sub.deinit();
         self.sub_states.deinit();
+    }
+
+    pub fn format(
+        self: LookaheadState,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        try writer.print("{s}{s} {{", .{ if (self.look == .NONE)
+            ""
+        else if (self.look == .POSITIVE)
+            "&"
+        else
+            "!", self.base });
+        for (self.sub_states.items) |sub| {
+            try writer.print("{s}, ", .{sub});
+        }
+        try writer.print("}}", .{});
     }
 };
 

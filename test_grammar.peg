@@ -2,7 +2,12 @@
 
 SPACINGS = SPACING * ;
 
-SPACING = SPACE ;
+SPACING 
+    = SPACE
+    | COMMENT 
+    ;
+
+COMMENT = '//' (!LINE_END .)* LINE_END ; 
 
 SPACE 
     = ' '
