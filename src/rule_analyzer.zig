@@ -486,7 +486,10 @@ pub const ExecState = struct {
             .MATCH => for (instr.data.match.items) |prong| {
                 try list.append(SplitBranch.initProng(prong));
             },
-            else => unreachable,
+            else => {
+                std.debug.print("{s}\n", .{@tagName(instr.tag)});
+                unreachable;
+            },
         }
     }
 
@@ -534,10 +537,15 @@ pub const ExecState = struct {
     // returns true if some jump could be executed
     pub fn execJumps(self: *ExecState) !ExecJmpsResult {
         const instr = self.getCurrInstr() orelse return .NO_CHANGE;
-        const blocks = self.blocks.items;
-
         if (!instr.meta.isConsuming() or
             instr.tag == .MATCH and ir.isMatchLookahead(instr)) return .LOOKAHEAD;
+
+        return try self.execForceJumps();
+    }
+
+    pub fn execForceJumps(self: *ExecState) !ExecJmpsResult {
+        const instr = self.getCurrInstr() orelse return .NO_CHANGE;
+        const blocks = self.blocks.items;
 
         switch (instr.tag) {
             .JMP => {

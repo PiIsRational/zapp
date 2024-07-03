@@ -44,6 +44,7 @@ pub fn optimize(lir: *ir.LowIr) !void {
         .ir = lir,
     };
 
+    std.debug.print("{s}\n", .{self.ir});
     var emitter = look.LookaheadEmitter.init(self.ir.allocator);
     defer emitter.deinit();
 
@@ -52,11 +53,11 @@ pub fn optimize(lir: *ir.LowIr) !void {
     defer nfa.deinit(self.ir.allocator);
     try gvgen.genAutomaton(stdout, nfa, "nfa");
 
-    //var dfa_gen = DfaGen.init(self.ir.allocator);
-    //defer dfa_gen.deinit();
-    //const dfa = try dfa_gen.gen(self.ir.blocks.items[0]);
-    //try gvgen.genAutomaton(stdout, dfa, "dfa");
-    //defer dfa.deinit(self.ir.allocator);
+    var dfa_gen = DfaGen.init(self.ir.allocator);
+    defer dfa_gen.deinit();
+    const dfa = try dfa_gen.gen(nfa.start);
+    try gvgen.genAutomaton(stdout, dfa, "dfa");
+    defer dfa.deinit(self.ir.allocator);
 }
 
 fn generateDfa(self: *PassManager, block: *ir.Block) !void {
