@@ -278,19 +278,24 @@ pub const LookaheadEmitter = struct {
                 switch (instr.tag) {
                     .MATCH => {
                         var new_prongs = std.ArrayList(ir.MatchProng).init(self.allocator);
-                        for (instr.data.match.items) |prong| {
+                        for (instr.data.match.items) |*prong| {
                             if (!markers[prong.dest.id]) {
-                                try new_prongs.append(prong);
+                                try new_prongs.append(prong.*);
                                 continue;
                             }
 
-                            if (prong.dest.meta.is_target and
-                                nfa.appendFailChain(state, prong.dest.fail) and
-                                state.fail == null)
-                            {
+                            if (prong.dest.meta.is_target) {
+                                if (prong.dest.fail != nfa.fail) {
+                                    prong.dest = prong.dest.fail.?;
+                                    try new_prongs.append(prong.*);
+                                } else {
+                                    prong.deinit();
+                                }
+
                                 state.meta.is_target = true;
+                            } else {
+                                prong.deinit();
                             }
-                            prong.deinit();
                         }
 
                         if (new_prongs.items.len == 0) {
@@ -302,14 +307,13 @@ pub const LookaheadEmitter = struct {
                         instr.data.match = new_prongs;
                     },
                     .JMP => if (markers[instr.data.jmp.id]) {
-                        markers[state.id] = true;
-                        change = true;
-
                         if (instr.data.jmp.meta.is_target and
-                            nfa.appendFailChain(state, instr.data.jmp.fail) and
-                            state.fail == null)
+                            instr.data.jmp.fail != nfa.fail)
                         {
-                            state.meta.is_target = true;
+                            instr.data.jmp = instr.data.jmp.fail.?;
+                        } else {
+                            markers[state.id] = true;
+                            change = true;
                         }
                     },
                     else => continue,
