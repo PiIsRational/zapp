@@ -412,7 +412,7 @@ const DfaState = struct {
         var prongs = std.ArrayList(ra.SplitBranch)
             .init(self.sub_states.allocator);
         for (self.sub_states.items) |*state| {
-            try state.addBranches(&prongs);
+            try state.addBranches(&prongs, true);
         }
 
         const full_match = try ra.canonicalizeBranches(&prongs);

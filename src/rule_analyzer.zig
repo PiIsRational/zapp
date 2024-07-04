@@ -210,8 +210,8 @@ pub const Automaton = struct {
         return true;
     }
 
-    pub fn appendFailChain(self: Automaton, to: *ir.Block, chain: ?*ir.Block) void {
-        if (chain == null) return;
+    pub fn appendFailChain(self: Automaton, to: *ir.Block, chain: ?*ir.Block) bool {
+        if (chain == null) return false;
 
         var blk = to;
         while (blk.fail) |fail| {
@@ -220,6 +220,7 @@ pub const Automaton = struct {
         }
 
         blk.fail = chain.?;
+        return true;
     }
 
     pub fn format(
@@ -260,14 +261,14 @@ pub const SplitBranch = struct {
         return self;
     }
 
-    pub fn initProng(prong: ir.MatchProng) SplitBranch {
+    pub fn initProng(prong: ir.MatchProng, ret_look: bool) SplitBranch {
         var self = init(null);
 
         for (prong.labels.items) |range| {
             self.set.addRange(range.from, range.to);
         }
 
-        if (!prong.consuming) {
+        if (!prong.consuming and ret_look) {
             const next_block = prong.dest;
             assert(next_block.insts.items.len == 1);
             const instr = next_block.insts.items[0];
@@ -491,6 +492,7 @@ pub const ExecState = struct {
     pub fn addBranches(
         self: *const ExecState,
         list: *std.ArrayList(SplitBranch),
+        ret_look: bool,
     ) !void {
         const wrapped_instr = self.getCurrInstr();
         if (wrapped_instr == null) {
@@ -504,7 +506,7 @@ pub const ExecState = struct {
             .STRING => try list.append(SplitBranch
                 .initChar(instr.data.str[self.instr_sub_idx])),
             .MATCH => for (instr.data.match.items) |prong| {
-                try list.append(SplitBranch.initProng(prong));
+                try list.append(SplitBranch.initProng(prong, ret_look));
             },
             else => unreachable,
         }

@@ -6,7 +6,12 @@ SPACING
     = COMMENT
     ;
 
-COMMENT = '//' (!LINE_END .)* LINE_END ; 
+COMMENT = '//' (!SIMPLE_END .)* LINE_END ; 
+
+SIMPLE_END
+    = '\n'
+    | '\r'
+    ;
 
 LINE_END 
     = '\r\n'
