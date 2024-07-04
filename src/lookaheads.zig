@@ -27,34 +27,6 @@ const LookaheadType = enum {
     NONE,
 };
 
-pub fn ListIter(comptime T: type) type {
-    return struct {
-        list: *std.ArrayList(T),
-        index: usize = 0,
-
-        pub fn init(list: *std.ArrayList(T)) @This() {
-            return .{ .list = list };
-        }
-
-        pub fn next(self: *@This()) ?*T {
-            if (self.list.items.len == self.index) return null;
-            const item = &self.list.items[self.index];
-            self.index += 1;
-
-            return item;
-        }
-
-        pub fn getLast(self: @This()) *T {
-            const items = self.list.items;
-            return &items[items.len - 1];
-        }
-
-        pub fn reset(self: @This()) void {
-            self.index = 0;
-        }
-    };
-}
-
 pub const LookaheadEmitter = struct {
     const Ctx = LookaheadCtx(std.hash.Wyhash);
     pub const LookaheadMap = std.HashMap(
@@ -101,8 +73,11 @@ pub const LookaheadEmitter = struct {
         try fail_block.insts.append(ir.Instr.initTag(.FAIL));
         self.nfa.fail = fail_block;
 
+        var patience: usize = 100;
         while (self.states.popOrNull()) |popped_state| {
             var state = popped_state;
+            patience -= 1;
+            assert(patience > 0);
             const key = try state.toKey();
             defer key.deinit(self.allocator);
 
@@ -110,6 +85,20 @@ pub const LookaheadEmitter = struct {
 
             if (block.insts.items.len != 0) {
                 state.deinit();
+                continue;
+            }
+
+            if (state.canFillLookBranches()) {
+                try state.fillLookBranches();
+                const new_key = try state.toKey();
+                defer new_key.deinit(self.allocator);
+
+                try self.states.append(state);
+                assert(!new_key.eql(key));
+
+                const blk = try self.getBlockForState(state, new_key);
+
+                try block.insts.append(ir.Instr.initJmp(blk));
                 continue;
             }
 
@@ -205,14 +194,13 @@ pub const LookaheadEmitter = struct {
         defer base_key.deinit(self.allocator);
         const first_block = self.map.get(base_key).?;
         const start = self.states.items.len;
-        var iter = try StateFillIter.init(base, self.allocator);
-        const first_state = (try iter.next()).?;
+        const first_state = (try base.fillBranches()).?;
 
-        while (try iter.next()) |state| {
+        while (try base.fillBranches()) |state| {
             try self.states.append(state);
         }
 
-        try self.states.append(iter.finalize().*);
+        try self.states.append(base.*);
         base.* = first_state;
 
         var last_transition = self.nfa.fail;
@@ -579,7 +567,13 @@ pub const LookaheadState = struct {
             return false;
         }
 
-        if (self.base.canFillBranches()) return true;
+        return self.base.canFillBranches();
+    }
+
+    pub fn canFillLookBranches(self: LookaheadState) bool {
+        if (self.look != .NONE and self.canFillBranches()) {
+            return true;
+        }
 
         for (self.sub_states.items) |sub| {
             if (sub.canFillBranches()) return true;
@@ -588,7 +582,25 @@ pub const LookaheadState = struct {
         return false;
     }
 
-    fn fillBranches(self: *LookaheadState) !?LookaheadState {
+    pub fn fillLookBranches(self: *LookaheadState) !void {
+        var iter = ra.ListIter(LookaheadState).init(&self.sub_states);
+        const len = self.sub_states.items.len;
+        while (iter.next()) |state| {
+            if (!state.base.canFillBranches()) continue;
+
+            while (try state.fillBranches()) |branched| {
+                try self.sub_states.append(branched);
+            }
+
+            if (iter.index == len) break;
+        }
+
+        for (self.sub_states.items) |*state| {
+            try state.fillLookBranches();
+        }
+    }
+
+    pub fn fillBranches(self: *LookaheadState) !?LookaheadState {
         const result = try self.base.fillBranches() orelse return null;
 
         return .{
@@ -848,81 +860,3 @@ fn LookaheadCtx(comptime Hasher: type) type {
         }
     };
 }
-
-const StateFillIter = struct {
-    base: *LookaheadState,
-    split: *LookaheadState = undefined,
-    stack: std.ArrayList(usize),
-
-    pub fn init(base: *LookaheadState, allocator: Allocator) !StateFillIter {
-        assert(base.canFillBranches());
-        var self: StateFillIter = .{
-            .base = base,
-            .stack = std.ArrayList(usize).init(allocator),
-        };
-
-        self.split = try self.getNext();
-        return self;
-    }
-
-    pub fn next(self: *StateFillIter) !?LookaheadState {
-        const result = try self.split.fillBranches() orelse return null;
-        const ret = try clonePath(self.base, self.stack.items, result);
-        return ret;
-    }
-
-    fn clonePath(state: *LookaheadState, path: []usize, end: LookaheadState) !LookaheadState {
-        if (path.len == 0) return end;
-        var base = try state.clone(false);
-
-        for (state.sub_states.items, 0..) |*sub, i| {
-            try base.sub_states.append(if (i == path[0])
-                try clonePath(sub, path[1..], end)
-            else
-                try sub.clone(true));
-        }
-
-        return base;
-    }
-
-    fn getNext(self: *StateFillIter) !*LookaheadState {
-        if (self.base.base.canFillBranches()) return self.base;
-
-        var ancestors = std.ArrayList(*LookaheadState)
-            .init(self.stack.allocator);
-        defer ancestors.deinit();
-
-        var curr = self.base;
-        outer: while (true) {
-            while (curr.sub_states.items.len != 0) {
-                try self.stack.append(0);
-                try ancestors.append(curr);
-                curr = &curr.sub_states.items[0];
-            }
-
-            if (curr.base.canFillBranches()) return curr;
-
-            var last_choice = self.stack.popOrNull() orelse break;
-            var ancestor = ancestors.pop();
-
-            while (last_choice + 1 == ancestor.sub_states.items.len) {
-                if (ancestor.base.canFillBranches()) return ancestor;
-
-                last_choice = self.stack.popOrNull() orelse break :outer;
-                ancestor = ancestors.pop();
-            }
-
-            last_choice += 1;
-            curr = &ancestor.sub_states.items[last_choice];
-            try self.stack.append(last_choice);
-            try ancestors.append(ancestor);
-        }
-
-        unreachable;
-    }
-
-    pub fn finalize(self: *StateFillIter) *LookaheadState {
-        self.stack.deinit();
-        return self.base;
-    }
-};
