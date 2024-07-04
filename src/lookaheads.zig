@@ -168,7 +168,6 @@ pub const LookaheadEmitter = struct {
             }
         }
 
-        //try self.removeFails(&self.nfa);
         return self.nfa;
     }
 
@@ -250,76 +249,6 @@ pub const LookaheadEmitter = struct {
         self.map_keys.deinit();
         self.states.deinit();
         self.map.deinit();
-    }
-
-    fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
-        const markers = try self.allocator.alloc(bool, nfa.blocks.items.len);
-        defer self.allocator.free(markers);
-        @memset(markers, false);
-
-        for (nfa.blocks.items) |state| {
-            const instr = state.insts.items[0];
-            if (instr.tag == .MATCH and instr.data.match.items.len == 0) {
-                markers[state.id] = true;
-            }
-        }
-
-        for (0..nfa.blocks.items.len) |_| {
-            var change = false;
-
-            for (nfa.blocks.items) |state| {
-                if (markers[state.id]) continue;
-
-                if (state.fail != null and markers[state.fail.?.id]) {
-                    state.fail = state.fail.?.fail;
-                }
-
-                const instr = &state.insts.items[0];
-                switch (instr.tag) {
-                    .MATCH => {
-                        var new_prongs = std.ArrayList(ir.MatchProng).init(self.allocator);
-                        for (instr.data.match.items) |prong| {
-                            if (markers[prong.dest.id]) {
-                                prong.deinit();
-                            } else {
-                                try new_prongs.append(prong);
-                            }
-                        }
-
-                        if (new_prongs.items.len == 0) {
-                            markers[state.id] = true;
-                            change = true;
-                        }
-
-                        instr.data.match.deinit();
-                        instr.data.match = new_prongs;
-                    },
-                    .JMP => if (markers[instr.data.jmp.id]) {
-                        markers[state.id] = true;
-                        change = true;
-                    },
-                    else => continue,
-                }
-            }
-
-            if (!change) break;
-        }
-
-        var curr: usize = 0;
-        var i: usize = 0;
-        while (i < nfa.blocks.items.len) : (i += 1) {
-            const s = nfa.blocks.items[i];
-            if (markers[s.id]) {
-                s.deinit(self.allocator);
-                continue;
-            }
-
-            s.id = curr;
-            nfa.blocks.items[curr] = s;
-            curr += 1;
-        }
-
-        nfa.blocks.shrinkRetainingCapacity(curr);
     }
 };
 

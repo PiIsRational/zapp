@@ -210,6 +210,18 @@ pub const Automaton = struct {
         return true;
     }
 
+    pub fn appendFailChain(self: Automaton, to: *ir.Block, chain: ?*ir.Block) void {
+        if (chain == null) return;
+
+        var blk = to;
+        while (blk.fail) |fail| {
+            if (blk.fail == self.fail) break;
+            blk = fail;
+        }
+
+        blk.fail = chain.?;
+    }
+
     pub fn format(
         self: @This(),
         comptime _: []const u8,
@@ -253,6 +265,14 @@ pub const SplitBranch = struct {
 
         for (prong.labels.items) |range| {
             self.set.addRange(range.from, range.to);
+        }
+
+        if (!prong.consuming) {
+            const next_block = prong.dest;
+            assert(next_block.insts.items.len == 1);
+            const instr = next_block.insts.items[0];
+            assert(instr.tag == .RET);
+            self.final_action = instr.data.action;
         }
 
         return self;
@@ -486,10 +506,7 @@ pub const ExecState = struct {
             .MATCH => for (instr.data.match.items) |prong| {
                 try list.append(SplitBranch.initProng(prong));
             },
-            else => {
-                std.debug.print("{s}\n", .{@tagName(instr.tag)});
-                unreachable;
-            },
+            else => unreachable,
         }
     }
 

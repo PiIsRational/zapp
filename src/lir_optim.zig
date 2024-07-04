@@ -44,7 +44,6 @@ pub fn optimize(lir: *ir.LowIr) !void {
         .ir = lir,
     };
 
-    std.debug.print("{s}\n", .{self.ir});
     var emitter = look.LookaheadEmitter.init(self.ir.allocator);
     defer emitter.deinit();
 
@@ -242,12 +241,40 @@ const DfaGen = struct {
             new_states.clearRetainingCapacity();
         }
 
+        try self.mergeDest(&dfa);
         return dfa;
     }
 
     fn put(self: *DfaGen, key: DfaState.Key, value: *ir.Block) !void {
         try self.map_keys.append(key);
         try self.map.put(key, value);
+    }
+
+    fn mergeDest(self: *DfaGen, dfa: *ra.Automaton) !void {
+        for (dfa.blocks.items) |blk| {
+            assert(blk.insts.items.len == 1);
+            const instr = &blk.insts.items[0];
+            if (instr.tag != .MATCH) continue;
+
+            var new_prongs = std.ArrayList(ir.MatchProng)
+                .init(self.allocator);
+
+            outer: for (instr.data.match.items) |prong| {
+                for (new_prongs.items) |*new| {
+                    if (new.dest == prong.dest and new.consuming == prong.consuming) {
+                        try new.labels.appendSlice(prong.labels.items);
+                        try new.optimize();
+                        prong.deinit();
+                        continue :outer;
+                    }
+                }
+
+                try new_prongs.append(prong);
+            }
+
+            instr.data.match.deinit();
+            instr.data.match = new_prongs;
+        }
     }
 
     pub fn deinit(self: *DfaGen) void {
@@ -408,7 +435,6 @@ const DfaState = struct {
         var had_change = false;
         for (self.sub_states.items) |*sub| {
             const jmp_result = try sub.execJumps();
-            assert(jmp_result != .LOOKAHEAD);
             had_change = jmp_result == .CHANGE or had_change;
         }
 

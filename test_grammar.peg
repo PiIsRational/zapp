@@ -1,19 +1,12 @@
 %% NAME Test
 
-SPACINGS = SPACING * ;
+SPACINGS = SPACING ;
 
-SPACING 
-    = SPACE
-    | COMMENT 
+SPACING
+    = COMMENT
     ;
 
 COMMENT = '//' (!LINE_END .)* LINE_END ; 
-
-SPACE 
-    = ' '
-    | '\t'
-    | LINE_END
-    ;
 
 LINE_END 
     = '\r\n'

@@ -105,9 +105,20 @@ fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
 
 fn genAutomatonEdge(w: Writer, start: *lir.Block, prong: lir.MatchProng) !void {
     try w.print("    {d} -> {d} [label = \"", .{ start.id, prong.dest.id });
-    for (prong.labels.items) |range| {
+    var len: usize = 0;
+    if (!prong.consuming) try w.print("(ε) ", .{});
+    for (prong.labels.items, 0..) |range, i| {
         try genRange(w, range);
-        try w.print(", ", .{});
+        len += if (range.isChar()) 1 else 3;
+        if (i + 1 == prong.labels.items.len) continue;
+
+        if (len >= 7) {
+            try w.print(",\\n", .{});
+            len = 0;
+        } else {
+            try w.print(", ", .{});
+            len += 1;
+        }
     }
     try w.print("\"];\n", .{});
 }
