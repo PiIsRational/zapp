@@ -73,11 +73,8 @@ pub const LookaheadEmitter = struct {
         try fail_block.insts.append(ir.Instr.initTag(.FAIL));
         self.nfa.fail = fail_block;
 
-        var patience: usize = 100;
         while (self.states.popOrNull()) |popped_state| {
             var state = popped_state;
-            patience -= 1;
-            assert(patience > 0);
             const key = try state.toKey();
             defer key.deinit(self.allocator);
 
@@ -89,6 +86,7 @@ pub const LookaheadEmitter = struct {
             }
 
             if (state.canFillLookBranches()) {
+                std.debug.print("{s}\n", .{state});
                 try state.fillLookBranches();
                 const new_key = try state.toKey();
                 defer new_key.deinit(self.allocator);
@@ -394,7 +392,6 @@ pub const LookaheadState = struct {
             .init(self.sub_states.allocator);
 
         try self.addBranches(&prongs);
-
         var normal_match = try ra.canonicalizeBranches(&prongs);
         normal_match.invert();
 
@@ -434,11 +431,29 @@ pub const LookaheadState = struct {
             });
         }
 
+        var base_fail = ra.AcceptanceSet.Full;
+        for (base_buffer.items) |branch| {
+            base_fail.cut(branch.set);
+        }
+
         for (self.sub_states.items) |sub| {
             assert(sub.look != .NONE);
 
             try sub.addBranches(&sub_buffer);
-            try appendAndReplace(prongs, &sub_buffer);
+            var index: usize = 0;
+            for (sub_buffer.items) |*branch| {
+                if (branch.final_action == null) {
+                    sub_buffer.items[index] = branch.*;
+                    index += 1;
+                    continue;
+                }
+
+                // do not append branches that would fail anyways
+                branch.set.cut(base_fail);
+                if (!branch.set.isEmpty()) try prongs.append(branch.*);
+            }
+
+            sub_buffer.shrinkRetainingCapacity(index);
 
             // finally analyze the accepting branches
             for (sub_buffer.items) |sub_branch| for (base_buffer.items) |*base_branch| {
@@ -456,24 +471,6 @@ pub const LookaheadState = struct {
             if (branch.set.isEmpty()) continue;
             try prongs.append(branch);
         }
-    }
-
-    fn appendAndReplace(
-        prongs: *std.ArrayList(ra.SplitBranch),
-        buf: *std.ArrayList(ra.SplitBranch),
-    ) !void {
-        var index: usize = 0;
-        for (buf.items) |branch| {
-            if (branch.final_action == null) {
-                try prongs.append(branch);
-                continue;
-            } else {
-                buf.items[index] = branch;
-                index += 1;
-            }
-        }
-
-        buf.shrinkRetainingCapacity(index);
     }
 
     pub fn splitOn(self: *const LookaheadState, branch: ra.SplitBranch) !LookaheadState {
@@ -583,16 +580,19 @@ pub const LookaheadState = struct {
     }
 
     pub fn fillLookBranches(self: *LookaheadState) !void {
-        var iter = ra.ListIter(LookaheadState).init(&self.sub_states);
-        const len = self.sub_states.items.len;
-        while (iter.next()) |state| {
+        var buf = std.ArrayList(LookaheadState)
+            .init(self.sub_states.allocator);
+        defer buf.deinit();
+
+        for (self.sub_states.items) |*state| {
             if (!state.base.canFillBranches()) continue;
 
             while (try state.fillBranches()) |branched| {
-                try self.sub_states.append(branched);
+                try buf.append(branched);
             }
 
-            if (iter.index == len) break;
+            try self.sub_states.appendSlice(buf.items);
+            buf.clearRetainingCapacity();
         }
 
         for (self.sub_states.items) |*state| {

@@ -19,34 +19,6 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const ir = @import("low_ir.zig");
 
-pub fn ListIter(comptime T: type) type {
-    return struct {
-        list: *std.ArrayList(T),
-        index: usize = 0,
-
-        pub fn init(list: *std.ArrayList(T)) @This() {
-            return .{ .list = list };
-        }
-
-        pub fn next(self: *@This()) ?*T {
-            if (self.list.items.len == self.index) return null;
-            const item = &self.list.items[self.index];
-            self.index += 1;
-
-            return item;
-        }
-
-        pub fn getLast(self: @This()) *T {
-            const items = self.list.items;
-            return &items[items.len - 1];
-        }
-
-        pub fn reset(self: @This()) void {
-            self.index = 0;
-        }
-    };
-}
-
 pub const AcceptanceSet = struct {
     values: [4]u64 = .{0} ** 4,
 
@@ -691,7 +663,6 @@ pub const ExecState = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        try writer.print("[ {} ]", .{self.had_fill});
         if (self.blocks.items.len == 0) {
             try writer.print("∅ ", .{});
         } else {

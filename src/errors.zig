@@ -115,6 +115,9 @@ pub fn print(
     base: []const u8,
     args: []const Error,
 ) !void {
+    std.Progress.lockStdErr();
+    defer std.Progress.unlockStdErr();
+
     if (args.len > MaxArgs) {
         return PrintError.TOO_MUCH_ARGS;
     }

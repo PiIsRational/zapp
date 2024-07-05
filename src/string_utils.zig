@@ -116,7 +116,7 @@ fn writeCharBase(writer: anytype, char: u8, escape: []const u8) !void {
         '\'',
         '"',
         '\\',
-        => try writer.print("{s}\\{c}", .{ escape, char }),
+        => try writer.print("{s}{s}\\{c}", .{ escape, escape, char }),
         else => if ((char < 33 or char >= 127) and char != ' ')
             try writer.print("{s}\\x{x:0>2}", .{ escape, char })
         else

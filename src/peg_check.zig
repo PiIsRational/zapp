@@ -45,10 +45,10 @@ pub fn optimize(
 
     try self.defPass(false, doubleDefCheck, "check no doubled defs");
     try self.defPass(false, checkNoActionReturn, "check no return without action");
+    try self.opPass(checkIdentifier, "no use of undefined identifiers");
     if (!self.pass) return false;
     try self.seqPass(desugarIdentifierSequence, "desugar identifiers");
     try self.opAppendDefPass(desugarSequences, "desugar sequences");
-    try self.opPass(checkIdentifier, "no use of undefined identifiers");
     if (!self.pass) return false;
     try self.opPass(checkEpsWithOp, "check no weird operations on epsilon");
     if (!self.pass) return false;
@@ -905,6 +905,13 @@ fn checkIdentifier(
 ) anyerror!void {
     const ident = switch (op.value) {
         .IDENTIFIER => |id| id,
+        .SEQ => |seq| {
+            for (seq.operateds.items) |*sub| {
+                try self.checkIdentifier(undefined, sub);
+            }
+
+            return;
+        },
         else => return,
     };
 

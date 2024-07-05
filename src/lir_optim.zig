@@ -247,7 +247,7 @@ const DfaGen = struct {
 
     fn put(self: *DfaGen, key: DfaState.Key, value: *ir.Block) !void {
         try self.map_keys.append(key);
-        try self.map.put(key, value);
+        try self.map.putNoClobber(key, value);
     }
 
     fn mergeDest(self: *DfaGen, dfa: *ra.Automaton) !void {

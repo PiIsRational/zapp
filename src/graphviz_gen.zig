@@ -24,6 +24,9 @@ const Automaton = @import("rule_analyzer.zig").Automaton;
 const su = @import("string_utils.zig");
 
 pub fn generate(w: Writer, p_ir: ir.PegIr) !void {
+    std.Progress.lockStdErr();
+    defer std.Progress.unlockStdErr();
+
     try w.print("digraph {s} {{\n", .{p_ir.name});
     for (p_ir.grammar.defs.items) |def| {
         try genDef(w, def, p_ir);
@@ -57,6 +60,9 @@ pub fn genAutomaton(
     dfa: Automaton,
     name: []const u8,
 ) !void {
+    std.Progress.lockStdErr();
+    defer std.Progress.unlockStdErr();
+
     try w.print("digraph {s} {{ \n", .{name});
     try w.print("    node [shape = doublecircle]; ", .{});
     try getTerminals(w, dfa);
