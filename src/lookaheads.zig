@@ -25,6 +25,10 @@ const LookaheadType = enum {
     POSITIVE,
     NEGATIVE,
     NONE,
+
+    pub fn less(self: LookaheadType, other: LookaheadType) bool {
+        return @intFromEnum(self) < @intFromEnum(other);
+    }
 };
 
 pub const LookaheadEmitter = struct {
@@ -63,7 +67,7 @@ pub const LookaheadEmitter = struct {
     pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
         self.nfa = ra.Automaton.init(self.allocator);
         const start_block = try self.nfa.getNew();
-        const start_state = try LookaheadState.blockInit(self.allocator, start);
+        var start_state = try LookaheadState.blockInit(self.allocator, start);
         try self.put(try start_state.toKey(), start_block);
         try self.states.append(start_state);
         self.nfa.start = start_block;
@@ -73,10 +77,15 @@ pub const LookaheadEmitter = struct {
         try fail_block.insts.append(ir.Instr.initTag(.FAIL));
         self.nfa.fail = fail_block;
 
+        var patience: usize = 10000;
+
         while (self.states.popOrNull()) |popped_state| {
             var state = popped_state;
             const key = try state.toKey();
             defer key.deinit(self.allocator);
+
+            patience -= 1;
+            assert(patience > 0);
 
             const block = self.map.get(key).?;
 
@@ -86,7 +95,6 @@ pub const LookaheadEmitter = struct {
             }
 
             if (state.canFillLookBranches()) {
-                std.debug.print("{s}\n", .{state});
                 try state.fillLookBranches();
                 const new_key = try state.toKey();
                 defer new_key.deinit(self.allocator);
@@ -202,11 +210,11 @@ pub const LookaheadEmitter = struct {
         base.* = first_state;
 
         var last_transition = self.nfa.fail;
-        for (self.states.items[start..]) |state| {
+        for (self.states.items[start..]) |*state| {
             const key = try state.toKey();
             defer key.deinit(self.allocator);
 
-            const new_block = try self.getBlockForState(state, key);
+            const new_block = try self.getBlockForState(state.*, key);
 
             var new_transition = try self.nfa.getNew();
             new_transition.fail = last_transition;
@@ -442,7 +450,7 @@ pub const LookaheadState = struct {
             try sub.addBranches(&sub_buffer);
             var index: usize = 0;
             for (sub_buffer.items) |*branch| {
-                if (branch.final_action == null) {
+                if (branch.final_action != null) {
                     sub_buffer.items[index] = branch.*;
                     index += 1;
                     continue;
@@ -579,6 +587,83 @@ pub const LookaheadState = struct {
         return false;
     }
 
+    /// the goal of cleanup is to order and deduplicate lookahead states
+    pub fn cleanUp(self: *LookaheadState) void {
+        for (self.sub_states.items) |*sub| {
+            sub.cleanUp();
+        }
+
+        const Ctx = struct {
+            pub fn less(s: @This(), lhs: LookaheadState, rhs: LookaheadState) bool {
+                assert(lhs.action == null and rhs.action == null);
+
+                const l_k = lhs.base.toKey();
+                const r_k = rhs.base.toKey();
+
+                if (l_k == null) return r_k != null;
+                if (r_k == null) return false;
+
+                if (l_k.?.lessThan(r_k.?)) return true;
+                if (!l_k.?.eql(r_k.?)) return false;
+
+                if (lhs.look.less(rhs.look)) return true;
+                if (lhs.look != rhs.look) return false;
+
+                if (lhs.start.less(rhs.start)) return true;
+                if (!lhs.start.eql(rhs.start)) return false;
+
+                if (lhs.sub_states.items.len < rhs.sub_states.items.len) return true;
+                if (lhs.sub_states.items.len > rhs.sub_states.items.len) return false;
+
+                for (lhs.sub_states.items, rhs.sub_states.items) |l, r| {
+                    if (s.less(l, r)) return true;
+                    if (!l.eql(r)) return false;
+                }
+
+                return false;
+            }
+        };
+
+        // sort the sub_states
+        std.sort.pdq(LookaheadState, self.sub_states.items, Ctx{}, Ctx.less);
+
+        //remove doubled sub_states
+        if (self.sub_states.items.len <= 1) return;
+
+        var i: usize = 1;
+        var idx: usize = 1;
+        while (i < self.sub_states.items.len) : (i += 1) {
+            const last = self.sub_states.items[idx - 1];
+            const curr = &self.sub_states.items[i];
+
+            if (last.eql(curr.*)) {
+                curr.deinit();
+                continue;
+            }
+
+            self.sub_states.items[idx] = curr.*;
+            idx += 1;
+        }
+
+        self.sub_states.shrinkRetainingCapacity(idx);
+    }
+
+    pub fn eql(self: LookaheadState, other: LookaheadState) bool {
+        if ((self.action == null and other.action == null and
+            !self.base.eql(other.base) or self.action != other.action) or
+            self.look != other.look or !self.start.eql(other.start) or
+            self.sub_states.items.len != other.sub_states.items.len)
+        {
+            return false;
+        }
+
+        for (self.sub_states.items, other.sub_states.items) |s, o| {
+            if (!s.eql(o)) return false;
+        }
+
+        return true;
+    }
+
     pub fn fillLookBranches(self: *LookaheadState) !void {
         var buf = std.ArrayList(LookaheadState)
             .init(self.sub_states.allocator);
@@ -590,10 +675,9 @@ pub const LookaheadState = struct {
             while (try state.fillBranches()) |branched| {
                 try buf.append(branched);
             }
-
-            try self.sub_states.appendSlice(buf.items);
-            buf.clearRetainingCapacity();
         }
+
+        try self.sub_states.appendSlice(buf.items);
 
         for (self.sub_states.items) |*state| {
             try state.fillLookBranches();
@@ -798,8 +882,8 @@ pub const LookaheadState = struct {
         }
     };
 
-    pub fn toKey(self: LookaheadState) !Key {
-        // TODO: make sure there is a canonical ordering for the states
+    pub fn toKey(self: *LookaheadState) !Key {
+        self.cleanUp();
 
         // here undefined makes sense as accept is first inspected
         const base_key = if (self.action == null)
@@ -810,7 +894,7 @@ pub const LookaheadState = struct {
         const sub_states = try self.sub_states.allocator
             .alloc(Key, self.sub_states.items.len);
 
-        for (self.sub_states.items, sub_states) |from, *to| {
+        for (self.sub_states.items, sub_states) |*from, *to| {
             to.* = try from.toKey();
         }
 

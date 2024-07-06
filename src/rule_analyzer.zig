@@ -687,4 +687,18 @@ pub const ExecPlace = struct {
     pub fn init(id: usize, instr: usize) ExecPlace {
         return .{ .block_id = id, .instr = instr };
     }
+
+    pub fn eql(self: ExecPlace, other: ExecPlace) bool {
+        return self.block_id == other.block_id and
+            self.instr == other.instr and
+            self.instr_sub_idx == other.instr_sub_idx;
+    }
+
+    pub fn less(self: ExecPlace, other: ExecPlace) bool {
+        if (self.block_id < other.block_id) return true;
+        if (self.block_id > other.block_id) return false;
+        if (self.instr < other.instr) return true;
+        if (self.instr > other.instr) return false;
+        return self.instr_sub_idx < other.instr_sub_idx;
+    }
 };
