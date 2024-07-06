@@ -303,8 +303,10 @@ pub const SplitBranch = struct {
 /// the function returns the set of all matches by the prongs
 pub fn canonicalizeBranches(prongs: *std.ArrayList(SplitBranch)) !AcceptanceSet {
     var normal_match: AcceptanceSet = .{};
+    var buf = std.ArrayList(SplitBranch).init(prongs.allocator);
+    defer buf.deinit();
 
-    try canonicalizeBase(prongs, &normal_match);
+    try canonicalizeBase(prongs, &buf, &normal_match);
     try canonicalizeAccepts(prongs, &normal_match);
 
     return normal_match;
@@ -333,8 +335,11 @@ fn canonicalizeAccepts(
 
 fn canonicalizeBase(
     prongs: *std.ArrayList(SplitBranch),
+    buf: *std.ArrayList(SplitBranch),
     normal_match: *AcceptanceSet,
 ) !void {
+    buf.clearRetainingCapacity();
+
     var i: usize = 1;
     while (i <= prongs.items.len) : (i += 1) {
         const prong = &prongs.items[i - 1];
@@ -377,8 +382,11 @@ fn canonicalizeBase(
             }
 
             assert(!prong_cp.set.isEmpty());
-            try prongs.append(prong_cp);
+            try buf.append(prong_cp);
         }
+
+        try prongs.appendSlice(buf.items);
+        buf.clearRetainingCapacity();
     }
 }
 
