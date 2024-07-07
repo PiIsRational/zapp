@@ -174,7 +174,7 @@ pub const Automaton = struct {
     }
 
     pub fn isNfa(self: Automaton) bool {
-        for (self.blocks.items.len) |block| {
+        for (self.blocks.items) |block| {
             const instrs = block.insts.items;
             if (instrs.len != 1) return false;
             switch (instrs[0].tag) {
@@ -191,7 +191,7 @@ pub const Automaton = struct {
     }
 
     pub fn isDfa(self: Automaton) bool {
-        for (self.blocks.items.len) |block| {
+        for (self.blocks.items) |block| {
             const instrs = block.insts.items;
             if (instrs.len != 1) return false;
             switch (instrs[0].tag) {
@@ -387,6 +387,31 @@ fn canonicalizeBase(
 
         try prongs.appendSlice(buf.items);
         buf.clearRetainingCapacity();
+    }
+}
+
+pub fn mergeDest(allocator: Allocator, dfa: *Automaton) !void {
+    for (dfa.blocks.items) |blk| {
+        assert(blk.insts.items.len == 1);
+        const instr = &blk.insts.items[0];
+        if (instr.tag != .MATCH) continue;
+
+        var new_prongs = std.ArrayList(ir.MatchProng).init(allocator);
+        outer: for (instr.data.match.items) |prong| {
+            for (new_prongs.items) |*new| {
+                if (new.dest == prong.dest and new.consuming == prong.consuming) {
+                    try new.labels.appendSlice(prong.labels.items);
+                    try new.optimize();
+                    prong.deinit();
+                    continue :outer;
+                }
+            }
+
+            try new_prongs.append(prong);
+        }
+
+        instr.data.match.deinit();
+        instr.data.match = new_prongs;
     }
 }
 

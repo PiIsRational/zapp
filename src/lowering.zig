@@ -18,7 +18,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const pir = @import("peg_ir.zig");
-const lir = @import("low_ir.zig");
+const lir = @import("lir.zig").ir;
 
 pub fn lower(allocator: Allocator, p_ir: pir.PegIr) !lir.LowIr {
     var def_names = std.ArrayList([]const u8).init(allocator);

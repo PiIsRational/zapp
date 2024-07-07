@@ -19,9 +19,9 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Writer = std.fs.File.Writer;
 
-const lir = @import("low_ir.zig");
-const su = @import("string_utils.zig");
-const pir = @import("peg_ir.zig");
+const lir = @import("../lir.zig").ir;
+const su = @import("../string_utils.zig");
+const pir = @import("../peg_ir.zig");
 const Version = @import("config").Version;
 
 const CodeGen = @This();

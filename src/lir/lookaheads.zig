@@ -21,6 +21,7 @@ const ra = @import("rule_analyzer.zig");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 
+const LookaheadEmitter = @This();
 const LookaheadType = enum {
     POSITIVE,
     NEGATIVE,
@@ -30,309 +31,306 @@ const LookaheadType = enum {
     }
 };
 
-pub const LookaheadEmitter = struct {
-    const Ctx = LookaheadCtx(std.hash.Wyhash);
-    pub const LookaheadMap = std.HashMap(
-        LookaheadTopState.Key,
-        *ir.Block,
-        Ctx,
-        std.hash_map.default_max_load_percentage,
-    );
+pub const LookaheadMap = std.HashMap(
+    LookaheadTopState.Key,
+    *ir.Block,
+    LookaheadCtx(std.hash.Wyhash),
+    std.hash_map.default_max_load_percentage,
+);
 
-    states: std.ArrayList(LookaheadTopState),
-    map: LookaheadMap,
-    map_keys: std.ArrayList(LookaheadTopState.Key),
-    allocator: Allocator,
-    nfa: ra.Automaton = undefined, // only set at emit
+states: std.ArrayList(LookaheadTopState),
+map: LookaheadMap,
+map_keys: std.ArrayList(LookaheadTopState.Key),
+allocator: Allocator,
+nfa: ra.Automaton = undefined, // only set at emit
 
-    pub fn init(allocator: Allocator) LookaheadEmitter {
-        return .{
-            .allocator = allocator,
-            .map = LookaheadMap.init(allocator),
-            .states = std.ArrayList(LookaheadTopState).init(allocator),
-            .map_keys = std.ArrayList(LookaheadTopState.Key).init(allocator),
-        };
-    }
+pub fn init(allocator: Allocator) LookaheadEmitter {
+    return .{
+        .allocator = allocator,
+        .map = LookaheadMap.init(allocator),
+        .states = std.ArrayList(LookaheadTopState).init(allocator),
+        .map_keys = std.ArrayList(LookaheadTopState.Key).init(allocator),
+    };
+}
 
-    /// goal:
-    /// generate an nfa:
-    /// the difference between an nfa and a dfa is epsilon transitions
-    /// as having multiple possibilities to match a char can be replaced by epsilon transitions
-    ///
-    ///
-    /// the spolution is to use the backtracking feature and normal jumps in blocks
-    /// this solution would not be executable, but it would be understandable
-    /// for the dfa generator
-    pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
-        self.nfa = ra.Automaton.init(self.allocator);
-        const start_block = try self.nfa.getNew();
-        var start_state = try LookaheadTopState.blockInit(self.allocator, start);
-        try self.put(try start_state.toKey(), start_block);
-        try self.states.append(start_state);
-        self.nfa.start = start_block;
+/// goal:
+/// generate an nfa:
+/// the difference between an nfa and a dfa is epsilon transitions
+/// as having multiple possibilities to match a char can be replaced by epsilon transitions
+///
+///
+/// the spolution is to use the backtracking feature and normal jumps in blocks
+/// this solution would not be executable, but it would be understandable
+/// for the dfa generator
+pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
+    self.nfa = ra.Automaton.init(self.allocator);
+    const start_block = try self.nfa.getNew();
+    var start_state = try LookaheadTopState.blockInit(self.allocator, start);
+    try self.put(try start_state.toKey(), start_block);
+    try self.states.append(start_state);
+    self.nfa.start = start_block;
 
-        // the second state of the nfa is always the failing state (similar to dfa)
-        const fail_block = try self.nfa.getNew();
-        try fail_block.insts.append(ir.Instr.initTag(.FAIL));
-        self.nfa.fail = fail_block;
+    // the second state of the nfa is always the failing state (similar to dfa)
+    const fail_block = try self.nfa.getNew();
+    try fail_block.insts.append(ir.Instr.initTag(.FAIL));
+    self.nfa.fail = fail_block;
 
-        var patience: usize = 10000;
+    var patience: usize = 10000;
 
-        while (self.states.popOrNull()) |popped_state| {
-            var state = popped_state;
-            const key = try state.toKey();
-            defer key.deinit(self.allocator);
+    while (self.states.popOrNull()) |popped_state| {
+        var state = popped_state;
+        const key = try state.toKey();
+        defer key.deinit(self.allocator);
 
-            patience -= 1;
-            assert(patience > 0);
+        patience -= 1;
+        assert(patience > 0);
 
-            const block = self.map.get(key).?;
+        const block = self.map.get(key).?;
 
-            if (block.insts.items.len != 0) {
-                state.deinit();
-                continue;
-            }
-
-            if (state.canFillLookBranches()) {
-                try state.fillLookBranches();
-                const new_key = try state.toKey();
-                defer new_key.deinit(self.allocator);
-
-                try self.states.append(state);
-                assert(!new_key.eql(key));
-
-                const blk = try self.getBlockForState(state, new_key);
-
-                try block.insts.append(ir.Instr.initJmp(blk));
-                continue;
-            }
-
-            if (try self.addEpsilons(&state)) {
-                try self.states.append(state);
-                continue;
-            }
-
-            if (try state.execJumps()) {
-                const new_key = try state.toKey();
-                defer new_key.deinit(self.allocator);
-
-                try self.states.append(state);
-                if (new_key.eql(key)) continue;
-
-                const blk = try self.getBlockForState(state, new_key);
-
-                try block.insts.append(ir.Instr.initJmp(blk));
-                continue;
-            }
-
-            defer state.deinit();
-
-            const branches = try state.getBranches();
-            defer branches.deinit();
-
-            try block.insts.append(ir.Instr.initTag(.MATCH));
-            const instr = &block.insts.items[0];
-            instr.data = .{ .match = std.ArrayList(ir.MatchProng).init(self.allocator) };
-
-            if (block.fail == null and !branches.fail_set.isEmpty()) {
-                block.fail = fail_block;
-            }
-
-            for (branches.prongs.items) |branch| {
-                var new_state = try state.splitOn(branch);
-
-                const new_key = try new_state.toKey();
-                defer new_key.deinit(self.allocator);
-                var labels = std.ArrayList(ir.Range).init(self.allocator);
-                var iter = branch.set.rangeIter();
-                while (iter.next()) |range| try labels.append(range);
-
-                const new_block = try self.getBlockForState(new_state, new_key);
-                try instr.data.match.append(.{
-                    .labels = labels,
-                    .dest = new_block,
-                    .consuming = branch.final_action == null,
-                });
-
-                if (new_block.insts.items.len == 0) {
-                    try self.states.append(new_state);
-                } else {
-                    new_state.deinit();
-                }
-            }
+        if (block.insts.items.len != 0) {
+            state.deinit();
+            continue;
         }
 
-        try self.removeFails(&self.nfa);
-        return self.nfa;
-    }
+        if (state.canFillLookBranches()) {
+            try state.fillLookBranches();
+            const new_key = try state.toKey();
+            defer new_key.deinit(self.allocator);
 
-    fn getBlockForState(
-        self: *LookaheadEmitter,
-        state: LookaheadTopState,
-        key: LookaheadTopState.Key,
-    ) !*ir.Block {
-        return self.map.get(key) orelse blk: {
-            const dst_block = try self.nfa.getNew();
-
-            if (state.isEmpty()) {
-                const action = state.action.?;
-                var pass_instr = ir.Instr.initTag(.RET);
-                pass_instr.data = .{ .action = action };
-                try dst_block.insts.append(pass_instr);
-            }
-
-            try self.put(try key.clone(self.allocator), dst_block);
-            break :blk dst_block;
-        };
-    }
-
-    /// this method adds epsilon tansitions from `base` to all next states
-    /// reachable through fillBranches
-    /// the epsilon transitions are basically implemented using JMP.
-    /// to get "choice" between the epsilons it makes use of backtracking.
-    ///
-    /// the method returns true iff it was able to add epsilons for `base`
-    fn addEpsilons(self: *LookaheadEmitter, base: *LookaheadTopState) !bool {
-        if (!base.canFillBranches()) return false;
-
-        const base_key = try base.toKey();
-        defer base_key.deinit(self.allocator);
-        const first_block = self.map.get(base_key).?;
-        const start = self.states.items.len;
-        const first_state = (try base.fillBranches()).?;
-
-        while (try base.fillBranches()) |state| {
             try self.states.append(state);
+            assert(!new_key.eql(key));
+
+            const blk = try self.getBlockForState(state, new_key);
+
+            try block.insts.append(ir.Instr.initJmp(blk));
+            continue;
         }
 
-        try self.states.append(base.*);
-        base.* = first_state;
-
-        var last_transition = self.nfa.fail;
-        for (self.states.items[start..]) |*state| {
-            const key = try state.toKey();
-            defer key.deinit(self.allocator);
-
-            const new_block = try self.getBlockForState(state.*, key);
-
-            var new_transition = try self.nfa.getNew();
-            new_transition.fail = last_transition;
-            try new_transition.insts.append(ir.Instr.initJmp(new_block));
-
-            last_transition = new_transition;
+        if (try self.addEpsilons(&state)) {
+            try self.states.append(state);
+            continue;
         }
 
-        // execute the loop body for `first_block`
-        // the block is somewhat special as it does not contain a jmp instruction
-        // pretty certain that this should not cause any problems, but not 100 %
-        first_block.fail = last_transition;
-        first_block.meta.is_target = true;
+        if (try state.execJumps()) {
+            const new_key = try state.toKey();
+            defer new_key.deinit(self.allocator);
 
-        return true;
+            try self.states.append(state);
+            if (new_key.eql(key)) continue;
+
+            const blk = try self.getBlockForState(state, new_key);
+
+            try block.insts.append(ir.Instr.initJmp(blk));
+            continue;
+        }
+
+        defer state.deinit();
+
+        const branches = try state.getBranches();
+        defer branches.deinit();
+
+        try block.insts.append(ir.Instr.initTag(.MATCH));
+        const instr = &block.insts.items[0];
+        instr.data = .{ .match = std.ArrayList(ir.MatchProng).init(self.allocator) };
+
+        if (block.fail == null and !branches.fail_set.isEmpty()) {
+            block.fail = fail_block;
+        }
+
+        for (branches.prongs.items) |branch| {
+            var new_state = try state.splitOn(branch);
+
+            const new_key = try new_state.toKey();
+            defer new_key.deinit(self.allocator);
+            var labels = std.ArrayList(ir.Range).init(self.allocator);
+            var iter = branch.set.rangeIter();
+            while (iter.next()) |range| try labels.append(range);
+
+            const new_block = try self.getBlockForState(new_state, new_key);
+            try instr.data.match.append(.{
+                .labels = labels,
+                .dest = new_block,
+                .consuming = branch.final_action == null,
+            });
+
+            if (new_block.insts.items.len == 0) {
+                try self.states.append(new_state);
+            } else {
+                new_state.deinit();
+            }
+        }
     }
 
-    pub fn put(self: *LookaheadEmitter, key: LookaheadTopState.Key, value: *ir.Block) !void {
-        try self.map_keys.append(key);
-        try self.map.putNoClobber(key, value);
+    try self.removeFails(&self.nfa);
+    return self.nfa;
+}
+
+fn getBlockForState(
+    self: *LookaheadEmitter,
+    state: LookaheadTopState,
+    key: LookaheadTopState.Key,
+) !*ir.Block {
+    return self.map.get(key) orelse blk: {
+        const dst_block = try self.nfa.getNew();
+
+        if (state.isEmpty()) {
+            const action = state.action.?;
+            var pass_instr = ir.Instr.initTag(.RET);
+            pass_instr.data = .{ .action = action };
+            try dst_block.insts.append(pass_instr);
+        }
+
+        try self.put(try key.clone(self.allocator), dst_block);
+        break :blk dst_block;
+    };
+}
+
+/// this method adds epsilon tansitions from `base` to all next states
+/// reachable through fillBranches
+/// the epsilon transitions are basically implemented using JMP.
+/// to get "choice" between the epsilons it makes use of backtracking.
+///
+/// the method returns true iff it was able to add epsilons for `base`
+fn addEpsilons(self: *LookaheadEmitter, base: *LookaheadTopState) !bool {
+    if (!base.canFillBranches()) return false;
+
+    const base_key = try base.toKey();
+    defer base_key.deinit(self.allocator);
+    const first_block = self.map.get(base_key).?;
+    const start = self.states.items.len;
+    const first_state = (try base.fillBranches()).?;
+
+    while (try base.fillBranches()) |state| {
+        try self.states.append(state);
     }
 
-    pub fn deinit(self: *LookaheadEmitter) void {
-        for (self.states.items) |state| state.deinit();
-        for (self.map_keys.items) |key| key.deinit(self.allocator);
+    try self.states.append(base.*);
+    base.* = first_state;
 
-        self.map_keys.deinit();
-        self.states.deinit();
-        self.map.deinit();
+    var last_transition = self.nfa.fail;
+    for (self.states.items[start..]) |*state| {
+        const key = try state.toKey();
+        defer key.deinit(self.allocator);
+
+        const new_block = try self.getBlockForState(state.*, key);
+
+        var new_transition = try self.nfa.getNew();
+        new_transition.fail = last_transition;
+        try new_transition.insts.append(ir.Instr.initJmp(new_block));
+
+        last_transition = new_transition;
     }
 
-    fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
-        const markers = try self.allocator.alloc(bool, nfa.blocks.items.len);
-        defer self.allocator.free(markers);
-        @memset(markers, false);
+    // execute the loop body for `first_block`
+    // the block is somewhat special as it does not contain a jmp instruction
+    // pretty certain that this should not cause any problems, but not 100 %
+    first_block.fail = last_transition;
+    first_block.meta.is_target = true;
+
+    return true;
+}
+
+pub fn put(self: *LookaheadEmitter, key: LookaheadTopState.Key, value: *ir.Block) !void {
+    try self.map_keys.append(key);
+    try self.map.putNoClobber(key, value);
+}
+
+pub fn deinit(self: *LookaheadEmitter) void {
+    for (self.states.items) |state| state.deinit();
+    for (self.map_keys.items) |key| key.deinit(self.allocator);
+
+    self.map_keys.deinit();
+    self.states.deinit();
+    self.map.deinit();
+}
+
+fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
+    const markers = try self.allocator.alloc(bool, nfa.blocks.items.len);
+    defer self.allocator.free(markers);
+    @memset(markers, false);
+
+    for (nfa.blocks.items) |state| {
+        const instr = state.insts.items[0];
+        if (instr.tag == .MATCH and instr.data.match.items.len == 0) {
+            markers[state.id] = true;
+        }
+    }
+
+    for (0..nfa.blocks.items.len) |_| {
+        var change = false;
 
         for (nfa.blocks.items) |state| {
-            const instr = state.insts.items[0];
-            if (instr.tag == .MATCH and instr.data.match.items.len == 0) {
-                markers[state.id] = true;
+            if (markers[state.id]) continue;
+
+            if (state.fail != null and markers[state.fail.?.id]) {
+                state.fail = state.fail.?.fail;
             }
-        }
 
-        for (0..nfa.blocks.items.len) |_| {
-            var change = false;
+            const instr = &state.insts.items[0];
+            switch (instr.tag) {
+                .MATCH => {
+                    var new_prongs = std.ArrayList(ir.MatchProng).init(self.allocator);
+                    for (instr.data.match.items) |*prong| {
+                        if (!markers[prong.dest.id]) {
+                            try new_prongs.append(prong.*);
+                            continue;
+                        }
 
-            for (nfa.blocks.items) |state| {
-                if (markers[state.id]) continue;
-
-                if (state.fail != null and markers[state.fail.?.id]) {
-                    state.fail = state.fail.?.fail;
-                }
-
-                const instr = &state.insts.items[0];
-                switch (instr.tag) {
-                    .MATCH => {
-                        var new_prongs = std.ArrayList(ir.MatchProng).init(self.allocator);
-                        for (instr.data.match.items) |*prong| {
-                            if (!markers[prong.dest.id]) {
+                        if (prong.dest.meta.is_target) {
+                            if (prong.dest.fail != nfa.fail) {
+                                prong.dest = prong.dest.fail.?;
                                 try new_prongs.append(prong.*);
-                                continue;
-                            }
-
-                            if (prong.dest.meta.is_target) {
-                                if (prong.dest.fail != nfa.fail) {
-                                    prong.dest = prong.dest.fail.?;
-                                    try new_prongs.append(prong.*);
-                                } else {
-                                    prong.deinit();
-                                }
-
-                                state.meta.is_target = true;
                             } else {
                                 prong.deinit();
                             }
-                        }
 
-                        if (new_prongs.items.len == 0) {
-                            markers[state.id] = true;
-                            change = true;
-                        }
-
-                        instr.data.match.deinit();
-                        instr.data.match = new_prongs;
-                    },
-                    .JMP => if (markers[instr.data.jmp.id]) {
-                        if (instr.data.jmp.meta.is_target and
-                            instr.data.jmp.fail != nfa.fail)
-                        {
-                            instr.data.jmp = instr.data.jmp.fail.?;
+                            state.meta.is_target = true;
                         } else {
-                            markers[state.id] = true;
-                            change = true;
+                            prong.deinit();
                         }
-                    },
-                    else => continue,
-                }
-            }
+                    }
 
-            if (!change) break;
+                    if (new_prongs.items.len == 0) {
+                        markers[state.id] = true;
+                        change = true;
+                    }
+
+                    instr.data.match.deinit();
+                    instr.data.match = new_prongs;
+                },
+                .JMP => if (markers[instr.data.jmp.id]) {
+                    if (instr.data.jmp.meta.is_target and
+                        instr.data.jmp.fail != nfa.fail)
+                    {
+                        instr.data.jmp = instr.data.jmp.fail.?;
+                    } else {
+                        markers[state.id] = true;
+                        change = true;
+                    }
+                },
+                else => continue,
+            }
         }
 
-        var curr: usize = 0;
-        var i: usize = 0;
-        while (i < nfa.blocks.items.len) : (i += 1) {
-            const s = nfa.blocks.items[i];
-            if (markers[s.id]) {
-                s.deinit(self.allocator);
-                continue;
-            }
-
-            s.id = curr;
-            nfa.blocks.items[curr] = s;
-            curr += 1;
-        }
-
-        nfa.blocks.shrinkRetainingCapacity(curr);
+        if (!change) break;
     }
-};
+
+    var curr: usize = 0;
+    var i: usize = 0;
+    while (i < nfa.blocks.items.len) : (i += 1) {
+        const s = nfa.blocks.items[i];
+        if (markers[s.id]) {
+            s.deinit(self.allocator);
+            continue;
+        }
+
+        s.id = curr;
+        nfa.blocks.items[curr] = s;
+        curr += 1;
+    }
+
+    nfa.blocks.shrinkRetainingCapacity(curr);
+}
 
 pub const LookaheadTopState = struct {
     base: ra.ExecState,
@@ -452,7 +450,7 @@ pub const LookaheadTopState = struct {
     }
 
     pub fn baseInit(base: ra.ExecState, allocator: Allocator) LookaheadTopState {
-        return init(base, allocator);
+        return LookaheadTopState.init(base, allocator);
     }
 
     pub fn init(

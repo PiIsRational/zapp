@@ -1,9 +1,5 @@
 %% NAME Test
 
-IDENTIFIER
-    = !KEYWORD [A-Za-z_] ([A-Za-z0-9_])* SKIP
-    ;
-
 SKIP = WHITESPACE* ;
 
 WHITESPACE
@@ -16,67 +12,3 @@ LINE_COMMENT
     | '////' (!'\n' .)* 
     ;
 
-END_OF_WORD = ![a-zA-Z0-9_] SKIP;
-KEYWORD_ADDRSPACE   = 'addrspace'   END_OF_WORD ;
-KEYWORD_ALIGN       = 'align'       END_OF_WORD ;
-KEYWORD_ALLOWZERO   = 'allowzero'   END_OF_WORD ;
-KEYWORD_AND         = 'and'         END_OF_WORD ;
-KEYWORD_ANYFRAME    = 'anyframe'    END_OF_WORD ;
-KEYWORD_ANYTYPE     = 'anytype'     END_OF_WORD ;
-KEYWORD_ASM         = 'asm'         END_OF_WORD ;
-KEYWORD_ASYNC       = 'async'       END_OF_WORD ;
-KEYWORD_AWAIT       = 'await'       END_OF_WORD ;
-KEYWORD_BREAK       = 'break'       END_OF_WORD ;
-KEYWORD_CALLCONV    = 'callconv'    END_OF_WORD ;
-KEYWORD_CATCH       = 'catch'       END_OF_WORD ;
-KEYWORD_COMPTIME    = 'comptime'    END_OF_WORD ; 
-KEYWORD_CONST       = 'const'       END_OF_WORD ;
-KEYWORD_CONTINUE    = 'continue'    END_OF_WORD ;
-KEYWORD_DEFER       = 'defer'       END_OF_WORD ;
-KEYWORD_ELSE        = 'else'        END_OF_WORD ;
-KEYWORD_ENUM        = 'enum'        END_OF_WORD ;
-KEYWORD_ERRDEFER    = 'errdefer'    END_OF_WORD ;
-KEYWORD_ERROR       = 'error'       END_OF_WORD ;
-KEYWORD_EXPORT      = 'export'      END_OF_WORD ;
-KEYWORD_EXTERN      = 'extern'      END_OF_WORD ;
-KEYWORD_FN          = 'fn'          END_OF_WORD ;
-KEYWORD_FOR         = 'for'         END_OF_WORD ;
-KEYWORD_IF          = 'if'          END_OF_WORD ;
-KEYWORD_INLINE      = 'inline'      END_OF_WORD ;
-KEYWORD_NOALIAS     = 'noalias'     END_OF_WORD ;
-KEYWORD_NOSUSPEND   = 'nosuspend'   END_OF_WORD ;
-KEYWORD_NOINLINE    = 'noinline'    END_OF_WORD ;
-KEYWORD_OPAQUE      = 'opaque'      END_OF_WORD ;
-KEYWORD_OR          = 'or'          END_OF_WORD ;
-KEYWORD_ORELSE      = 'orelse'      END_OF_WORD ;
-KEYWORD_PACKED      = 'packed'      END_OF_WORD ;
-KEYWORD_PUB         = 'pub'         END_OF_WORD ;
-KEYWORD_RESUME      = 'resume'      END_OF_WORD ;
-KEYWORD_RETURN      = 'return'      END_OF_WORD ;
-KEYWORD_LINKSECTION = 'linksection' END_OF_WORD ;
-KEYWORD_STRUCT      = 'struct'      END_OF_WORD ;
-KEYWORD_SUSPEND     = 'suspend'     END_OF_WORD ;
-KEYWORD_SWITCH      = 'switch'      END_OF_WORD ;
-KEYWORD_TEST        = 'test'        END_OF_WORD ;
-KEYWORD_THREADLOCAL = 'threadlocal' END_OF_WORD ;
-KEYWORD_TRY         = 'try'         END_OF_WORD ;
-KEYWORD_UNION       = 'union'       END_OF_WORD ;
-KEYWORD_UNREACHABLE = 'unreachable' END_OF_WORD ;
-KEYWORD_USINGNAMESPACE = 'usingnamespace' END_OF_WORD ;
-KEYWORD_VAR         = 'var'         END_OF_WORD ;
-KEYWORD_VOLATILE    = 'volatile'    END_OF_WORD ;
-KEYWORD_WHILE       = 'while'       END_OF_WORD ;
- 
-KEYWORD = KEYWORD_ADDRSPACE | KEYWORD_ALIGN | KEYWORD_ALLOWZERO | KEYWORD_AND
-         | KEYWORD_ANYFRAME | KEYWORD_ANYTYPE | KEYWORD_ASM | KEYWORD_ASYNC
-         | KEYWORD_AWAIT | KEYWORD_BREAK | KEYWORD_CALLCONV | KEYWORD_CATCH
-         | KEYWORD_COMPTIME | KEYWORD_CONST | KEYWORD_CONTINUE | KEYWORD_DEFER
-         | KEYWORD_ELSE | KEYWORD_ENUM | KEYWORD_ERRDEFER | KEYWORD_ERROR | KEYWORD_EXPORT
-         | KEYWORD_EXTERN | KEYWORD_FN | KEYWORD_FOR | KEYWORD_IF
-         | KEYWORD_INLINE | KEYWORD_NOALIAS | KEYWORD_NOSUSPEND | KEYWORD_NOINLINE
-         | KEYWORD_OPAQUE | KEYWORD_OR | KEYWORD_ORELSE | KEYWORD_PACKED
-         | KEYWORD_PUB | KEYWORD_RESUME | KEYWORD_RETURN | KEYWORD_LINKSECTION
-         | KEYWORD_STRUCT | KEYWORD_SUSPEND | KEYWORD_SWITCH | KEYWORD_TEST
-         | KEYWORD_THREADLOCAL | KEYWORD_TRY | KEYWORD_UNION | KEYWORD_UNREACHABLE
-         | KEYWORD_USINGNAMESPACE | KEYWORD_VAR | KEYWORD_VOLATILE | KEYWORD_WHILE
-         ;

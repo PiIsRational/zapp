@@ -18,12 +18,13 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Writer = std.fs.File.Writer;
-const ir = @import("peg_ir.zig");
-const lir = @import("low_ir.zig");
-const Automaton = @import("rule_analyzer.zig").Automaton;
+const pir = @import("peg_ir.zig");
 const su = @import("string_utils.zig");
+const lir_mod = @import("lir.zig");
+const lir = lir_mod.ir;
+const Automaton = lir_mod.Automaton;
 
-pub fn generate(w: Writer, p_ir: ir.PegIr) !void {
+pub fn generate(w: Writer, p_ir: pir.PegIr) !void {
     std.Progress.lockStdErr();
     defer std.Progress.unlockStdErr();
 
@@ -34,7 +35,7 @@ pub fn generate(w: Writer, p_ir: ir.PegIr) !void {
     try w.print("}}\n", .{});
 }
 
-fn genDef(w: Writer, def: ir.Definition, p_ir: ir.PegIr) !void {
+fn genDef(w: Writer, def: pir.Definition, p_ir: pir.PegIr) !void {
     for (def.sequences.items) |seq| for (seq.operateds.items) |op| switch (op.value) {
         .ID => |id| {
             try genNode(def.id, w, p_ir);
@@ -46,7 +47,7 @@ fn genDef(w: Writer, def: ir.Definition, p_ir: ir.PegIr) !void {
     };
 }
 
-fn genNode(id: usize, w: Writer, p_ir: ir.PegIr) !void {
+fn genNode(id: usize, w: Writer, p_ir: pir.PegIr) !void {
     const def = &p_ir.grammar.defs.items[id];
     if (def.generated()) {
         try w.print("node_{d}", .{id});

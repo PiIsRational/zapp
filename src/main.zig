@@ -24,8 +24,8 @@ const Error = @import("errors.zig");
 const Parser = @import("peg_parser.zig").Zapp(.{});
 const graphGen = @import("graphviz_gen.zig").generate;
 const lower = @import("lowering.zig").lower;
-const LirOptim = @import("lir_optim.zig");
-const CodeGen = @import("new_gen.zig");
+const optimizeLir = @import("lir.zig").optimize;
+const CodeGen = @import("codegen/codegen.zig");
 const config = @import("config");
 
 pub const MaxInputSize = 1024 * 1024 * 1024;
@@ -210,7 +210,7 @@ fn parserGen(
 
     // optimize lir
     var optimize_node = root_node.start("optimize lir", 0);
-    try LirOptim.optimize(&lir);
+    try optimizeLir(&lir);
     optimize_node.end();
 
     _ = dst_path;

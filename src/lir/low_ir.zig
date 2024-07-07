@@ -17,8 +17,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
-const pir = @import("peg_ir.zig");
-const su = @import("string_utils.zig");
+const pir = @import("../peg_ir.zig");
+const su = @import("../string_utils.zig");
 
 pub const LowIr = struct {
     allocator: Allocator,
