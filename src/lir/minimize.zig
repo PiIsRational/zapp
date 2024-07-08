@@ -65,10 +65,6 @@ pub fn minimize(allocator: Allocator, automaton: ra.Automaton) !ra.Automaton {
 
     sets.items[0] = base_states;
 
-    std.debug.print("new stage\n", .{});
-    for (sets.items) |set| printSet(set);
-    std.debug.print("\n", .{});
-
     var count: usize = 0;
     while (count != sets.items.len) {
         count = sets.items.len;

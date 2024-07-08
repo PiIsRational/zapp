@@ -286,6 +286,12 @@ pub const Instr = struct {
         return out;
     }
 
+    pub fn initString(str: []const u8) Instr {
+        var out = initTag(.STRING);
+        out.data = .{ .str = str };
+        return out;
+    }
+
     pub fn initTag(tag: InstrTag) Instr {
         return .{
             .tag = tag,
@@ -295,11 +301,9 @@ pub const Instr = struct {
     }
 
     pub fn initJmp(to: *Block) Instr {
-        return .{
-            .tag = .JMP,
-            .meta = InstrMeta.Empty,
-            .data = .{ .jmp = to },
-        };
+        var out = initTag(.JMP);
+        out.data = .{ .jmp = to };
+        return out;
     }
 
     pub fn deinit(self: Instr, allocator: Allocator) void {

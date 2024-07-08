@@ -90,13 +90,15 @@ pub fn writeEscapeChar(writer: anytype, char: u8) !void {
     try writer.print("'", .{});
 }
 
+pub fn writeEscapeString(writer: anytype, string: []const u8) !void {
+    try writer.print("\"", .{});
+    for (string) |char| try writeEscapeCharacter(writer, char);
+    try writer.print("\"", .{});
+}
+
 pub fn writeString(writer: anytype, string: []const u8) !void {
     try writer.print("\"", .{});
-
-    for (string) |char| {
-        try writeCharacter(writer, char);
-    }
-
+    for (string) |char| try writeCharacter(writer, char);
     try writer.print("\"", .{});
 }
 

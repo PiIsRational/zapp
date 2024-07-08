@@ -415,6 +415,137 @@ pub fn mergeDest(allocator: Allocator, dfa: *Automaton) !void {
     }
 }
 
+pub fn deleteUnreachable(allocator: Allocator, dfa: *Automaton) !void {
+    var tags = try allocator.alloc(bool, dfa.blocks.items.len);
+    defer allocator.free(tags);
+    @memset(tags, false);
+
+    const Frame = struct {
+        blk: *ir.Block,
+        index: usize = 0,
+    };
+
+    var stack = std.ArrayList(Frame).init(allocator);
+    defer stack.deinit();
+    try stack.append(.{ .blk = dfa.start });
+
+    while (stack.popOrNull()) |popped_frame| {
+        var frame = popped_frame;
+        const instr = frame.blk.insts.getLast();
+
+        tags[frame.blk.id] = true;
+
+        switch (instr.tag) {
+            .JMP => if (frame.index == 0) {
+                const dest = instr.data.jmp;
+
+                frame.index += 1;
+                try stack.append(frame);
+
+                if (tags[dest.id]) continue;
+
+                try stack.append(.{ .blk = instr.data.jmp });
+            },
+            .MATCH => if (frame.index < instr.data.match.items.len) {
+                const new: Frame = .{
+                    .blk = instr.data.match.items[frame.index].dest,
+                };
+
+                frame.index += 1;
+                try stack.append(frame);
+                if (tags[new.blk.id]) continue;
+
+                try stack.append(new);
+            },
+            else => {},
+        }
+    }
+
+    var i: usize = 0;
+    var index: usize = 0;
+    while (i < dfa.blocks.items.len) : (i += 1) {
+        const blk = dfa.blocks.items[i];
+        if (!tags[blk.id]) {
+            blk.deinit(allocator);
+            continue;
+        }
+
+        dfa.blocks.items[index] = blk;
+        blk.id = index;
+        index += 1;
+    }
+
+    dfa.blocks.shrinkRetainingCapacity(index);
+}
+
+pub fn compressMatches(allocator: Allocator, dfa: *Automaton) !void {
+    var starts = try allocator.alloc(bool, dfa.blocks.items.len);
+    defer allocator.free(starts);
+    @memset(starts, false);
+
+    // populate starts
+    for (dfa.blocks.items) |blk| {
+        assert(blk.insts.items.len == 1);
+        const instr = blk.insts.items[0];
+
+        if (instr.tag != .MATCH) continue;
+        const prongs = instr.data.match.items;
+        if (prongs.len == 1) continue;
+
+        for (prongs) |p| starts[p.dest.id] = true;
+    }
+
+    for (dfa.blocks.items) |blk| {
+        if (!starts[blk.id]) continue;
+        var match_string = std.ArrayList(u8).init(allocator);
+
+        var curr_blk = blk;
+        while (getMatchChar(&curr_blk)) |c| {
+            try match_string.append(c);
+        }
+
+        assert(curr_blk.insts.items.len > 0);
+        if (curr_blk.insts.items.len == 2) {
+            const c_instr = &curr_blk.insts.items[0];
+            assert(c_instr.tag == .STRING);
+
+            try match_string.appendSlice(c_instr.data.str);
+            assert(curr_blk.insts.items[1].tag == .JMP);
+            curr_blk = curr_blk.insts.items[1].data.jmp;
+        }
+
+        if (match_string.items.len == 0) {
+            match_string.deinit();
+            continue;
+        }
+
+        const new_instr = ir.Instr.initString(try match_string.toOwnedSlice());
+        const instr = &blk.insts.items[0];
+        instr.deinit(allocator);
+        instr.* = new_instr;
+
+        try blk.insts.append(ir.Instr.initJmp(curr_blk));
+    }
+
+    try deleteUnreachable(allocator, dfa);
+}
+
+fn getMatchChar(blk: **ir.Block) ?u8 {
+    if (blk.*.insts.items.len != 1) return null;
+    const instr = &blk.*.insts.items[0];
+
+    if (instr.tag != .MATCH) return null;
+    const prongs = instr.data.match.items;
+    if (prongs.len != 1) return null;
+    const prong = prongs[0];
+    if (prong.labels.items.len != 1) return null;
+    const class = prong.labels.items[0];
+    if (!class.isChar()) return null;
+
+    blk.* = prong.dest;
+    return class.from;
+}
+
 /// the exec state is a basic execution state for ir blocks
 /// (it does not handle lookahead, but anything else)
 pub const ExecState = struct {

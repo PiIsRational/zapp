@@ -95,7 +95,7 @@ fn genAutomatonNodeEps(w: Writer, block: *lir.Block) !void {
 }
 
 fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
-    if (block.insts.items.len != 1) return;
+    assert(block.insts.items.len > 0);
 
     const instr = block.insts.items[0];
     switch (instr.tag) {
@@ -106,6 +106,19 @@ fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
             "    {d} -> {d} [label = \"ε\"];\n",
             .{ block.id, instr.data.jmp.id },
         ),
+        .STRING => {
+            try w.print("    {d} [xlabel = ", .{block.id});
+            try su.writeEscapeString(w, instr.data.str);
+            try w.print("];\n", .{});
+
+            const next_instr = block.insts.items[1];
+            assert(next_instr.tag == .JMP);
+
+            try w.print(
+                "    {d} -> {d} [label = \"ε\"];\n",
+                .{ block.id, next_instr.data.jmp.id },
+            );
+        },
         else => {},
     }
 }

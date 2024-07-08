@@ -63,11 +63,15 @@ pub fn optimize(lir: *ir.LowIr) !void {
         try gvgen.genAutomaton(stdout, dfa, "dfa");
     }
 
-    const nerode = try minimize(self.ir.allocator, dfa);
+    var nerode = try minimize(self.ir.allocator, dfa);
     defer nerode.deinit(self.ir.allocator);
 
     try gvgen.genAutomaton(stdout, dfa, "dfa");
     try gvgen.genAutomaton(stdout, nerode, "nerode");
+
+    try ra.compressMatches(self.ir.allocator, &nerode);
+
+    try gvgen.genAutomaton(stdout, nerode, "compressed_nerode");
 }
 
 fn generateDfa(self: *PassManager, block: *ir.Block) !void {
