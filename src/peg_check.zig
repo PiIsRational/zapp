@@ -122,6 +122,7 @@ pub fn optimize(
     try self.seqPass(checkDoubledCut, "check for doubled cut ops");
     try self.defPass(false, checkLastSeqCut, "check for cuts in ending sequences");
     try self.defPass(false, checkTerminalsRegular, "check that terminals are regular");
+    try self.opPass(setUsedTerminal, "set use for terminals on use bounds");
 
     return self.pass;
 }
@@ -162,6 +163,27 @@ fn checkTerminalsRegular(self: *PegPassManager, def: *ir.Definition) anyerror!vo
             .t = .ERROR,
         }},
     );
+}
+
+/// sets the used_terminal flag
+///
+/// needs:
+///     * is_terminal needs to be set and everything chould be canonicalized
+///     * all rules (definitions) that are not in use should be removed
+/// change bounds:
+///     * the used_terminal flag is set for terminals that are used by nonterminals
+fn setUsedTerminal(
+    self: *PegPassManager,
+    def: *const ir.Definition,
+    op: *ir.Operated,
+) anyerror!void {
+    if (def.is_terminal) return;
+    switch (op.value) {
+        .ID => |dest| if (self.ir.defs.items[dest].is_terminal) {
+            self.ir.defs.items[dest].used_terminal = true;
+        },
+        else => return,
+    }
 }
 
 /// verify that no terminals implicitly use actions
@@ -1123,6 +1145,7 @@ fn desugarStarSequence(
             .has_actions = false,
             .moves_actions = false,
             .is_terminal = def.is_terminal,
+            .used_terminal = false,
             .generated = true,
         };
 
@@ -1552,7 +1575,7 @@ fn inlineOneSeqDefs(self: *PegPassManager, def: *ir.Definition) anyerror!void {
             if (op.prefix_op != .NONE) continue;
 
             to_inline = self.getDefinition(id);
-            //if (to_inline.is_terminal and !def.is_terminal) continue;
+            if (to_inline.is_terminal and !def.is_terminal) continue;
 
             const inline_seqs = to_inline.sequences.items;
             if (inline_seqs.len != 1) continue;

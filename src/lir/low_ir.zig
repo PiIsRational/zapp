@@ -168,12 +168,14 @@ pub const Block = struct {
         return false;
     }
 
-    pub fn deinit(self: *Block, allocator: Allocator) void {
-        for (self.insts.items) |instr| {
-            instr.deinit(allocator);
-        }
+    pub fn deinitContent(self: *Block, allocator: Allocator) void {
+        for (self.insts.items) |instr| instr.deinit(allocator);
         self.insts.deinit();
         self.fail = null;
+    }
+
+    pub fn deinit(self: *Block, allocator: Allocator) void {
+        self.deinitContent(allocator);
         allocator.destroy(self);
     }
 
@@ -209,6 +211,7 @@ pub const BlockMeta = packed struct {
     has_actions: bool,
     moves_actions: bool,
     is_target: bool,
+    used_terminal: bool,
 
     pub const Empty: BlockMeta = .{
         .mid_recurse = false,
@@ -220,6 +223,7 @@ pub const BlockMeta = packed struct {
         .moves_actions = false,
         .is_terminal = false,
         .is_target = false,
+        .used_terminal = false,
     };
 
     pub fn format(
@@ -233,7 +237,12 @@ pub const BlockMeta = packed struct {
             if (self.regular) " (reg)" else if (self.finite) " (fin)" else "",
             if (self.nonterm_fail) " (fail)" else "",
             if (self.moves_actions) " (act)" else "",
-            if (self.is_terminal) " (ter)" else "",
+            if (self.is_terminal and self.used_terminal)
+                " (u ter)"
+            else if (self.is_terminal)
+                " (ter)"
+            else
+                "",
             if (self.is_target) " (tgt)" else "",
         });
     }

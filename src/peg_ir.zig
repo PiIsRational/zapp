@@ -322,6 +322,7 @@ pub const Definition = struct {
     return_type: ReturnType,
     sequences: std.ArrayList(Sequence),
     id: usize,
+
     accepts_eps: bool,
     mid_recurse: bool,
     right_recurse: bool,
@@ -331,6 +332,7 @@ pub const Definition = struct {
     moves_actions: bool,
     is_terminal: bool,
     generated: bool,
+    used_terminal: bool,
 
     pub fn init(
         allocator: Allocator,
@@ -356,6 +358,7 @@ pub const Definition = struct {
             .has_actions = false,
             .moves_actions = false,
             .is_terminal = false,
+            .used_terminal = false,
             .generated = generated,
         };
     }
@@ -395,7 +398,12 @@ pub const Definition = struct {
             if (self.mid_recurse) " (m∞)" else if (self.right_recurse) " (r∞)" else "",
             if (self.regular) " (reg)" else if (self.finite) " (fin)" else "",
             if (self.moves_actions) " (act)" else "",
-            if (self.is_terminal) " (ter)" else "",
+            if (self.is_terminal and self.used_terminal)
+                " (u ter)"
+            else if (self.is_terminal)
+                " (ter)"
+            else
+                "",
             if (self.generated) " (gen)" else "",
         });
         try writer.print(": {s}", .{self.return_type});
@@ -794,13 +802,10 @@ pub const Action = struct {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         if (self.isEmpty()) return;
 
         if (self.implicit) {

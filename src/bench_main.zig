@@ -68,10 +68,10 @@ pub fn main() !void {
         const src_file = try entry.dir.openFile(entry.basename, .{});
         const src = try src_file.readToEndAllocOptions(allocator, MaxInputSize, null, 1, 0);
         defer allocator.free(src);
-        total_size += src.len;
 
         switch (try parser.parse(src)) {
             .pass => {
+                total_size += src.len;
                 passed_files += 1;
                 try stdout.print(Green ++ "pass:" ++ Reset ++ " {s}\n", .{entry.path});
                 const stats = parser.stats();
@@ -97,7 +97,7 @@ pub fn main() !void {
             else => unreachable,
         }
     }
-    const ellapsed_millis = std.time.milliTimestamp() - start_ms;
+    const ellapsed_millis = @max(std.time.milliTimestamp() - start_ms, 1);
 
     try stdout.print(Blue ++ "\n     Stats:     \n================\n" ++ Reset, .{});
     try stdout.print(
@@ -114,7 +114,10 @@ pub fn main() !void {
     try stdout.print("parsed bytes: {d}\n", .{total_size});
     try stdout.print(
         Blue ++ "  ==> " ++ Reset ++ "approx. speed: {d}/s\n\n",
-        .{std.fmt.fmtIntSizeBin(@intCast(@divFloor(1000 * total_size, @as(usize, @intCast(ellapsed_millis)))))},
+        .{std.fmt.fmtIntSizeBin(@intCast(@divFloor(
+            1000 * total_size,
+            @as(usize, @intCast(ellapsed_millis)),
+        )))},
     );
 
     try stdout.print(Blue ++ "memory stats:" ++ Reset ++ "\n{s}\n", .{parser.stats()});

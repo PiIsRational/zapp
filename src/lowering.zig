@@ -167,6 +167,7 @@ fn lowerSeq(
         .has_actions = def.has_actions,
         .moves_actions = def.moves_actions,
         .is_terminal = def.is_terminal,
+        .used_terminal = def.used_terminal,
         .is_target = label.choice == 0,
     };
 
@@ -208,6 +209,7 @@ fn lowerSeq(
             .has_actions = def.has_actions,
             .moves_actions = def.moves_actions,
             .is_terminal = def.is_terminal,
+            .used_terminal = def.used_terminal,
             .is_target = false,
         };
     }

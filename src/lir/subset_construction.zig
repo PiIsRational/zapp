@@ -190,8 +190,8 @@ const DfaState = struct {
 
     /// deduplicates the sub states of the dfa state
     fn deduplicate(self: *DfaState) void {
-        self.reorder();
         if (self.sub_states.items.len <= 1) return;
+        self.reorder();
 
         var i: usize = 1;
         var idx: usize = 1;

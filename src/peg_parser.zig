@@ -2674,6 +2674,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         .finite = true,
                         .has_actions = false,
                         .moves_actions = false,
+                        .used_terminal = false,
                         .is_terminal = su.isScreamingSnakeCase(@"$0"),
                         .generated = false,
                     });

@@ -1,0 +1,9 @@
+%% NAME Test
+
+Ident = IDENTIFIER ;
+
+IDENTIFIER = !'co' REST ;
+
+REST = [A-Za-z0-9_] REST
+    | @
+    ;

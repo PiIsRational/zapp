@@ -41,109 +41,81 @@ const PassError = Allocator.Error;
 // make all the analyses simpler and more reusable.
 
 pub fn optimize(lir: *ir.LowIr) !void {
-    const stdout = std.io.getStdOut().writer();
-    const self: PassManager = .{
+    var self: PassManager = .{
         .ir = lir,
     };
 
-    var emitter = LookaheadEmitter.init(self.ir.allocator);
-    defer emitter.deinit();
-
-    const nfa = try emitter.emit(self.ir.blocks.items[0]);
-
-    defer nfa.deinit(self.ir.allocator);
-
-    var dfa_gen = DfaGen.init(self.ir.allocator);
-    defer dfa_gen.deinit();
-    const dfa = try dfa_gen.genDfa(nfa.start);
-    defer dfa.deinit(self.ir.allocator);
-
-    if (false) {
-        try gvgen.genAutomaton(stdout, nfa, "nfa");
-        try gvgen.genAutomaton(stdout, dfa, "dfa");
-    }
-
-    var nerode = try minimize(self.ir.allocator, dfa);
-    defer nerode.deinit(self.ir.allocator);
-
-    try gvgen.genAutomaton(stdout, dfa, "dfa");
-    try gvgen.genAutomaton(stdout, nerode, "nerode");
-
-    try ra.compressMatches(self.ir.allocator, &nerode);
-
-    try gvgen.genAutomaton(stdout, nerode, "compressed_nerode");
+    try self.blockPass(addAutomaton);
 }
 
-fn generateDfa(self: *PassManager, block: *ir.Block) !void {
-    assert(block.meta.is_terminal);
-    assert(block.meta.is_target);
-
-    _ = self;
-}
-
-/// equivalent to cloning a rule in pir
-fn shallowRuleCopy(self: *PassManager, block: *ir.Block, base: usize) !*ir.Block {
-    assert(block.meta.is_target);
-    var map = std.AutoHashMap(usize, *ir.Block).init(self.ir.allocator);
-    defer map.deinit();
-    return try self.shallowRuleCopyRec(block, base, &map);
-}
-
-fn shallowRuleCopyRec(
-    self: *PassManager,
-    block: *ir.Block,
-    base: usize,
-    map: *std.AutoHashMap(usize, *ir.Block),
-) !*ir.Block {
+fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
+    const w = std.io.getStdErr().writer();
+    if (!blk.meta.is_target or !blk.meta.used_terminal) return;
     const allocator = self.ir.allocator;
-    // 3 steps
-    // 1) copy the own block over or get it from the map
-    if (map.get(block.id)) |clone| return clone;
-    var new_block = try block.clone(allocator);
-    try self.ir.appendDefBlock(new_block, base);
-    try map.put(block.id, new_block);
 
-    // 2) copy the fail block
-    if (block.fail) |fail_block| {
-        new_block.fail = try self.shallowRuleCopyRec(fail_block, base, map);
+    var emitter = LookaheadEmitter.init(allocator);
+    defer emitter.deinit();
+    var dfa_gen = DfaGen.init(allocator);
+    defer dfa_gen.deinit();
+
+    const nfa = try emitter.emit(blk);
+    defer nfa.deinit(allocator);
+    gvgen.genAutomaton(w, nfa, "nfa") catch unreachable;
+
+    const dfa = try dfa_gen.genDfa(nfa.start);
+    defer dfa.deinit(allocator);
+
+    var nerode = try minimize(allocator, dfa);
+    nerode.start.meta = .{
+        .mid_recurse = false,
+        .right_recurse = true, // may be false too
+        .regular = true, // generally true
+        .finite = false, // possibly true
+        .is_terminal = true,
+        .nonterm_fail = false, // ?
+        .has_actions = true, // possibly false
+        .moves_actions = true, // possibly false
+        .is_target = true,
+        .used_terminal = true,
+    };
+
+    try ra.compressMatches(allocator, &nerode);
+    nerode.setFail();
+    gvgen.genAutomaton(w, nerode, "name") catch unreachable;
+    try self.appendAutomaton(&nerode, blk);
+}
+
+fn appendAutomaton(
+    self: *PassManager,
+    automaton: *ra.Automaton,
+    blk: *ir.Block,
+) PassError!void {
+    automaton.replaceBlock(automaton.start, blk);
+    blk.deinitContent(self.ir.allocator);
+
+    for (automaton.blocks.items) |block| {
+        block.base = blk.base;
+
+        if (block != automaton.start) {
+            block.id = self.ir.blocks.items.len;
+            try self.ir.blocks.append(block);
+            continue;
+        }
+
+        block.id = blk.id;
+        blk.* = block.*;
     }
 
-    // 3) copy the jump to blocks
-    const insts = new_block.insts.items;
-    const last = &insts[insts.len - 1];
-    switch (last.tag) {
-        .JMP => {
-            const jmp_block = last.data.jmp;
-            last.data.jmp = try self.shallowRuleCopyRec(jmp_block, base, map);
-        },
-        .MATCH => {
-            const prongs = last.data.match.items;
-            for (prongs) |*prong| {
-                prong.dest = try self.shallowRuleCopyRec(prong.dest, base, map);
-            }
-        },
-        .NONTERM => {
-            const jmp_block = last.data.ctx_jmp.next;
-            last.data.ctx_jmp.next = try self.shallowRuleCopyRec(jmp_block, base, map);
-        },
-        .FAIL,
-        .RET,
-        .EXIT_PASS,
-        .EXIT_FAIL,
-        => {},
-        else => unreachable,
-    }
-
-    return new_block;
+    self.ir.allocator.destroy(automaton.start);
+    automaton.blocks.deinit();
 }
 
 fn blockPass(
     self: *PassManager,
     comptime pass: fn (*PassManager, *ir.Block) PassError!void,
 ) !void {
-    const blocks = &self.ir.blocks.items;
     var i: usize = 0;
-    while (i < blocks.len) : (i += 1) {
-        try pass(self, blocks[i]);
+    while (i < self.ir.blocks.items.len) : (i += 1) {
+        try pass(self, self.ir.blocks.items[i]);
     }
 }

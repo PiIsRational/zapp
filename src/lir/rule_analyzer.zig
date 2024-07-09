@@ -223,6 +223,31 @@ pub const Automaton = struct {
         return true;
     }
 
+    pub fn replaceBlock(self: *Automaton, blk: *ir.Block, repl: *ir.Block) void {
+        for (self.blocks.items) |block| {
+            const instr = &block.insts.items[block.insts.items.len - 1];
+
+            switch (instr.tag) {
+                .JMP => if (instr.data.jmp == blk) {
+                    instr.data.jmp = repl;
+                },
+                .MATCH => for (instr.data.match.items) |*prong| {
+                    if (prong.dest == blk) {
+                        prong.dest = repl;
+                    }
+                },
+                else => {},
+            }
+        }
+    }
+
+    pub fn setFail(self: *Automaton) void {
+        for (self.blocks.items) |blk| {
+            if (blk == self.fail) continue;
+            blk.fail = self.fail;
+        }
+    }
+
     pub fn format(
         self: @This(),
         comptime _: []const u8,
@@ -424,6 +449,8 @@ pub fn deleteUnreachable(allocator: Allocator, dfa: *Automaton) !void {
         blk: *ir.Block,
         index: usize = 0,
     };
+    const fail_num = dfa.fail.id;
+    tags[fail_num] = true;
 
     var stack = std.ArrayList(Frame).init(allocator);
     defer stack.deinit();
@@ -472,6 +499,7 @@ pub fn deleteUnreachable(allocator: Allocator, dfa: *Automaton) !void {
 
         dfa.blocks.items[index] = blk;
         blk.id = index;
+        if (i == fail_num) dfa.fail = blk;
         index += 1;
     }
 
@@ -484,6 +512,7 @@ pub fn compressMatches(allocator: Allocator, dfa: *Automaton) !void {
     @memset(starts, false);
 
     // populate starts
+    starts[dfa.start.id] = true;
     for (dfa.blocks.items) |blk| {
         assert(blk.insts.items.len == 1);
         const instr = blk.insts.items[0];

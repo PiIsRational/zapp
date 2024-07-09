@@ -479,7 +479,7 @@ pub fn generate(
     try writer.print("{s}\n", .{helper});
 
     // type declarations
-    try writer.writeAll(@embedFile("./runtime/memo.zig"));
+    try writer.writeAll(@embedFile("./memo.zig"));
     try self.returnTypes();
     try self.parseReturn();
     try writer.print("{s}\n", .{structs});

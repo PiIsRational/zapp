@@ -213,16 +213,15 @@ fn parserGen(
     try optimizeLir(&lir);
     optimize_node.end();
 
-    _ = dst_path;
     // generate
-    // var codegen_progress = root_node.start("codegen", 0);
-    // const f = std.fs.cwd().createFile(dst_path, .{}) catch {
-    //     try Error.print("could not create the destination file", null, "", &.{});
-    //     return;
-    // };
-    // var ngen: CodeGen = undefined;
-    // try ngen.generate(lir, f.writer());
-    // codegen_progress.end();
+    var codegen_progress = root_node.start("codegen", 0);
+    const f = std.fs.cwd().createFile(dst_path, .{}) catch {
+        try Error.print("could not create the destination file", null, "", &.{});
+        return;
+    };
+    var ngen: CodeGen = undefined;
+    try ngen.generate(lir, f.writer());
+    codegen_progress.end();
 }
 
 fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type {

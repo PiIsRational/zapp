@@ -39,7 +39,7 @@ const ActionReturn = ir.ActionReturn;
 ir: PegIr,
 %%
 
-Grammar = SPACING (TopLevelComment SPACING )* Name MetaData Definition+ FileEnd {
+Grammar = SPACING (TopLevelComment SPACING)* Name MetaData Definition+ FileEnd {
     self.ir.top_level_comment = invert([]const u8, try $*2.toOwnedSlice());
 };
 
@@ -82,6 +82,7 @@ Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequenc
         .finite = true,
         .has_actions = false,
         .moves_actions = false,
+        .used_terminal = false,
         .is_terminal = su.isScreamingSnakeCase($1),
         .generated = false,
     });
