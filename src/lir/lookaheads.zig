@@ -308,10 +308,12 @@ fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
                         instr.data.jmp.fail != nfa.fail)
                     {
                         instr.data.jmp = instr.data.jmp.fail.?;
+                        instr.data.jmp.meta.is_target = true;
                     } else {
                         markers[state.id] = true;
-                        change = true;
                     }
+
+                    change = true;
                 },
                 else => continue,
             }
@@ -386,9 +388,9 @@ const LookaheadTopState = struct {
             });
         }
 
-        var base_fail = ra.AcceptanceSet.Full;
+        var base_no_consume = ra.AcceptanceSet.Full;
         for (base_buffer.items) |branch| {
-            base_fail.cut(branch.set);
+            if (branch.final_action == null) base_no_consume.cut(branch.set);
         }
 
         for (self.sub_states.items) |sub| {
@@ -402,7 +404,7 @@ const LookaheadTopState = struct {
                 }
 
                 // do not append branches that would fail anyways
-                branch.set.cut(base_fail);
+                branch.set.cut(base_no_consume);
                 if (!branch.set.isEmpty()) try prongs.append(branch.*);
             }
 
@@ -728,7 +730,6 @@ const LookaheadTopState = struct {
             _: std.fmt.FormatOptions,
             writer: anytype,
         ) !void {
-            // TODO: maybe add the sub states here
             if (self.action) |act| {
                 try writer.print("(act: {d})", .{act});
             } else {

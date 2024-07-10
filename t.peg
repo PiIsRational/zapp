@@ -2,8 +2,32 @@
 
 Ident = IDENTIFIER ;
 
-IDENTIFIER = !'co' REST ;
-
-REST = [A-Za-z0-9_] REST
-    | @
+IDENTIFIER
+    = !(KEYWORD END_OF_WORD) [A-Za-z_] [A-Za-z0-9_]* END_OF_WORD
     ;
+
+
+LINE_COMMENT
+    = '//' ![!/] ^ (!'\n' .)*
+    | '////' (!'\n' .)* 
+    ;
+
+HEX = [0-9a-fA-F] ;
+
+SKIP = WHITESPACE* ;
+
+WHITESPACE
+    = [ \n]
+    | LINE_COMMENT
+    ;
+ 
+END_OF_WORD = ![a-zA-Z0-9_] SKIP;
+KEYWORD_CALLCONV    = 'callconv' ;
+KEYWORD_CATCH       = 'catch' ;
+KEYWORD_COMPTIME    = 'comptime' ; 
+KEYWORD_CONST       = 'const' ;
+KEYWORD_CONTINUE    = 'continue' ;
+ 
+KEYWORD = KEYWORD_CALLCONV | KEYWORD_CATCH
+         | KEYWORD_COMPTIME | KEYWORD_CONST | KEYWORD_CONTINUE 
+         ;

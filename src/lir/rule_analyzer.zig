@@ -746,7 +746,7 @@ pub const ExecState = struct {
         NO_CHANGE,
     };
 
-    // returns true if some jump could be executed
+    /// returns true if some jump could be executed
     pub fn execJumps(self: *ExecState) !ExecJmpsResult {
         const instr = self.getCurrInstr() orelse return .NO_CHANGE;
         if (!instr.meta.isConsuming() or
@@ -755,6 +755,7 @@ pub const ExecState = struct {
         return try self.execForceJumps();
     }
 
+    /// same as exec jumps but ignoring lookaheads
     pub fn execForceJumps(self: *ExecState) !ExecJmpsResult {
         const instr = self.getCurrInstr() orelse return .NO_CHANGE;
         const blocks = self.blocks.items;

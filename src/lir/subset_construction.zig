@@ -182,6 +182,7 @@ const DfaState = struct {
         while (try self.fillBranches() or try self.execJumps()) {}
         self.resetHadFill();
         self.deduplicate();
+
         if (self.isEmpty()) {
             assert(self.sub_states.items.len > 0);
             self.action = self.sub_states.items[0].last_action;
@@ -362,7 +363,11 @@ const DfaState = struct {
             writer: anytype,
         ) !void {
             if (self.sub_states.len == 0) {
-                try writer.print("(∅ , {d})", .{self.action.?});
+                if (self.action) |act| {
+                    try writer.print("(∅ , {d})", .{act});
+                } else {
+                    try writer.print("(∅ )", .{});
+                }
                 return;
             }
 
@@ -404,7 +409,11 @@ const DfaState = struct {
         writer: anytype,
     ) !void {
         if (self.isEmpty()) {
-            try writer.print("(∅ , {d})", .{self.action.?});
+            if (self.action) |act| {
+                try writer.print("(∅ , {d})", .{act});
+            } else {
+                try writer.print("(∅ )", .{});
+            }
             return;
         }
 
