@@ -31,7 +31,7 @@ const LookaheadType = enum {
     }
 };
 
-pub const LookaheadMap = std.HashMap(
+const LookaheadMap = std.HashMap(
     LookaheadTopState.Key,
     *ir.Block,
     LookaheadCtx(std.hash.Wyhash),
@@ -485,7 +485,7 @@ const LookaheadTopState = struct {
     /// the goal of cleanup is to order and deduplicate lookahead states
     fn cleanUp(self: *LookaheadTopState) void {
         const Ctx = struct {
-            pub fn less(_: @This(), lhs: LookaheadState, rhs: LookaheadState) bool {
+            fn less(_: @This(), lhs: LookaheadState, rhs: LookaheadState) bool {
                 const l_k = lhs.base.toKey();
                 const r_k = rhs.base.toKey();
 
@@ -724,7 +724,7 @@ const LookaheadTopState = struct {
             allocator.free(self.sub_states);
         }
 
-        pub fn format(
+        fn format(
             self: Key,
             comptime _: []const u8,
             _: std.fmt.FormatOptions,
@@ -774,7 +774,7 @@ const LookaheadTopState = struct {
         self.sub_states.deinit();
     }
 
-    pub fn format(
+    fn format(
         self: LookaheadTopState,
         comptime _: []const u8,
         _: std.fmt.FormatOptions,
@@ -792,10 +792,12 @@ const LookaheadTopState = struct {
         try writer.print("}}", .{});
     }
 };
-pub const LookaheadState = struct {
+
+const LookaheadState = struct {
     base: ra.ExecState,
     look: LookaheadType,
     start: ra.ExecPlace,
+    lookaheads: std.ArrayList(LookaheadState),
 
     fn lookaheadIsDoneOnSet(self: LookaheadState, set: ra.AcceptanceSet) bool {
         const next = self.base.nextPlace(set).?;
@@ -812,11 +814,20 @@ pub const LookaheadState = struct {
             self.base.instr == self.start.instr;
     }
 
-    pub fn splitOn(self: *const LookaheadState, branch: ra.SplitBranch) !?LookaheadState {
+    fn splitOn(self: LookaheadState, branch: ra.SplitBranch) !?LookaheadState {
+        var looks = std.ArrayList(LookaheadState).init(self.lookaheads.allocator);
+
+        for (self.lookaheads.items) |look| {
+            if (try look.splitOn(branch)) |l| {
+                try looks.append(l);
+            }
+        }
+
         var new: LookaheadState = .{
             .base = try self.base.splitOn(branch.set) orelse return null,
             .look = self.look,
             .start = self.start,
+            .lookaheads = looks,
         };
 
         if (new.isDone()) {
@@ -833,37 +844,59 @@ pub const LookaheadState = struct {
             (blocks[0].id != self.start.block_id or self.base.instr != self.start.instr);
     }
 
-    pub fn canFillBranches(self: LookaheadState) bool {
+    fn canFillBranches(self: LookaheadState) bool {
         if (self.isDone()) return false;
         return self.base.canFillBranches();
     }
 
-    pub fn eql(self: LookaheadState, other: LookaheadState) bool {
+    fn eql(self: LookaheadState, other: LookaheadState) bool {
         if (!self.base.eql(other.base) or
             self.look != other.look or
-            !self.start.eql(other.start))
+            !self.start.eql(other.start) or
+            self.lookaheads.items.len != other.lookaheads.items.len)
         {
             return false;
+        }
+
+        for (self.lookaheads.items, other.lookaheads.items) |s, o| {
+            if (!s.eql(o)) return false;
         }
 
         return true;
     }
 
-    pub fn fillBranches(self: *LookaheadState) !?LookaheadState {
+    fn fillSubBranches(self: *LookaheadState) !bool {
+        var result = false;
+        var i: usize = 0;
+        while (i < self.lookaheads.items.len) : (i += 1) {
+            var look = self.lookaheads.items[i];
+            result = try look.fillSubBranches() or result;
+            if (!look.canFillBranches()) continue;
+            result = true;
+
+            while (try look.fillBranches()) |new| {
+                try self.lookaheads.append(new);
+            }
+
+            self.lookaheads.items[i] = look;
+        }
+
+        return result;
+    }
+
+    fn fillBranches(self: *LookaheadState) !?LookaheadState {
         const result = try self.base.fillBranches() orelse return null;
 
         return .{
             .look = self.look,
             .start = self.start,
             .base = result,
+            .lookaheads = try self.cloneLookaheads(),
         };
     }
 
-    pub fn execJumps(self: *LookaheadState) !union(enum) {
-        new: LookaheadState,
-        change: bool,
-    } {
-        const result = if (self.lookaheadOnStart())
+    fn execJumps(self: *LookaheadState) bool {
+        var result = if (self.lookaheadOnStart())
             try self.base.execForceJumps()
         else
             try self.base.execJumps();
@@ -871,16 +904,20 @@ pub const LookaheadState = struct {
         if (result == .LOOKAHEAD) {
             const split_result = try self.splitOff();
             if (split_result) |new| {
-                return .{ .new = new };
+                try self.lookaheads.append(new);
             }
 
-            return .{ .change = false };
+            return split_result != null;
         }
 
-        return .{ .change = result == .CHANGE };
+        for (self.lookaheads.items) |sub| {
+            result = try sub.execJumps() or result;
+        }
+
+        return result == .CHANGE;
     }
 
-    pub fn addBranches(
+    fn addBranches(
         self: LookaheadState,
         prongs: *std.ArrayList(ra.SplitBranch),
     ) !void {
@@ -910,31 +947,18 @@ pub const LookaheadState = struct {
         const curr_blk = &blocks[blocks.len - 1];
 
         assert(!instr.meta.isConsuming());
+        new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
         switch (instr.tag) {
             .NONTERM => {
-                new_branch.look = if (instr.meta.pos == (self.look == .POSITIVE))
-                    .POSITIVE
-                else
-                    .NEGATIVE;
-
                 // got to the next block
                 curr_blk.* = instr.data.ctx_jmp.returns;
                 self.base.instr = 0;
             },
             .STRING => {
-                new_branch.look = if (instr.meta.pos == (self.look == .POSITIVE))
-                    .POSITIVE
-                else
-                    .NEGATIVE;
-
                 // string match cannot be the last instruction of a block
                 self.base.instr += 1;
             },
             .MATCH => {
-                new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
-
-                // got to the next block
-
                 // there should be only one way
                 // (this causes no problems because lowering only generates one)
                 assert(instr.data.match.items.len == 1);
@@ -960,43 +984,67 @@ pub const LookaheadState = struct {
         );
     }
 
-    pub fn clone(self: LookaheadState) !LookaheadState {
+    fn clone(self: LookaheadState) !LookaheadState {
         return .{
             .look = self.look,
             .start = self.start,
             .base = try self.base.clone(),
+            .lookaheads = try self.cloneLookaheads(),
         };
     }
 
-    pub const Key = struct {
+    fn cloneLookaheads(self: LookaheadState) !std.ArrayList(LookaheadState) {
+        var looks = std.ArrayList(LookaheadState).init(self.lookaheads.allocator);
+        for (self.lookaheads.items) |look| try looks.append(try look.clone());
+        return looks;
+    }
+
+    const Key = struct {
         base: ra.ExecState.Key,
         look: LookaheadType,
+        lookaheads: []const Key,
 
-        pub fn eql(self: Key, other: Key) bool {
-            if (self.look != other.look) return false;
-            return self.base.eql(other.base);
+        fn eql(self: Key, other: Key) bool {
+            if (self.look != other.look or
+                self.lookaheads.len != other.lookaheads.len or
+                self.base.eql(other.base)) return false;
+
+            for (self.lookaheads, other.lookaheads) |s, o| {
+                if (!s.eql(o)) return false;
+            }
+
+            return true;
         }
 
-        pub fn hash(self: Key, hasher: anytype) void {
+        fn hash(self: Key, hasher: anytype) void {
             assert(std.meta.hasUniqueRepresentation(LookaheadType));
 
             self.base.hash(hasher);
             hasher.update(std.mem.asBytes(&self.look));
+
+            for (self.lookaheads) |look| {
+                look.hash(hasher);
+            }
         }
 
-        pub fn clone(self: Key) Key {
+        fn clone(self: Key, allocator: Allocator) !Key {
+            const looks = try allocator.alloc(Key, self.lookaheads.len);
+            for (self.lookaheads, looks) |from, *to| to.* = try from.clone();
+
             return .{
+                .lookaheads = looks,
                 .base = self.base,
                 .look = self.look,
             };
         }
 
-        pub fn format(
+        fn format(
             self: Key,
             comptime _: []const u8,
             _: std.fmt.FormatOptions,
             writer: anytype,
         ) !void {
+            // TODO: add looks
             try writer.print("{s}{s}", .{ if (self.look == .POSITIVE)
                 "&"
             else
@@ -1004,28 +1052,37 @@ pub const LookaheadState = struct {
         }
     };
 
-    pub fn toKey(self: *LookaheadState) ?Key {
+    fn toKey(self: *LookaheadState, allocator: Allocator) !?Key {
         const base_key = self.base.toKey() orelse {
             assert(self.look == .POSITIVE);
             return null;
         };
+        var looks = std.ArrayList(Key).init(allocator);
+        for (self.lookaheads.items) |look| {
+            const key = try look.toKey();
+            if (key) |k| try looks.append(k);
+        }
 
         return .{
+            .lookaheads = try looks.toOwnedSlice(),
             .base = base_key,
             .look = self.look,
         };
     }
 
-    pub fn deinit(self: LookaheadState) void {
+    fn deinit(self: LookaheadState) void {
+        for (self.lookaheads.items) |look| look.deinit();
+        self.lookaheads.deinit();
         self.base.deinit();
     }
 
-    pub fn format(
+    fn format(
         self: Key,
         comptime _: []const u8,
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
+        // TODO: complete the formatting
         try writer.print("{s}{s}", .{ if (self.look == .POSITIVE)
             "&"
         else
