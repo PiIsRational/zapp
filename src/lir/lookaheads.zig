@@ -88,7 +88,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
         }
 
         if (state.canFillLookBranches()) {
-            try state.fillLookBranches();
+            while (try state.fillLookBranches()) {}
             const new_key = try state.toKey();
             defer new_key.deinit(self.allocator);
 
@@ -477,6 +477,7 @@ const LookaheadTopState = struct {
     fn canFillLookBranches(self: LookaheadTopState) bool {
         for (self.sub_states.items) |sub| {
             if (sub.canFillBranches()) return true;
+            if (sub.canFillSubBranches()) return true;
         }
 
         return false;
@@ -545,13 +546,17 @@ const LookaheadTopState = struct {
         return true;
     }
 
-    fn fillLookBranches(self: *LookaheadTopState) !void {
+    fn fillLookBranches(self: *LookaheadTopState) !bool {
         var buf = std.ArrayList(LookaheadState)
             .init(self.sub_states.allocator);
         defer buf.deinit();
 
+        var result = false;
+
         for (self.sub_states.items) |*state| {
+            result = try state.fillSubBranches() or result;
             if (!state.base.canFillBranches()) continue;
+            result = true;
 
             while (try state.fillBranches()) |branched| {
                 try buf.append(branched);
@@ -559,6 +564,7 @@ const LookaheadTopState = struct {
         }
 
         try self.sub_states.appendSlice(buf.items);
+        return result;
     }
 
     fn fillBranches(self: *LookaheadTopState) !?LookaheadTopState {
@@ -583,13 +589,7 @@ const LookaheadTopState = struct {
 
         var had_change = result != .NO_CHANGE;
         for (self.sub_states.items) |*sub| {
-            switch (try sub.execJumps()) {
-                .new => |new_sub| {
-                    had_change = true;
-                    try buf.append(new_sub);
-                },
-                .change => |val| had_change = had_change or val,
-            }
+            had_change = try sub.execJumps() or had_change;
         }
         try self.sub_states.appendSlice(buf.items);
 
@@ -607,6 +607,7 @@ const LookaheadTopState = struct {
 
     fn splitOff(self: *LookaheadTopState) !LookaheadState {
         var new_branch: LookaheadState = .{
+            .lookaheads = std.ArrayList(LookaheadState).init(self.sub_states.allocator),
             .base = try self.base.clone(),
             .look = undefined,
             .start = undefined,
@@ -711,7 +712,7 @@ const LookaheadTopState = struct {
 
         fn clone(self: Key, allocator: Allocator) !Key {
             const sub_states = try allocator.alloc(LookaheadState.Key, self.sub_states.len);
-            for (self.sub_states, sub_states) |from, *to| to.* = from.clone();
+            for (self.sub_states, sub_states) |from, *to| to.* = try from.clone(allocator);
 
             return .{
                 .base = self.base,
@@ -758,7 +759,9 @@ const LookaheadTopState = struct {
 
         var sub_states = std.ArrayList(LookaheadState.Key).init(self.sub_states.allocator);
         for (self.sub_states.items) |*from| {
-            if (from.toKey()) |key| try sub_states.append(key);
+            if (try from.toKey(self.sub_states.allocator)) |key| {
+                try sub_states.append(key);
+            }
         }
 
         return .{
@@ -865,6 +868,15 @@ const LookaheadState = struct {
         return true;
     }
 
+    fn canFillSubBranches(self: LookaheadState) bool {
+        for (self.lookaheads.items) |sub| {
+            if (sub.canFillBranches()) return true;
+            if (sub.canFillSubBranches()) return true;
+        }
+
+        return false;
+    }
+
     fn fillSubBranches(self: *LookaheadState) !bool {
         var result = false;
         var i: usize = 0;
@@ -895,8 +907,8 @@ const LookaheadState = struct {
         };
     }
 
-    fn execJumps(self: *LookaheadState) bool {
-        var result = if (self.lookaheadOnStart())
+    fn execJumps(self: *LookaheadState) !bool {
+        const result = if (self.lookaheadOnStart())
             try self.base.execForceJumps()
         else
             try self.base.execJumps();
@@ -910,11 +922,12 @@ const LookaheadState = struct {
             return split_result != null;
         }
 
-        for (self.lookaheads.items) |sub| {
-            result = try sub.execJumps() or result;
+        var change = result == .CHANGE;
+        for (self.lookaheads.items) |*sub| {
+            change = try sub.execJumps() or change;
         }
 
-        return result == .CHANGE;
+        return change;
     }
 
     fn addBranches(
@@ -984,7 +997,7 @@ const LookaheadState = struct {
         );
     }
 
-    fn clone(self: LookaheadState) !LookaheadState {
+    fn clone(self: LookaheadState) Allocator.Error!LookaheadState {
         return .{
             .look = self.look,
             .start = self.start,
@@ -1029,7 +1042,7 @@ const LookaheadState = struct {
 
         fn clone(self: Key, allocator: Allocator) !Key {
             const looks = try allocator.alloc(Key, self.lookaheads.len);
-            for (self.lookaheads, looks) |from, *to| to.* = try from.clone();
+            for (self.lookaheads, looks) |from, *to| to.* = try from.clone(allocator);
 
             return .{
                 .lookaheads = looks,
@@ -1052,14 +1065,14 @@ const LookaheadState = struct {
         }
     };
 
-    fn toKey(self: *LookaheadState, allocator: Allocator) !?Key {
+    fn toKey(self: LookaheadState, allocator: Allocator) !?Key {
         const base_key = self.base.toKey() orelse {
             assert(self.look == .POSITIVE);
             return null;
         };
         var looks = std.ArrayList(Key).init(allocator);
         for (self.lookaheads.items) |look| {
-            const key = try look.toKey();
+            const key = try look.toKey(allocator);
             if (key) |k| try looks.append(k);
         }
 
