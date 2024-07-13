@@ -339,6 +339,49 @@ fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
     nfa.blocks.shrinkRetainingCapacity(curr);
 }
 
+fn addSubBranches(
+    prongs: *std.ArrayList(ra.SplitBranch),
+    base_buffer: *std.ArrayList(ra.SplitBranch),
+    subs: []const LookaheadState,
+) Allocator.Error!void {
+    var sub_buffer = std.ArrayList(ra.SplitBranch)
+        .init(base_buffer.allocator);
+    defer sub_buffer.deinit();
+
+    var base_no_consume = ra.AcceptanceSet.Full;
+    for (base_buffer.items) |branch| {
+        if (branch.final_action == null) base_no_consume.cut(branch.set);
+    }
+
+    for (subs) |sub| {
+        try sub.addBranches(&sub_buffer);
+        var index: usize = 0;
+        for (sub_buffer.items) |*branch| {
+            if (branch.final_action != null) {
+                sub_buffer.items[index] = branch.*;
+                index += 1;
+                continue;
+            }
+
+            // do not append branches that would fail anyways
+            branch.set.cut(base_no_consume);
+            if (!branch.set.isEmpty()) try prongs.append(branch.*);
+        }
+
+        sub_buffer.shrinkRetainingCapacity(index);
+
+        // finally analyze the accepting branches
+        for (sub_buffer.items) |sub_branch| for (base_buffer.items) |*base_branch| {
+            switch (sub.look) {
+                .POSITIVE => base_branch.set.intersect(sub_branch.set),
+                .NEGATIVE => base_branch.set.cut(sub_branch.set),
+            }
+        };
+
+        sub_buffer.clearRetainingCapacity();
+    }
+}
+
 const LookaheadTopState = struct {
     base: ra.ExecState,
     action: ?usize,
@@ -374,10 +417,7 @@ const LookaheadTopState = struct {
 
         var base_buffer = std.ArrayList(ra.SplitBranch)
             .init(self.sub_states.allocator);
-        var sub_buffer = std.ArrayList(ra.SplitBranch)
-            .init(self.sub_states.allocator);
         defer base_buffer.deinit();
-        defer sub_buffer.deinit();
 
         if (!accepting) {
             try self.base.addBranches(&base_buffer, false);
@@ -388,38 +428,7 @@ const LookaheadTopState = struct {
             });
         }
 
-        var base_no_consume = ra.AcceptanceSet.Full;
-        for (base_buffer.items) |branch| {
-            if (branch.final_action == null) base_no_consume.cut(branch.set);
-        }
-
-        for (self.sub_states.items) |sub| {
-            try sub.addBranches(&sub_buffer);
-            var index: usize = 0;
-            for (sub_buffer.items) |*branch| {
-                if (branch.final_action != null) {
-                    sub_buffer.items[index] = branch.*;
-                    index += 1;
-                    continue;
-                }
-
-                // do not append branches that would fail anyways
-                branch.set.cut(base_no_consume);
-                if (!branch.set.isEmpty()) try prongs.append(branch.*);
-            }
-
-            sub_buffer.shrinkRetainingCapacity(index);
-
-            // finally analyze the accepting branches
-            for (sub_buffer.items) |sub_branch| for (base_buffer.items) |*base_branch| {
-                switch (sub.look) {
-                    .POSITIVE => base_branch.set.intersect(sub_branch.set),
-                    .NEGATIVE => base_branch.set.cut(sub_branch.set),
-                }
-            };
-
-            sub_buffer.clearRetainingCapacity();
-        }
+        try addSubBranches(prongs, &base_buffer, self.sub_states.items);
 
         for (base_buffer.items) |branch| {
             if (branch.set.isEmpty()) continue;
@@ -722,10 +731,13 @@ const LookaheadTopState = struct {
         }
 
         fn deinit(self: Key, allocator: Allocator) void {
+            for (self.sub_states) |sub| {
+                sub.deinit(allocator);
+            }
             allocator.free(self.sub_states);
         }
 
-        fn format(
+        pub fn format(
             self: Key,
             comptime _: []const u8,
             _: std.fmt.FormatOptions,
@@ -734,12 +746,7 @@ const LookaheadTopState = struct {
             if (self.action) |act| {
                 try writer.print("(act: {d})", .{act});
             } else {
-                try writer.print("{s}{s} {{", .{ if (self.look == .NONE)
-                    ""
-                else if (self.look == .POSITIVE)
-                    "&"
-                else
-                    "!", self.base });
+                try writer.print("{s} {{", .{self.base});
                 for (self.sub_states) |sub| {
                     try writer.print("{s}, ", .{sub});
                 }
@@ -777,18 +784,13 @@ const LookaheadTopState = struct {
         self.sub_states.deinit();
     }
 
-    fn format(
+    pub fn format(
         self: LookaheadTopState,
         comptime _: []const u8,
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        try writer.print("{s}{s} {{", .{ if (self.look == .NONE)
-            ""
-        else if (self.look == .POSITIVE)
-            "&"
-        else
-            "!", self.base });
+        try writer.print("{s} {{", .{self.base});
         for (self.sub_states.items) |sub| {
             try writer.print("{s}, ", .{sub});
         }
@@ -802,11 +804,21 @@ const LookaheadState = struct {
     start: ra.ExecPlace,
     lookaheads: std.ArrayList(LookaheadState),
 
-    fn lookaheadIsDoneOnSet(self: LookaheadState, set: ra.AcceptanceSet) bool {
-        const next = self.base.nextPlace(set).?;
+    fn isDoneOnSet(self: LookaheadState, set: ra.AcceptanceSet) bool {
+        if (self.base.nextPlace(set)) |next| {
+            if (self.base.blocks.items.len != 1 or
+                (next.block_id == self.start.block_id and
+                next.instr == self.start.instr))
+            {
+                return false;
+            }
+        } else return false;
 
-        return self.base.blocks.items.len == 1 and
-            (next.block_id != self.start.block_id or next.instr != self.start.instr);
+        for (self.lookaheads.items) |look| {
+            if (!look.isDoneOnSet(set)) return false;
+        }
+
+        return true;
     }
 
     fn lookaheadOnStart(self: LookaheadState) bool {
@@ -827,7 +839,7 @@ const LookaheadState = struct {
         }
 
         var new: LookaheadState = .{
-            .base = try self.base.splitOn(branch.set) orelse return null,
+            .base = try self.base.splitOn(branch.set) orelse try self.base.clone(),
             .look = self.look,
             .start = self.start,
             .lookaheads = looks,
@@ -843,8 +855,19 @@ const LookaheadState = struct {
 
     fn isDone(self: LookaheadState) bool {
         const blocks = self.base.blocks.items;
-        return blocks.len == 1 and
-            (blocks[0].id != self.start.block_id or self.base.instr != self.start.instr);
+
+        if (blocks.len != 1 or
+            blocks[0].id == self.start.block_id and
+            self.base.instr == self.start.instr)
+        {
+            return false;
+        }
+
+        for (self.lookaheads.items) |look| {
+            if (!look.isDone()) return false;
+        }
+
+        return true;
     }
 
     fn canFillBranches(self: LookaheadState) bool {
@@ -941,9 +964,11 @@ const LookaheadState = struct {
         try self.base.addBranches(&base_buffer, false);
 
         for (base_buffer.items) |*branch| {
-            if (!self.lookaheadIsDoneOnSet(branch.set)) continue;
+            if (!self.isDoneOnSet(branch.set)) continue;
             branch.final_action = 0; // this is a terminal action
         }
+
+        try addSubBranches(prongs, &base_buffer, self.lookaheads.items);
 
         for (base_buffer.items) |branch| {
             if (branch.set.isEmpty()) continue;
@@ -1013,14 +1038,17 @@ const LookaheadState = struct {
     }
 
     const Key = struct {
-        base: ra.ExecState.Key,
+        base: ?ra.ExecState.Key,
         look: LookaheadType,
         lookaheads: []const Key,
 
         fn eql(self: Key, other: Key) bool {
             if (self.look != other.look or
                 self.lookaheads.len != other.lookaheads.len or
-                self.base.eql(other.base)) return false;
+                self.base == null and other.base != null or
+                self.base != null and other.base == null or
+                !(self.base == null and other.base == null or
+                self.base.?.eql(other.base.?))) return false;
 
             for (self.lookaheads, other.lookaheads) |s, o| {
                 if (!s.eql(o)) return false;
@@ -1032,7 +1060,13 @@ const LookaheadState = struct {
         fn hash(self: Key, hasher: anytype) void {
             assert(std.meta.hasUniqueRepresentation(LookaheadType));
 
-            self.base.hash(hasher);
+            if (self.base) |base| {
+                hasher.update("1");
+                base.hash(hasher);
+            } else {
+                hasher.update("0");
+            }
+
             hasher.update(std.mem.asBytes(&self.look));
 
             for (self.lookaheads) |look| {
@@ -1051,7 +1085,14 @@ const LookaheadState = struct {
             };
         }
 
-        fn format(
+        fn deinit(self: Key, allocator: Allocator) void {
+            for (self.lookaheads) |look| {
+                look.deinit(allocator);
+            }
+            allocator.free(self.lookaheads);
+        }
+
+        pub fn format(
             self: Key,
             comptime _: []const u8,
             _: std.fmt.FormatOptions,
@@ -1066,15 +1107,14 @@ const LookaheadState = struct {
     };
 
     fn toKey(self: LookaheadState, allocator: Allocator) !?Key {
-        const base_key = self.base.toKey() orelse {
-            assert(self.look == .POSITIVE);
-            return null;
-        };
+        const base_key = self.base.toKey();
         var looks = std.ArrayList(Key).init(allocator);
         for (self.lookaheads.items) |look| {
             const key = try look.toKey(allocator);
             if (key) |k| try looks.append(k);
         }
+
+        if (looks.items.len == 0 and base_key == null) return null;
 
         return .{
             .lookaheads = try looks.toOwnedSlice(),
@@ -1089,8 +1129,8 @@ const LookaheadState = struct {
         self.base.deinit();
     }
 
-    fn format(
-        self: Key,
+    pub fn format(
+        self: LookaheadState,
         comptime _: []const u8,
         _: std.fmt.FormatOptions,
         writer: anytype,
