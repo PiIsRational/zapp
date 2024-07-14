@@ -60,7 +60,7 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
 
     const nfa = try emitter.emit(blk);
     defer nfa.deinit(allocator);
-    gvgen.genAutomaton(w, nfa, "nfa") catch unreachable;
+    //gvgen.genAutomaton(w, nfa, "nfa") catch unreachable;
 
     const dfa = try dfa_gen.genDfa(nfa.start);
     defer dfa.deinit(allocator);

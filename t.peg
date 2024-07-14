@@ -2,7 +2,6 @@
 
 Ident = IDENTIFIER ;
 
-IDENTIFIER = !KEYWORD [A-Za-z_] [A-Za-z0-9_]* ![A-Za-z0-9_] ;
+IDENTIFIER = !KEYWORD [A-Za-z_] [A-Za-z0-9_]* ;
 
-KEYWORD_CONST       = 'const' ![A-Za-z0-9_];
-KEYWORD = KEYWORD_CONST ;
+KEYWORD       = 'const' ![A-Za-z0-9_]; 

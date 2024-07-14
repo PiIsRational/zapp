@@ -646,9 +646,6 @@ pub const ExecState = struct {
         assert(!set.isEmpty());
 
         switch (instr.tag) {
-            // this only works because the set was built using add branches and
-            // therefore cannot contain more characters in itself if it accepts the string
-            // TODO: make this more robust
             .STRING => if (set.matchesChar(instr.data.str[self.instr_sub_idx])) {
                 var new_state = try self.clone();
                 if (self.instr_sub_idx + 1 == instr.data.str.len) {
@@ -894,5 +891,14 @@ pub const ExecPlace = struct {
         if (self.instr < other.instr) return true;
         if (self.instr > other.instr) return false;
         return self.instr_sub_idx < other.instr_sub_idx;
+    }
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        try writer.print("({d} {d} {d})", .{ self.block_id, self.instr, self.instr_sub_idx });
     }
 };
