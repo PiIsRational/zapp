@@ -77,6 +77,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
 
     while (self.states.popOrNull()) |popped_state| {
         var state = popped_state;
+
         const key = try state.toKey();
         defer key.deinit(self.allocator);
 
@@ -440,7 +441,7 @@ const LookaheadTopState = struct {
 
     fn isLookFail(self: LookaheadTopState) !bool {
         for (self.sub_states.items) |sub| {
-            if (try sub.isDone() and sub.look == .NEGATIVE) return true;
+            if (try sub.isDone(true) and sub.look == .NEGATIVE) return true;
         }
 
         return false;
@@ -814,9 +815,9 @@ const LookaheadState = struct {
         var val: ra.ExecState.ExecJmpsResult = .CHANGE;
         while (val == .CHANGE) : (val = try next.execJumps()) {
             const blocks = next.blocks.items;
-            assert(blocks.len != 0);
 
-            if (blocks.len == 1 and
+            if (blocks.len == 0 or
+                blocks.len == 1 and
                 (blocks[0].id != self.start.block_id or next.instr != self.start.instr))
             {
                 return true;
@@ -844,16 +845,20 @@ const LookaheadState = struct {
         }
 
         var new: LookaheadState = .{
-            .base = if (try self.isDoneOnSet(branch.set))
+            .base = if (try self.isDone(false))
                 try self.base.clone()
             else
-                try self.base.splitOn(branch.set) orelse return null,
+                try self.base.splitOn(branch.set) orelse {
+                    for (looks.items) |l| l.deinit();
+                    looks.deinit();
+                    return null;
+                },
             .look = self.look,
             .start = self.start,
             .lookaheads = looks,
         };
 
-        if (try new.isDone()) {
+        if (try new.isDone(true)) {
             new.deinit();
             return null;
         }
@@ -861,16 +866,15 @@ const LookaheadState = struct {
         return new;
     }
 
-    fn isDone(self: LookaheadState) !bool {
+    fn isDone(self: LookaheadState, deep: bool) !bool {
         var copy = try self.base.clone();
         defer copy.deinit();
         var val: ra.ExecState.ExecJmpsResult = .CHANGE;
 
         while (val == .CHANGE) : (val = try copy.execJumps()) {
             const blocks = copy.blocks.items;
-            assert(blocks.len != 0);
 
-            if (blocks.len == 1 and
+            if (blocks.len == 0 or blocks.len == 1 and
                 (blocks[0].id != self.start.block_id or copy.instr != self.start.instr))
             {
                 break;
@@ -878,22 +882,35 @@ const LookaheadState = struct {
         }
 
         const blocks = copy.blocks.items;
-        if (blocks.len != 1 or
+        if (blocks.len != 0 and (blocks.len != 1 or
             blocks[0].id == self.start.block_id and
-            copy.instr == self.start.instr)
+            copy.instr == self.start.instr))
         {
+            std.debug.print("{s} is ", .{self});
+            if (deep) std.debug.print("deep ", .{});
+            std.debug.print("not done\n", .{});
             return false;
         }
 
-        for (self.lookaheads.items) |look| {
-            if (!try look.isDone()) return false;
+        if (deep) {
+            for (self.lookaheads.items) |look| {
+                if (!try look.isDone(true)) {
+                    std.debug.print("{s} is ", .{self});
+                    if (deep) std.debug.print("deep ", .{});
+                    std.debug.print("not done\n", .{});
+                    return false;
+                }
+            }
         }
 
+        std.debug.print("{s} is ", .{self});
+        if (deep) std.debug.print("deep ", .{});
+        std.debug.print("done\n", .{});
         return true;
     }
 
     fn canFillBranches(self: LookaheadState) !bool {
-        if (try self.isDone()) return false;
+        if (try self.isDone(false)) return false;
         return self.base.canFillBranches();
     }
 
@@ -953,6 +970,8 @@ const LookaheadState = struct {
     }
 
     fn execJumps(self: *LookaheadState) !bool {
+        if (try self.isDone(false)) return try self.execJumpsChilds();
+
         const result = if (self.lookaheadOnStart())
             try self.base.execForceJumps()
         else
@@ -967,7 +986,11 @@ const LookaheadState = struct {
             return split_result != null;
         }
 
-        var change = result == .CHANGE;
+        return try self.execJumpsChilds() or result == .CHANGE;
+    }
+
+    fn execJumpsChilds(self: *LookaheadState) Allocator.Error!bool {
+        var change = false;
         for (self.lookaheads.items) |*sub| {
             change = try sub.execJumps() or change;
         }
@@ -983,11 +1006,18 @@ const LookaheadState = struct {
             .init(prongs.allocator);
         defer base_buffer.deinit();
 
-        try self.base.addBranches(&base_buffer, false);
+        if (try self.isDone(false)) {
+            try base_buffer.append(.{
+                .set = ra.AcceptanceSet.Full,
+                .final_action = 0,
+            });
+        } else {
+            try self.base.addBranches(&base_buffer, false);
 
-        for (base_buffer.items) |*branch| {
-            if (!try self.isDoneOnSet(branch.set)) continue;
-            branch.final_action = 0; // this is a terminal action
+            for (base_buffer.items) |*branch| {
+                if (!try self.isDoneOnSet(branch.set)) continue;
+                branch.final_action = 0; // this is a terminal action
+            }
         }
 
         try addSubBranches(prongs, &base_buffer, self.lookaheads.items);

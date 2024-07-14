@@ -45,6 +45,7 @@ pub fn optimize(lir: *ir.LowIr) !void {
         .ir = lir,
     };
 
+    std.debug.print("{s}\n", .{lir});
     try self.blockPass(addAutomaton);
 }
 
