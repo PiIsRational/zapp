@@ -45,7 +45,6 @@ pub fn optimize(lir: *ir.LowIr) !void {
         .ir = lir,
     };
 
-    std.debug.print("{s}\n", .{lir});
     try self.blockPass(addAutomaton);
 }
 
@@ -91,6 +90,20 @@ fn appendAutomaton(
     automaton: *ra.Automaton,
     blk: *ir.Block,
 ) PassError!void {
+    for (automaton.blocks.items) |block| {
+        const instr = block.insts.items[0];
+        if (instr.tag != .RET) continue;
+
+        const action = &self.ir.actions.items[instr.data.action];
+        action.nonterms.clearAndFree();
+        for (action.args.items) |*arg| {
+            assert(arg.ret.isNone());
+            arg.deinit(self.ir.allocator);
+        }
+        action.args.clearAndFree();
+        action.base = block;
+    }
+
     automaton.replaceBlock(automaton.start, blk);
     blk.deinitContent(self.ir.allocator);
 

@@ -886,26 +886,15 @@ const LookaheadState = struct {
             blocks[0].id == self.start.block_id and
             copy.instr == self.start.instr))
         {
-            std.debug.print("{s} is ", .{self});
-            if (deep) std.debug.print("deep ", .{});
-            std.debug.print("not done\n", .{});
             return false;
         }
 
         if (deep) {
             for (self.lookaheads.items) |look| {
-                if (!try look.isDone(true)) {
-                    std.debug.print("{s} is ", .{self});
-                    if (deep) std.debug.print("deep ", .{});
-                    std.debug.print("not done\n", .{});
-                    return false;
-                }
+                if (!try look.isDone(true)) return false;
             }
         }
 
-        std.debug.print("{s} is ", .{self});
-        if (deep) std.debug.print("deep ", .{});
-        std.debug.print("done\n", .{});
         return true;
     }
 

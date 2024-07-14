@@ -1,6 +1,5 @@
 %% NAME Test
 
-Ident = IDENTIFIER ;
+Ident = "const" END;
 
-IDENTIFIER = !KEYWORD [A-Za-z0-9_]* ![A-Za-z0-9_] ;
-KEYWORD       = 'const' ![A-Za-z0-9_]; 
+END = !. ;

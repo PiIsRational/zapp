@@ -4,8 +4,8 @@
 // controlflow instroduced by the cut operator
 
 Grammar: "[]const u8"
-       = Greeting Ending EOS { $2 }
-       | Hello Ending EOS { $2 }
+       = Greeting Ending Eos { $2 }
+       | Hello Ending Eos { $2 }
        ;
 
 Greeting = "Hello" ^ " There"
@@ -17,4 +17,4 @@ Hello = "Hello World" ;
 Ending: "[]const u8"
       = .* { $0 } ;
 
-EOS = !. ;
+Eos = !. ;

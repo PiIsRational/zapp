@@ -4,11 +4,11 @@
 // controlflow instroduced by the cut operator
 
 Grammar: "[]const u8"
-       = ("Hello" ^ "People")* Ending EOS { $2 }
-       | "Hello World" Ending EOS { $2 }
+       = ("Hello" ^ "People")* Ending Eos { $2 }
+       | "Hello World" Ending Eos { $2 }
        ;
 
 Ending: "[]const u8"
       = .* { $0 } ;
 
-EOS = !. ;
+Eos = !. ;
