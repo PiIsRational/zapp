@@ -571,10 +571,10 @@ HEX_ = '_'? HEX ;
 DEC = [0-9] ;
 DEC_ = '_'? DEC ;
 
-BIN_INT = BIN (BIN_ ^)* ;
-OCT_INT = OCT (OCT_ ^)* ;
-DEC_INT = DEC (DEC_ ^)* ;
-HEX_INT = HEX (HEX_ ^)* ;
+BIN_INT = BIN BIN_* !BIN_ ;
+OCT_INT = OCT OCT_* !OCT_ ;
+DEC_INT = DEC DEC_* !DEC_ ;
+HEX_INT = HEX HEX_* !HEX_ ;
 
 // From https://lemire.me/blog/2018/05/09/how-quickly-can-you-check-that-a-string-is-valid-unicode-utf-8/
 MB_UTF8_LITERAL
@@ -592,8 +592,8 @@ MB_UTF8_LITERAL
 ASCII_CHAR_NOT_NL_SLASH_SQUOTE = [\x01-\x09\x0B-\x26\x28-\x5B\x5D-\x7F] ;
 
 CHAR_ESCAPE
-    = "\\x" ^ HEX HEX
-    | "\\u{" ^ HEX+ "}"
+    = "\\x" HEX HEX
+    | "\\u{" HEX+ "}"
     | "\\" [nr\\t'"]
     ;
 
@@ -608,15 +608,21 @@ STRING_CHAR
     | ![\\"\n] .
     ;
 
-CONTAINER_DOC_COMMENT = ('//!' (!'\n' . ^)* [ \n]* SKIP)+ ;
-DOC_COMMENT = ('///' (!'\n' . ^)* ([ \n] ^)* SKIP)+ ; 
+CONTAINER_DOC_COMMENT = ('//!' (!'\n' .)* [ \n]* SKIP)+ ;
+DOC_COMMENT = ('///' (!'\n' .)* [ \n]* SKIP)+ ; 
 LINE_COMMENT
-    = '//' ![!/] ^ (!'\n' . ^)*
-    | '////' (!'\n' . ^)* 
+    = '//' ![!/] (!'\n' .)* !(![\n] .) 
+    | '////' (!'\n' .)* !(![\n] .)
     ;
 
-LINE_STRING = ("\\\\" (!'\n' . ^)* ([ \n] ^)*)+ ;
-SKIP = (WHITESPACE ^)* ;
+LINE_STRING = ("\\\\" (![\n] .)* [ \n]*)+ ;
+SKIP = WHITESPACE* !WHITESPACE_START ;
+
+WHITESPACE_START 
+    = [ \n]
+    | '//' ![!/]
+    | '////'
+    ;
 
 WHITESPACE
     = [ \n]
@@ -626,32 +632,31 @@ WHITESPACE
 CHAR_LITERAL = "'" CHAR_CHAR "'" SKIP;
 
 FLOAT
-    = "0x" HEX_INT "." ^ HEX_INT ([pP] [-+]? DEC_INT)? SKIP
-    |      DEC_INT "." ^ DEC_INT ([eE] [-+]? DEC_INT)? SKIP
-    | "0x" DEC_INT [pP] ^ [-+]? DEC_INT SKIP
+    = "0x" HEX_INT "."  HEX_INT ([pP] [-+]? DEC_INT)? SKIP
+    |      DEC_INT "."  DEC_INT ([eE] [-+]? DEC_INT)? SKIP
+    | "0x" DEC_INT [pP] [-+]? DEC_INT SKIP
     |      DEC_INT [eE] [-+]? DEC_INT SKIP
     ;
 
 INTEGER
-    = "0b" ^ BIN_INT SKIP 
-    | "0o" ^ OCT_INT SKIP
-    | "0x" ^ HEX_INT SKIP
-    |        DEC_INT SKIP
+    = "0b" BIN_INT SKIP 
+    | "0o" OCT_INT SKIP
+    | "0x" HEX_INT SKIP
+    |      DEC_INT SKIP
     ;
 
-STRINGLITERALSINGLE = "\"" (STRING_CHAR ^)* "\"" SKIP;
+STRINGLITERALSINGLE = "\"" STRING_CHAR* "\"" SKIP;
 STRINGLITERAL
     = STRINGLITERALSINGLE
     | (LINE_STRING                 SKIP)+ 
     ;
 
 IDENTIFIER
-    = !KEYWORD [A-Za-z_] ([A-Za-z0-9_] ^)* SKIP
+    = !KEYWORD [A-Za-z_] [A-Za-z0-9_]* END_OF_WORD
     | "@" STRINGLITERALSINGLE
     ;
 
-BUILTINIDENTIFIER = "@"[A-Za-z_]([A-Za-z0-9_] ^)* SKIP;
-
+BUILTINIDENTIFIER = "@"[A-Za-z_][A-Za-z0-9_]* END_OF_WORD;
 
 AMPERSAND            = '&'      ![=]      SKIP;
 AMPERSANDEQUAL       = '&='               SKIP;
@@ -717,7 +722,7 @@ SEMICOLON            = ';'                SKIP;
 SLASH                = '/'      ![=]      SKIP;
 SLASHEQUAL           = '/='               SKIP;
 TILDE                = '~'                SKIP;
- 
+
 END_OF_WORD = ![a-zA-Z0-9_] SKIP;
 KEYWORD_ADDRSPACE   = 'addrspace'   END_OF_WORD ;
 KEYWORD_ALIGN       = 'align'       END_OF_WORD ;

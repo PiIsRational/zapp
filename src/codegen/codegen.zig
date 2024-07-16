@@ -174,6 +174,9 @@ const vars =
     \\max_memo_state: State,
     \\infer_fail_msg: []const u8,
     \\infer_fail_err: ?anyerror,
+    \\term_end_state: State,
+    \\has_term_accept: bool,
+    \\term_accept_len: CharSpanLength,
 ;
 
 const funcs =
@@ -238,9 +241,12 @@ const funcs =
     \\    self.empty_backtrack = AddrToNFail[0];
     \\    self.max_memo_state = 0;
     \\    self.chars = chars;
+    \\    self.term_end_state = 0;
+    \\    self.has_term_accept = false;
+    \\    self.term_accept_len = 0;
     \\}
     \\
-    \\pub fn stats(self: *const @This()) Stats {
+    \\pub fn stats(self: @This()) Stats {
     \\    return .{
     \\        .memo = self.memo.getMemUseage(),
     \\        .max_memo = self.memo.max_chars,
@@ -381,7 +387,7 @@ const funcs =
     \\    }
     \\}
     \\
-    \\fn getParseError(self: *const @This()) ParsingError {
+    \\fn getParseError(self: @This()) ParsingError {
     \\    const rule = AddrToRule[self.next_expected];
     \\    return .{
     \\        .last_found = self.max_slice,
@@ -774,23 +780,40 @@ fn parseInstr(self: *CodeGen, instr: *lir.Instr, fail: ?*lir.Block) !void {
         },
         .STRING => try self.parseString(instr, fail.?),
         .MATCH => try self.parseMatch(instr, fail.?),
-        .NONTERM => try self.writer.print(
-            "try self.parseNonterminal({d}, {}, {});\n",
-            .{
+        .TERM, .NONTERM => {
+            try w.print("try self.parseNonterminal({d}, {}, {});\n", .{
                 instr.data.ctx_jmp.next.id,
                 instr.meta.neg,
                 !instr.meta.pos and !instr.meta.neg,
-            },
-        ),
-        .FAIL => try w.print("try self.returnFromNonterminal(true, false);\n", .{}),
+            });
+
+            if (instr.tag == .TERM) {
+                try w.print("self.has_term_accept = false;\n", .{});
+            }
+        },
         .RET => try w.print("try self.returnFromNonterminal(false, false);\n", .{}),
+        .EXIT_PASS => {
+            try w.print("try self.returnFromNonterminal(false, false);\n", .{});
+            try w.print("break;\n", .{});
+        },
+        .PRE_ACCEPT => {
+            try w.print("self.has_term_accept = true;\n", .{});
+            try w.print("self.term_end_state = self.state;\n", .{});
+            try w.print("self.term_accept_len = self.acc;\n", .{});
+        },
+        .FAIL => try w.print("try self.returnFromNonterminal(true, false);\n", .{}),
         .EXIT_FAIL => {
             try w.print("try self.returnFromNonterminal(true, false);\n", .{});
             try w.print("break;\n", .{});
         },
-        .EXIT_PASS => {
-            try w.print("try self.returnFromNonterminal(false, false);\n", .{});
-            try w.print("break;\n", .{});
+        .TERMINAL_FAIL => {
+            try w.print("if (self.has_term_accept) {{\n", .{});
+            try w.print("    self.acc = self.term_accept_len;\n", .{});
+            try w.print("    self.state = self.term_end_state;\n", .{});
+            try w.print("    try self.returnFromNonterminal(false, false);\n", .{});
+            try w.print("}} else {{\n", .{});
+            try w.print("    try self.returnFromNonterminal(true, false);\n", .{});
+            try w.print("}}\n", .{});
         },
     }
 }

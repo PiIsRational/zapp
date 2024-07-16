@@ -16,7 +16,7 @@
 
 %% NAME NewCalc
 
-Grammar: isize = SPACING Addition End { $2 };
+Grammar: isize = SPACING Addition EOF { $2 };
 
 Addition: isize = Neg (PLUS Neg)* {
     blk: {
@@ -106,4 +106,4 @@ LINE_END
     | '\r'
     ;
 
-End = !. ;
+EOF = !. ;

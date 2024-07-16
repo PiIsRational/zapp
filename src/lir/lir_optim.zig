@@ -49,7 +49,7 @@ pub fn optimize(lir: *ir.LowIr) !void {
 }
 
 fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
-    const w = std.io.getStdErr().writer();
+    const stdout = std.io.getStdErr().writer();
     if (!blk.meta.is_target or !blk.meta.used_terminal) return;
     const allocator = self.ir.allocator;
 
@@ -60,7 +60,6 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
 
     const nfa = try emitter.emit(blk);
     defer nfa.deinit(allocator);
-    //gvgen.genAutomaton(w, nfa, "nfa") catch unreachable;
 
     const dfa = try dfa_gen.genDfa(nfa.start);
     defer dfa.deinit(allocator);
@@ -81,7 +80,7 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
 
     try ra.compressMatches(allocator, &nerode);
     nerode.setFail();
-    gvgen.genAutomaton(w, nerode, "name") catch unreachable;
+    gvgen.genAutomaton(stdout, nerode, "nerode") catch unreachable;
     try self.appendAutomaton(&nerode, blk);
 }
 

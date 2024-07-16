@@ -141,7 +141,6 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
 
         for (branches.prongs.items) |branch| {
             var new_state = try state.splitOn(branch);
-
             const new_key = try new_state.toKey();
             defer new_key.deinit(self.allocator);
             var labels = std.ArrayList(ir.Range).init(self.allocator);
@@ -867,11 +866,12 @@ const LookaheadState = struct {
     }
 
     fn isDone(self: LookaheadState, deep: bool) !bool {
-        var copy = try self.base.clone();
-        defer copy.deinit();
+        const can_jump = self.base.canExecJumps();
+        var copy = if (can_jump) try self.base.clone() else self.base;
+        defer if (can_jump) copy.deinit();
         var val: ra.ExecState.ExecJmpsResult = .CHANGE;
 
-        while (val == .CHANGE) : (val = try copy.execJumps()) {
+        while (can_jump and val == .CHANGE) : (val = try copy.execJumps()) {
             const blocks = copy.blocks.items;
 
             if (blocks.len == 0 or blocks.len == 1 and

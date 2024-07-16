@@ -371,21 +371,25 @@ pub const Instr = struct {
                 }
                 try writer.print("  {s})", .{self.meta});
             },
-            .NONTERM => try writer.print(
-                "  (ctx jmp: %{d}, ret: %{d}{s})",
-                .{
-                    self.data.ctx_jmp.next.id,
-                    self.data.ctx_jmp.returns.id,
-                    self.meta,
-                },
-            ),
-            .FAIL => try writer.print("  (fail)", .{}),
+            .NONTERM => try writer.print("  (ctx jmp: %{d}, ret: %{d}{s})", .{
+                self.data.ctx_jmp.next.id,
+                self.data.ctx_jmp.returns.id,
+                self.meta,
+            }),
+            .TERM => try writer.print("  (term jmp: %{d}, ret: {d}{s})", .{
+                self.data.ctx_jmp.next.id,
+                self.darta.ctx_jmo.returns.id,
+                self.meta,
+            }),
+            .PRE_ACCEPT => try writer.print("  (pre accept: {d})", .{self.data.action}),
             .RET => try writer.print("  (ret: {d})", .{self.data.action}),
             .EXIT_PASS => try writer.print(
                 "  (exit pass: {d})",
                 .{self.data.action},
             ),
+            .FAIL => try writer.print("  (fail)", .{}),
             .EXIT_FAIL => try writer.print("  (exit fail)", .{}),
+            .TERMINAL_FAIL => try writer.print("  (terminal fail)", .{}),
         }
     }
 };
@@ -395,6 +399,9 @@ pub const InstrTag = enum {
     JMP, // jump without context
     MATCH, // conditional jump on different ranges of chars
     NONTERM, // call a nonterminal
+    TERM, // call a terminal
+    TERMINAL_FAIL, // the fail used for terminals (checks for the pre accept)
+    PRE_ACCEPT, // logs the last accepting state for a terminal
     FAIL, // return from the nonterminal and failed to match
     RET, // return from the nonterminal and succeeded to match
     EXIT_PASS, // exit from the loop and succeed to parse

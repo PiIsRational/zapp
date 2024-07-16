@@ -567,7 +567,7 @@ fn getMatchChar(blk: **ir.Block) ?u8 {
     const prongs = instr.data.match.items;
     if (prongs.len != 1) return null;
     const prong = prongs[0];
-    if (prong.labels.items.len != 1) return null;
+    if (prong.labels.items.len != 1 or !prong.consuming) return null;
     const class = prong.labels.items[0];
     if (!class.isChar()) return null;
 
@@ -743,6 +743,15 @@ pub const ExecState = struct {
         NO_CHANGE,
     };
 
+    pub fn canExecJumps(self: ExecState) bool {
+        const instr = self.getCurrInstr() orelse return false;
+        return switch (instr.tag) {
+            .JMP, .NONTERM, .RET => true,
+            .FAIL, .EXIT_FAIL, .EXIT_PASS => unreachable,
+            else => false,
+        };
+    }
+
     /// returns true if some jump could be executed
     pub fn execJumps(self: *ExecState) !ExecJmpsResult {
         const instr = self.getCurrInstr() orelse return .NO_CHANGE;
@@ -769,14 +778,14 @@ pub const ExecState = struct {
                 blocks[blocks.len - 1] = jmp.returns;
                 try self.blocks.append(jmp.next);
             },
-            .RET, .EXIT_PASS => {
+            .RET => {
                 // the jump has context
                 _ = self.blocks.pop();
                 self.last_action = instr.data.action;
             },
             // this would be a full fail
             // should be unreachable as fill branches ignores the fail branch
-            .FAIL, .EXIT_FAIL => unreachable,
+            .FAIL, .EXIT_FAIL, .EXIT_PASS => unreachable,
             else => return .NO_CHANGE,
         }
 
