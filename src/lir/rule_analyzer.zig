@@ -19,6 +19,87 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const ir = @import("low_ir.zig");
 
+pub fn MultiLevelBuffer(comptime T: type) type {
+    return struct {
+        base: std.ArrayList(T),
+        last_sub: usize = 0,
+
+        pub const Buffer = struct {
+            ptr: *MultiLevelBuffer(T),
+            start: usize,
+            id: usize,
+
+            pub fn append(self: *@This(), item: T) !void {
+                assert(self.ptr.last_sub == self.id);
+                try self.ptr.base.append(item);
+            }
+
+            pub fn deinit(self: *@This()) void {
+                self.clear();
+                self.ptr.last_sub -= 1;
+            }
+
+            pub fn clear(self: *@This()) void {
+                self.shrink(0);
+            }
+
+            pub fn shrink(self: @This(), size: usize) void {
+                assert(self.ptr.last_sub == self.id);
+                assert(size <= self.items().len);
+
+                self.ptr.base.shrinkRetainingCapacity(self.start + size);
+            }
+
+            pub fn items(self: @This()) []T {
+                assert(self.start <= self.ptr.base.items.len);
+                return self.ptr.base.items[self.start..];
+            }
+
+            /// append the element at `index` of this buffer to
+            /// the last buffer
+            pub fn appendBack(self: *@This(), index: usize) void {
+                assert(index < self.items().len);
+                const slice = self.ptr.base.items;
+                std.mem.swap(T, &slice[self.start], &slice[self.start + index]);
+                self.start += 1;
+            }
+
+            /// append the element at `index` of this buffer to the buffer
+            /// before the last buffer
+            pub fn appendBackTwo(self: *@This(), mid: *@This(), index: usize) void {
+                assert(mid.id + 1 == self.id);
+                assert(index < self.items().len);
+
+                const slice = self.ptr.base.items;
+                std.mem.swap(T, &slice[mid.start], &slice[self.start + index]);
+                std.mem.swap(T, &slice[self.start], &slice[self.start + index]);
+                self.start += 1;
+                mid.start += 1;
+            }
+        };
+
+        pub fn init(allocator: Allocator) @This() {
+            return .{
+                .base = std.ArrayList(T).init(allocator),
+            };
+        }
+
+        pub fn getNew(self: *@This()) Buffer {
+            self.last_sub += 1;
+            return .{
+                .ptr = self,
+                .id = self.last_sub,
+                .start = self.base.items.len,
+            };
+        }
+
+        pub fn deinit(self: @This()) void {
+            assert(self.last_sub == 0);
+            self.base.deinit();
+        }
+    };
+}
+
 pub const AcceptanceSet = struct {
     values: [4]u64 = .{0} ** 4,
 

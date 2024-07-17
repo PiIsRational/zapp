@@ -340,45 +340,49 @@ fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
 }
 
 fn addSubBranches(
-    prongs: *std.ArrayList(ra.SplitBranch),
-    base_buffer: *std.ArrayList(ra.SplitBranch),
+    prongs: *ra.MultiLevelBuffer(ra.SplitBranch).Buffer,
+    base_buffer: *ra.MultiLevelBuffer(ra.SplitBranch).Buffer,
+    buffer: *ra.MultiLevelBuffer(ra.SplitBranch),
     subs: []const LookaheadState,
 ) Allocator.Error!void {
-    var sub_buffer = std.ArrayList(ra.SplitBranch)
-        .init(base_buffer.allocator);
+    var sub_buffer = buffer.getNew();
     defer sub_buffer.deinit();
 
     var base_no_consume = ra.AcceptanceSet.Full;
-    for (base_buffer.items) |branch| {
+    for (base_buffer.items()) |branch| {
         if (branch.final_action == null) base_no_consume.cut(branch.set);
     }
 
     for (subs) |sub| {
-        try sub.addBranches(&sub_buffer);
+        try sub.addBranches(&sub_buffer, buffer);
         var index: usize = 0;
-        for (sub_buffer.items) |*branch| {
+        for (sub_buffer.items(), 0..) |*branch, i| {
             if (branch.final_action != null) {
-                sub_buffer.items[index] = branch.*;
+                sub_buffer.items()[index] = branch.*;
                 index += 1;
                 continue;
             }
 
             // do not append branches that would fail anyways
             branch.set.cut(base_no_consume);
-            if (!branch.set.isEmpty()) try prongs.append(branch.*);
+            if (!branch.set.isEmpty()) {
+                assert(prongs.id + 1 == base_buffer.id and
+                    base_buffer.id + 1 == sub_buffer.id);
+                sub_buffer.appendBackTwo(base_buffer, i);
+            }
         }
 
-        sub_buffer.shrinkRetainingCapacity(index);
+        sub_buffer.shrink(index);
 
         // finally analyze the accepting branches
-        for (sub_buffer.items) |sub_branch| for (base_buffer.items) |*base_branch| {
+        for (sub_buffer.items()) |sub_branch| for (base_buffer.items()) |*base_branch| {
             switch (sub.look) {
                 .POSITIVE => base_branch.set.intersect(sub_branch.set),
                 .NEGATIVE => base_branch.set.cut(sub_branch.set),
             }
         };
 
-        sub_buffer.clearRetainingCapacity();
+        sub_buffer.clear();
     }
 }
 
@@ -447,31 +451,33 @@ const LookaheadTopState = struct {
     }
 
     fn getBranches(self: LookaheadTopState) !ra.BranchResult {
-        var prongs = std.ArrayList(ra.SplitBranch)
+        var buffer = ra.MultiLevelBuffer(ra.SplitBranch)
             .init(self.sub_states.allocator);
 
-        try self.addBranches(&prongs);
-        var normal_match = try ra.canonicalizeBranches(&prongs);
+        var prong_buffer = buffer.getNew();
+        defer prong_buffer.deinit();
+        try self.addBranches(&prong_buffer, &buffer);
+        var normal_match = try ra.canonicalizeBranches(&buffer.base);
         normal_match.invert();
 
         return .{
             .fail_set = normal_match,
-            .prongs = prongs,
+            .prongs = buffer.base,
         };
     }
 
     fn addBranches(
         self: LookaheadTopState,
-        prongs: *std.ArrayList(ra.SplitBranch),
+        prongs: *ra.MultiLevelBuffer(ra.SplitBranch).Buffer,
+        buffer: *ra.MultiLevelBuffer(ra.SplitBranch),
     ) !void {
         const accepting = self.action != null;
 
-        var base_buffer = std.ArrayList(ra.SplitBranch)
-            .init(self.sub_states.allocator);
+        var base_buffer = buffer.getNew();
         defer base_buffer.deinit();
 
         if (!accepting) {
-            try self.base.addBranches(&base_buffer, false);
+            try self.base.addBranches(&base_buffer.ptr.base, false);
         } else {
             try base_buffer.append(.{
                 .set = ra.AcceptanceSet.Full,
@@ -479,11 +485,12 @@ const LookaheadTopState = struct {
             });
         }
 
-        try addSubBranches(prongs, &base_buffer, self.sub_states.items);
+        try addSubBranches(prongs, &base_buffer, buffer, self.sub_states.items);
 
-        for (base_buffer.items) |branch| {
+        for (base_buffer.items(), 0..) |branch, i| {
             if (branch.set.isEmpty()) continue;
-            try prongs.append(branch);
+            assert(prongs.id + 1 == base_buffer.id);
+            base_buffer.appendBack(i);
         }
     }
 
@@ -989,10 +996,10 @@ const LookaheadState = struct {
 
     fn addBranches(
         self: LookaheadState,
-        prongs: *std.ArrayList(ra.SplitBranch),
+        prongs: *ra.MultiLevelBuffer(ra.SplitBranch).Buffer,
+        buffer: *ra.MultiLevelBuffer(ra.SplitBranch),
     ) !void {
-        var base_buffer = std.ArrayList(ra.SplitBranch)
-            .init(prongs.allocator);
+        var base_buffer = buffer.getNew();
         defer base_buffer.deinit();
 
         if (try self.isDone(false)) {
@@ -1001,19 +1008,20 @@ const LookaheadState = struct {
                 .final_action = 0,
             });
         } else {
-            try self.base.addBranches(&base_buffer, false);
+            try self.base.addBranches(&base_buffer.ptr.base, false);
 
-            for (base_buffer.items) |*branch| {
+            for (base_buffer.items()) |*branch| {
                 if (!try self.isDoneOnSet(branch.set)) continue;
                 branch.final_action = 0; // this is a terminal action
             }
         }
 
-        try addSubBranches(prongs, &base_buffer, self.lookaheads.items);
+        try addSubBranches(prongs, &base_buffer, buffer, self.lookaheads.items);
 
-        for (base_buffer.items) |branch| {
+        for (base_buffer.items(), 0..) |branch, i| {
             if (branch.set.isEmpty()) continue;
-            try prongs.append(branch);
+            assert(prongs.id + 1 == base_buffer.id);
+            base_buffer.appendBack(i);
         }
     }
 
