@@ -52,7 +52,7 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
     try self.put(try start_state.toKey(), try dfa.getNew());
 
     const fail_block = try dfa.getNew();
-    try fail_block.insts.append(ir.Instr.initTag(.FAIL));
+    try fail_block.insts.append(ir.Instr.initTag(.TERMINAL_FAIL));
 
     dfa.start = dfa.blocks.items[0];
     dfa.fail = fail_block;
@@ -65,16 +65,20 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             defer state.deinit();
             const branches = try state.getBranches();
             defer branches.deinit();
+            std.debug.print("{s}\n", .{state});
 
             // get the block
             const curr_key = try state.toKey();
             defer curr_key.deinit(self.allocator);
 
             const block = self.map.get(curr_key).?;
-            if (block.insts.items.len != 0) continue;
+            const insts = block.insts.items;
+            if (insts.len > 1 or insts.len == 1 and insts[0].tag != .PRE_ACCEPT) {
+                continue;
+            }
 
             try block.insts.append(ir.Instr.initTag(.MATCH));
-            const instr = &block.insts.items[0];
+            const instr = &block.insts.items[block.insts.items.len - 1];
             instr.data = .{ .match = std.ArrayList(ir.MatchProng)
                 .init(self.allocator) };
 
@@ -85,7 +89,9 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             // add the prongs and get the destination block
             for (branches.prongs.items) |prong| {
                 var split_state = try state.splitOn(prong);
+                std.debug.print("{s}\n", .{split_state});
                 try split_state.goEps();
+                std.debug.print("{s}\n", .{split_state});
 
                 const key = try split_state.toKey();
                 defer key.deinit(self.allocator);
@@ -98,9 +104,14 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
 
                     // if the prong is not consuming the state of
                     // the block will be accepting
-                    if (split_state.isEmpty()) {
+                    if (split_state.isSemiEmpty()) {
+                        var pass_instr = ir.Instr.initTag(.PRE_ACCEPT);
                         const action = split_state.action.?;
+                        pass_instr.data = .{ .action = action };
+                        try dst_blk.insts.append(pass_instr);
+                    } else if (split_state.isEmpty()) {
                         var pass_instr = ir.Instr.initTag(.RET);
+                        const action = split_state.action.?;
                         pass_instr.data = .{ .action = action };
                         try dst_blk.insts.append(pass_instr);
                     }
@@ -116,7 +127,9 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
                     .consuming = prong.final_action == null,
                 });
 
-                if (dst_blk.insts.items.len == 0) {
+                if (dst_blk.insts.items.len == 0 or
+                    dst_blk.insts.items[0].tag == .PRE_ACCEPT)
+                {
                     try new_states.append(split_state);
                 } else {
                     split_state.deinit();
@@ -168,7 +181,20 @@ const DfaState = struct {
         return self;
     }
 
-    pub fn isEmpty(self: *const DfaState) bool {
+    pub fn isSemiEmpty(self: DfaState) bool {
+        var found_empty = false;
+        var found_full = false;
+
+        for (self.sub_states.items) |sub| {
+            const empty = sub.blocks.items.len == 0;
+            found_full = found_full or !empty;
+            found_empty = found_empty or empty;
+        }
+
+        return found_full and found_empty;
+    }
+
+    pub fn isEmpty(self: DfaState) bool {
         for (self.sub_states.items) |sub| {
             if (sub.blocks.items.len != 0) return false;
         }
@@ -183,7 +209,16 @@ const DfaState = struct {
         self.resetHadFill();
         self.deduplicate();
 
-        if (self.isEmpty()) {
+        if (self.isSemiEmpty()) {
+            assert(self.sub_states.items.len > 0);
+            self.action = null;
+            for (self.sub_states.items) |sub| {
+                if (sub.blocks.items.len != 0) continue;
+                self.action = sub.last_action;
+                break;
+            }
+            assert(self.action != null);
+        } else if (self.isEmpty()) {
             assert(self.sub_states.items.len > 0);
             self.action = self.sub_states.items[0].last_action;
         }
@@ -230,7 +265,7 @@ const DfaState = struct {
         std.sort.pdq(ra.ExecState, self.sub_states.items, Ctx{}, Ctx.less);
     }
 
-    pub fn clone(self: *const DfaState) !DfaState {
+    pub fn clone(self: DfaState) !DfaState {
         var sub_states = std.ArrayList(ra.ExecState)
             .init(self.sub_states.allocator);
 
@@ -252,7 +287,7 @@ const DfaState = struct {
             }
         }
 
-        if (new_dfa_state.isEmpty()) {
+        if (new_dfa_state.isSemiEmpty() or new_dfa_state.isEmpty()) {
             assert(branch.final_action != null);
             new_dfa_state.action = branch.final_action;
         }
@@ -332,10 +367,8 @@ const DfaState = struct {
         }
 
         pub fn eql(self: Key, other: Key) bool {
-            if (self.sub_states.len != other.sub_states.len) return false;
-            if (other.sub_states.len == 0) {
-                return other.action == self.action;
-            }
+            if (self.sub_states.len != other.sub_states.len or
+                other.action != self.action) return false;
 
             for (self.sub_states, other.sub_states) |self_sub, other_sub| {
                 if (!self_sub.eql(other_sub)) return false;

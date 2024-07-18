@@ -48,7 +48,7 @@ pub fn lower(allocator: Allocator, p_ir: pir.PegIr) !lir.LowIr {
 
     // add the definitions
     for (p_ir.defs.items) |def| {
-        try lowerDef(def, &low_ir);
+        try lowerDef(def, &low_ir, p_ir);
     }
 
     return low_ir;
@@ -115,7 +115,7 @@ fn cutSeq(op: pir.Operated) bool {
     };
 }
 
-fn lowerDef(def: pir.Definition, low_ir: *lir.LowIr) !void {
+fn lowerDef(def: pir.Definition, low_ir: *lir.LowIr, p_ir: pir.PegIr) !void {
     const seqs = def.sequences.items;
     const fail_lbl: lir.Label = .{
         .def = def.id,
@@ -129,7 +129,7 @@ fn lowerDef(def: pir.Definition, low_ir: *lir.LowIr) !void {
             .def = def.id,
             .choice = i,
             .symbol = 0,
-        }, fail_lbl, def);
+        }, fail_lbl, def, p_ir);
     }
 
     var blk = low_ir.place_to_block.get(fail_lbl).?;
@@ -145,6 +145,7 @@ fn lowerSeq(
     label: lir.Label,
     fail_lbl: lir.Label,
     def: pir.Definition,
+    p_ir: pir.PegIr,
 ) !void {
     const ops = seq.operateds.items;
     const last_branch = label.choice + 1 == fail_lbl.choice;
@@ -174,6 +175,7 @@ fn lowerSeq(
     for (0..ops.len) |i| {
         const op = ops[ops.len - 1 - i];
         has_cut = try lowerOp(
+            def,
             op,
             curr_blk,
             low_ir,
@@ -182,6 +184,7 @@ fn lowerSeq(
                 .choice = label.choice,
                 .symbol = i,
             },
+            p_ir,
         ) or has_cut;
 
         if (!cutSeq(op)) continue;
@@ -304,10 +307,12 @@ fn lowerAction(
 
 /// returns true iff the sequence has been cut
 fn lowerOp(
+    def: pir.Definition,
     op: pir.Operated,
     block: *lir.Block,
     low_ir: *lir.LowIr,
     lbl: lir.Label,
+    p_ir: pir.PegIr,
 ) !bool {
     const allocator = low_ir.allocator;
     var instr: lir.Instr = .{
@@ -321,7 +326,8 @@ fn lowerOp(
 
     switch (op.value) {
         .ID => |id| {
-            instr.tag = .NONTERM;
+            const dest = p_ir.defs.items[id];
+            instr.tag = if (dest.is_terminal and !def.is_terminal) .TERM else .NONTERM;
             instr.data = .{ .ctx_jmp = .{
                 .next = low_ir.place_to_block.get(.{
                     .def = id,

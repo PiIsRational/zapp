@@ -798,7 +798,10 @@ fn parseInstr(self: *CodeGen, instr: *lir.Instr, fail: ?*lir.Block) !void {
         },
         .PRE_ACCEPT => {
             try w.print("self.has_term_accept = true;\n", .{});
-            try w.print("self.term_end_state = self.state;\n", .{});
+            try w.print(
+                "self.term_end_state = {d};\n",
+                .{self.ir.actions.items[instr.data.action].base.id},
+            );
             try w.print("self.term_accept_len = self.acc;\n", .{});
         },
         .FAIL => try w.print("try self.returnFromNonterminal(true, false);\n", .{}),

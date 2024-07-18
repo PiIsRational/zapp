@@ -776,6 +776,7 @@ const LookaheadTopState = struct {
             undefined;
 
         var sub_states = std.ArrayList(LookaheadState.Key).init(self.sub_states.allocator);
+        try sub_states.ensureTotalCapacity(self.sub_states.items.len);
         for (self.sub_states.items) |*from| {
             if (try from.toKey(self.sub_states.allocator)) |key| {
                 try sub_states.append(key);
@@ -1167,6 +1168,8 @@ const LookaheadState = struct {
     fn toKey(self: LookaheadState, allocator: Allocator) !?Key {
         const base_key = self.base.toKey();
         var looks = std.ArrayList(Key).init(allocator);
+        try looks.ensureTotalCapacity(self.lookaheads.items.len);
+
         for (self.lookaheads.items) |look| {
             const key = try look.toKey(allocator);
             if (key) |k| try looks.append(k);

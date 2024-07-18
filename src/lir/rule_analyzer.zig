@@ -498,8 +498,10 @@ fn canonicalizeBase(
 
 pub fn mergeDest(allocator: Allocator, dfa: *Automaton) !void {
     for (dfa.blocks.items) |blk| {
-        assert(blk.insts.items.len == 1);
-        const instr = &blk.insts.items[0];
+        const insts = blk.insts.items;
+        assert(insts.len > 0);
+
+        const instr = if (insts[0].tag == .PRE_ACCEPT) &insts[1] else &insts[0];
         if (instr.tag != .MATCH) continue;
 
         var new_prongs = std.ArrayList(ir.MatchProng).init(allocator);
@@ -688,7 +690,7 @@ pub const ExecState = struct {
         self.blocks.append(blk) catch unreachable;
     }
 
-    pub fn nextPlace(self: *const ExecState, set: AcceptanceSet) ?ExecPlace {
+    pub fn nextPlace(self: ExecState, set: AcceptanceSet) ?ExecPlace {
         const instr = self.getCurrInstr() orelse return null;
 
         assert(!set.isEmpty());
@@ -721,11 +723,10 @@ pub const ExecState = struct {
         return null;
     }
 
-    pub fn splitOn(self: *const ExecState, set: AcceptanceSet) !?ExecState {
-        const instr = self.getCurrInstr() orelse return null;
-
+    pub fn splitOn(self: ExecState, set: AcceptanceSet) !?ExecState {
         assert(!set.isEmpty());
 
+        const instr = self.getCurrInstr() orelse return null;
         switch (instr.tag) {
             .STRING => if (set.matchesChar(instr.data.str[self.instr_sub_idx])) {
                 var new_state = try self.clone();
@@ -756,12 +757,12 @@ pub const ExecState = struct {
         return null;
     }
 
-    pub fn defaultPass(self: *const ExecState) ?usize {
+    pub fn defaultPass(self: ExecState) ?usize {
         return if (self.blocks.items.len == 0) self.last_action else null;
     }
 
     pub fn addBranches(
-        self: *const ExecState,
+        self: ExecState,
         list: *std.ArrayList(SplitBranch),
         ret_look: bool,
     ) !void {
@@ -790,7 +791,7 @@ pub const ExecState = struct {
         return last.insts.items[self.instr];
     }
 
-    pub fn canFillBranches(self: *const ExecState) bool {
+    pub fn canFillBranches(self: ExecState) bool {
         if (self.blocks.items.len == 0) return false;
         const last = self.blocks.getLast();
         return !self.had_fill and

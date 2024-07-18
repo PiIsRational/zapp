@@ -78,8 +78,8 @@ pub fn genAutomaton(
 }
 
 fn getTerminals(w: Writer, dfa: Automaton) !void {
-    for (dfa.blocks.items) |block| if (block.insts.items.len != 0 and
-        block.insts.items[0].tag == .RET)
+    for (dfa.blocks.items) |block| if (block.insts.items[0].tag == .RET or
+        block.insts.items[0].tag == .PRE_ACCEPT)
     {
         try w.print(" {d}", .{block.id});
     };
@@ -97,7 +97,8 @@ fn genAutomatonNodeEps(w: Writer, block: *lir.Block) !void {
 fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
     assert(block.insts.items.len > 0);
 
-    const instr = block.insts.items[0];
+    const insts = block.insts.items;
+    const instr = if (insts[0].tag == .PRE_ACCEPT) insts[1] else insts[0];
     switch (instr.tag) {
         .MATCH => for (instr.data.match.items) |prong| {
             try genAutomatonEdge(w, block, prong);
