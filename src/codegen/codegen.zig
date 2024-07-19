@@ -802,14 +802,15 @@ fn parseInstr(self: *CodeGen, instr: *lir.Instr, fail: ?*lir.Block) !void {
                 "self.term_end_state = {d};\n",
                 .{self.ir.actions.items[instr.data.action].base.id},
             );
-            try w.print("self.term_accept_len = self.acc;\n", .{});
+            // the -1 is because the pre accept has an implicit one char lookahead
+            try w.print("self.term_accept_len = self.acc - 1;\n", .{});
         },
         .FAIL => try w.print("try self.returnFromNonterminal(true, false);\n", .{}),
         .EXIT_FAIL => {
             try w.print("try self.returnFromNonterminal(true, false);\n", .{});
             try w.print("break;\n", .{});
         },
-        .TERMINAL_FAIL => {
+        .TERM_FAIL => {
             try w.print("if (self.has_term_accept) {{\n", .{});
             try w.print("    self.acc = self.term_accept_len;\n", .{});
             try w.print("    self.state = self.term_end_state;\n", .{});

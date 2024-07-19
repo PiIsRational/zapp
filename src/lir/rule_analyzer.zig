@@ -257,13 +257,13 @@ pub const Automaton = struct {
     pub fn isNfa(self: Automaton) bool {
         for (self.blocks.items) |block| {
             const instrs = block.insts.items;
-            if (instrs.len != 1) return false;
-            switch (instrs[0].tag) {
-                .MATCH,
-                .RET,
-                .FAIL,
-                .JMP,
-                => {},
+            if (instrs.len != 1 and instrs.len != 2) return false;
+            if ((instrs.len == 2) != (instrs[0].tag == .PRE_ACCEPT)) return false;
+            if (instrs.len == 2) switch (instrs[1].tag) {
+                .MATCH, .JMP => {},
+                else => return false,
+            } else switch (instrs[0].tag) {
+                .MATCH, .JMP, .RET, .TERM_FAIL => {},
                 else => return false,
             }
         }
@@ -274,12 +274,13 @@ pub const Automaton = struct {
     pub fn isDfa(self: Automaton) bool {
         for (self.blocks.items) |block| {
             const instrs = block.insts.items;
-            if (instrs.len != 1) return false;
-            switch (instrs[0].tag) {
-                .MATCH,
-                .RET,
-                .FAIL,
-                => {},
+            if (instrs.len != 1 and instrs.len != 2) return false;
+            if ((instrs.len == 2) != (instrs[0].tag == .PRE_ACCEPT)) return false;
+            if (instrs.len == 2) switch (instrs[1].tag) {
+                .MATCH => {},
+                else => return false,
+            } else switch (instrs[0].tag) {
+                .MATCH, .RET, .TERM_FAIL => {},
                 else => return false,
             }
 
@@ -784,11 +785,19 @@ pub const ExecState = struct {
         }
     }
 
+    /// assumes the current instr is always correct but not always a block
     pub fn getCurrInstr(self: ExecState) ?ir.Instr {
-        if (self.blocks.items.len == 0) return null;
-
-        const last = self.blocks.getLast();
+        const last = self.blocks.getLastOrNull() orelse return null;
         return last.insts.items[self.instr];
+    }
+
+    /// returns null on a bad instr but assumes there is a block
+    pub fn getCurrInstrOrNull(self: ExecState) ?ir.Instr {
+        const last = self.blocks.getLast();
+        return if (last.insts.items.len <= self.instr)
+            null
+        else
+            last.insts.items[self.instr];
     }
 
     pub fn canFillBranches(self: ExecState) bool {

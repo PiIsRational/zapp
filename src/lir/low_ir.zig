@@ -389,7 +389,7 @@ pub const Instr = struct {
             ),
             .FAIL => try writer.print("  (fail)", .{}),
             .EXIT_FAIL => try writer.print("  (exit fail)", .{}),
-            .TERMINAL_FAIL => try writer.print("  (terminal fail)", .{}),
+            .TERM_FAIL => try writer.print("  (term fail)", .{}),
         }
     }
 };
@@ -400,7 +400,7 @@ pub const InstrTag = enum {
     MATCH, // conditional jump on different ranges of chars
     NONTERM, // call a nonterminal
     TERM, // call a terminal
-    TERMINAL_FAIL, // the fail used for terminals (checks for the pre accept)
+    TERM_FAIL, // the fail used for terminals (checks for the pre accept)
     PRE_ACCEPT, // logs the last accepting state for a terminal
     FAIL, // return from the nonterminal and failed to match
     RET, // return from the nonterminal and succeeded to match

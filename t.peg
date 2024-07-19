@@ -1,6 +1,6 @@
 %% NAME Test
 
-Ident = KEYWORD_WHILE;
+Ident = SKIP ;
 
 SKIP = WHITESPACE* !WHITESPACE_START ;
 

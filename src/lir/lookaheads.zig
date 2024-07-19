@@ -72,7 +72,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
 
     // the second state of the nfa is always the failing state (similar to dfa)
     const fail_block = try self.nfa.getNew();
-    try fail_block.insts.append(ir.Instr.initTag(.FAIL));
+    try fail_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
     self.nfa.fail = fail_block;
 
     while (self.states.popOrNull()) |popped_state| {
@@ -121,7 +121,6 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             if (new_key.eql(key)) continue;
 
             const blk = try self.getBlockForState(state, new_key);
-
             try block.insts.append(ir.Instr.initJmp(blk));
             continue;
         }

@@ -42,25 +42,56 @@ pub fn minimize(allocator: Allocator, automaton: ra.Automaton) !ra.Automaton {
     var lookup = try allocator.alloc(usize, automaton.blocks.items.len);
     defer allocator.free(lookup);
 
+    var max_action: usize = 0;
+    for (automaton.blocks.items) |blk| {
+        const insts = blk.insts.items;
+        if (insts[0].tag != .RET and insts[0].tag != .PRE_ACCEPT) continue;
+        max_action = @max(max_action, insts[0].data.action);
+    }
+    var action_lookup = try allocator.alloc(usize, max_action + 1);
+    @memset(action_lookup, 0);
+    defer allocator.free(action_lookup);
+
     const fail_state = try ra.ExecState.init(allocator, automaton.fail);
     defer fail_state.deinit();
 
     var base_states = StateSet.init(allocator);
     for (automaton.blocks.items, 0..) |block, i| {
         const new_state = try ra.ExecState.init(allocator, block);
+        const insts = block.insts.items;
 
-        if (block.insts.items[0].tag != .RET and
-            block != automaton.fail)
+        if (insts[0].tag != .RET and
+            block != automaton.fail and
+            insts[0].tag != .PRE_ACCEPT)
         {
             try base_states.append(new_state);
             lookup[i] = 0;
             continue;
         }
 
+        if (block == automaton.fail) {
+            var accepting = StateSet.init(allocator);
+            try accepting.append(new_state);
+            try sets.append(accepting);
+
+            lookup[i] = sets.items.len;
+            continue;
+        }
+
+        const action_set = action_lookup[insts[0].data.action];
+        if (action_set != 0) {
+            const accepting = &sets.items[action_set - 1];
+            try accepting.append(new_state);
+            lookup[i] = action_set;
+            continue;
+        }
+
         var accepting = StateSet.init(allocator);
         try accepting.append(new_state);
         try sets.append(accepting);
+
         lookup[i] = sets.items.len;
+        action_lookup[insts[0].data.action] = sets.items.len;
     }
 
     sets.items[0] = base_states;
@@ -107,36 +138,41 @@ pub fn minimize(allocator: Allocator, automaton: ra.Automaton) !ra.Automaton {
     var nerode_dfa = ra.Automaton.init(allocator);
     for (sets.items) |_| _ = try nerode_dfa.getNew();
     for (sets.items, nerode_dfa.blocks.items) |set, new_block| {
-        const equivalent = set.items[0].getCurrInstr() orelse unreachable;
-        switch (equivalent.tag) {
-            .MATCH => {
-                for (set.items) |state| {
-                    if (state.blocks.getLast() != automaton.start) continue;
-                    nerode_dfa.start = new_block;
-                }
+        var repr = set.items[0];
+        assert(repr.instr == 0);
 
-                var instr: ir.Instr = .{
-                    .tag = .MATCH,
-                    .meta = ir.InstrMeta.Empty,
-                    .data = .{
-                        .match = std.ArrayList(ir.MatchProng).init(allocator),
-                    },
-                };
+        while (repr.getCurrInstrOrNull()) |equivalent| : (repr.instr += 1) {
+            switch (equivalent.tag) {
+                .MATCH => {
+                    for (set.items) |state| {
+                        if (state.blocks.getLast() != automaton.start) continue;
+                        nerode_dfa.start = new_block;
+                    }
 
-                for (equivalent.data.match.items) |prong| {
-                    var new_prong = try prong.clone();
-                    new_prong.dest = nerode_dfa.blocks.items[lookup[prong.dest.id]];
-                    try instr.data.match.append(new_prong);
-                }
-                try new_block.insts.append(instr);
-            },
-            .FAIL,
-            => {
-                try new_block.insts.append(equivalent);
-                nerode_dfa.fail = new_block;
-            },
-            .RET => try new_block.insts.append(equivalent),
-            else => unreachable,
+                    var instr: ir.Instr = .{
+                        .tag = .MATCH,
+                        .meta = ir.InstrMeta.Empty,
+                        .data = .{
+                            .match = std.ArrayList(ir.MatchProng).init(allocator),
+                        },
+                    };
+
+                    for (equivalent.data.match.items) |prong| {
+                        var new_prong = try prong.clone();
+                        new_prong.dest = nerode_dfa.blocks.items[lookup[prong.dest.id]];
+                        try instr.data.match.append(new_prong);
+                    }
+                    try new_block.insts.append(instr);
+                },
+                .TERM_FAIL,
+                => {
+                    try new_block.insts.append(equivalent);
+                    nerode_dfa.fail = new_block;
+                },
+                .RET => try new_block.insts.append(equivalent),
+                .PRE_ACCEPT => try new_block.insts.append(equivalent),
+                else => unreachable,
+            }
         }
     }
 
@@ -214,12 +250,16 @@ fn splitUp(
 
 fn splitOn(set: StateSet, branch: ra.SplitBranch, fail: ra.ExecState) !StateSet {
     assert(set.items.len > 0);
-    const instr = set.items[0].getCurrInstr();
-    if (instr == null or instr.?.tag == .RET) return cloneSet(set);
-
     var new = StateSet.init(set.allocator);
     try new.ensureTotalCapacity(set.items.len);
+
     for (set.items) |item| {
+        const instr = item.getCurrInstr();
+        if (instr == null or instr.?.tag == .RET) {
+            try new.append(try item.clone());
+            continue;
+        }
+
         const split_result = try item.splitOn(branch.set);
         try new.append(split_result orelse try fail.clone());
     }
@@ -231,11 +271,9 @@ fn getSplits(set: StateSet) !std.ArrayList(ra.SplitBranch) {
     var prongs = std.ArrayList(ra.SplitBranch)
         .init(set.allocator);
 
-    for (set.items) |*state| {
-        try state.addBranches(&prongs, true);
-    }
-
+    for (set.items) |*state| try state.addBranches(&prongs, true);
     _ = try ra.canonicalizeBranches(&prongs);
+
     return prongs;
 }
 

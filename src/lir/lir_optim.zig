@@ -64,24 +64,24 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
     const dfa = try dfa_gen.genDfa(nfa.start);
     defer dfa.deinit(allocator);
 
-    // var nerode = try minimize(allocator, dfa);
-    // nerode.start.meta = .{
-    //     .mid_recurse = false,
-    //     .right_recurse = true, // may be false too
-    //     .regular = true, // generally true
-    //     .finite = false, // possibly true
-    //     .is_terminal = true,
-    //     .nonterm_fail = false, // ?
-    //     .has_actions = true, // possibly false
-    //     .moves_actions = true, // possibly false
-    //     .is_target = true,
-    //     .used_terminal = true,
-    // };
+    var nerode = try minimize(allocator, dfa);
+    nerode.start.meta = .{
+        .mid_recurse = false,
+        .right_recurse = true, // may be false too
+        .regular = true, // generally true
+        .finite = false, // possibly true
+        .is_terminal = true,
+        .nonterm_fail = false, // ?
+        .has_actions = true, // possibly false
+        .moves_actions = true, // possibly false
+        .is_target = true,
+        .used_terminal = true,
+    };
 
-    // try ra.compressMatches(allocator, &nerode);
-    // nerode.setFail();
-    gvgen.genAutomaton(stdout, dfa, "dfa") catch unreachable;
-    // try self.appendAutomaton(&nerode, blk);
+    try ra.compressMatches(allocator, &nerode);
+    nerode.setFail();
+    gvgen.genAutomaton(stdout, nerode, "nerode") catch unreachable;
+    try self.appendAutomaton(&nerode, blk);
 }
 
 fn appendAutomaton(

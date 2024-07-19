@@ -52,7 +52,7 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
     try self.put(try start_state.toKey(), try dfa.getNew());
 
     const fail_block = try dfa.getNew();
-    try fail_block.insts.append(ir.Instr.initTag(.TERMINAL_FAIL));
+    try fail_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
 
     dfa.start = dfa.blocks.items[0];
     dfa.fail = fail_block;
@@ -65,7 +65,6 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             defer state.deinit();
             const branches = try state.getBranches();
             defer branches.deinit();
-            std.debug.print("{s}\n", .{state});
 
             // get the block
             const curr_key = try state.toKey();
@@ -89,9 +88,7 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             // add the prongs and get the destination block
             for (branches.prongs.items) |prong| {
                 var split_state = try state.splitOn(prong);
-                std.debug.print("{s}\n", .{split_state});
                 try split_state.goEps();
-                std.debug.print("{s}\n", .{split_state});
 
                 const key = try split_state.toKey();
                 defer key.deinit(self.allocator);
