@@ -23,6 +23,7 @@ const ra = @import("rule_analyzer.zig");
 
 const StateSet = std.ArrayList(ra.ExecState);
 
+/// minimization keeps `PRE_ACCEPT` and `RET` apart
 pub fn minimize(allocator: Allocator, automaton: ra.Automaton) !ra.Automaton {
     assert(automaton.isDfa());
 
@@ -70,7 +71,7 @@ pub fn minimize(allocator: Allocator, automaton: ra.Automaton) !ra.Automaton {
             continue;
         }
 
-        if (block == automaton.fail) {
+        if (block == automaton.fail or insts[0].tag == .RET) {
             var accepting = StateSet.init(allocator);
             try accepting.append(new_state);
             try sets.append(accepting);

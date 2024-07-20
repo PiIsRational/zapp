@@ -589,7 +589,9 @@ MB_UTF8_LITERAL
     ;
 
 // No null allowed in the generator (maybe look at how the zig parser handles this)
-ASCII_CHAR_NOT_NL_SLASH_SQUOTE = [\x01-\x09\x0B-\x26\x28-\x5B\x5D-\x7F] ;
+ASCII_CHAR_NOT_NL_SLASH_SQUOTE 
+    = [\x01-\x09\x0B-\x26\x28-\x5B\x5D-\x7F] 
+    ;
 
 CHAR_ESCAPE
     = "\\x" HEX HEX

@@ -334,11 +334,11 @@ const funcs =
     \\    if (!memo and opts.use_memo) {
     \\        try self.memo.add(self.start, AddrToRule[self.state], 
     \\            if (failed)
-    \\                .{ .fail = .{ .end_state = @intCast(self.state) } }
+    \\                .{ .fail = .{ .end_state = self.state } }
     \\            else 
     \\                .{ .pass = .{ 
-    \\                    .length = @intCast(self.acc), 
-    \\                    .end_state = @intCast(self.state), 
+    \\                    .length = self.acc, 
+    \\                    .end_state = self.state, 
     \\                } }
     \\        );
     \\    }

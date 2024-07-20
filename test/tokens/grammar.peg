@@ -1,4 +1,35 @@
 %% NAME Token
 
+%% TOP
+const Info = struct {
+    match: []const u8,
+    skip: bool,
+};
+%%
 
+Root: '[]const Info' = (&. Comment)* !. { try $*1.toOwnedSlice() };
 
+Comment: Info
+    = DOC_COMMENT {  .{ .match = $0, .skip = false, } }
+    | SKIP { .{ .match = $0, .skip = true, } }
+    ;
+
+SKIP = WHITESPACE* !WHITESPACE_START ;
+
+WHITESPACE_START 
+    = [ \n]
+    | '//' ![!/]
+    | '////'
+    ;
+
+WHITESPACE
+    = [ \n]
+    | LINE_COMMENT
+    ;
+
+LINE_COMMENT
+    = '//' ![!/] (!'\n' .)* !(![\n] .) 
+    | '////' (!'\n' .)* !(![\n] .)
+    ;
+
+DOC_COMMENT = ('///' (!'\n' .)* [ \n]* SKIP)+ ; 

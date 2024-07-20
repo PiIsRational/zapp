@@ -1,15 +1,16 @@
 const std = @import("std");
 
 const test_paths = [_][]const u8{
-    //"plus",
+    "plus",
     "question",
-    //"star",
+    "star",
     "tuple",
     "acceptor",
     "cut",
     "star_cut",
-    //"new_calculator",
+    "new_calculator",
     "json",
+    "tokens",
 };
 
 const Version = std.SemanticVersion{
