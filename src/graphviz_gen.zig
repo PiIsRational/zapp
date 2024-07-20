@@ -108,9 +108,9 @@ fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
             .{ block.id, instr.data.jmp.id },
         ),
         .STRING => {
-            try w.print("    {d} [xlabel = ", .{block.id});
+            try w.print("    {d} [xlabel = \"", .{block.id});
             try su.writeEscapeString(w, instr.data.str);
-            try w.print("];\n", .{});
+            try w.print("\"];\n", .{});
 
             const next_instr = block.insts.items[1];
             assert(next_instr.tag == .JMP);

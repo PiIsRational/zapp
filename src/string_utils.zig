@@ -91,9 +91,9 @@ pub fn writeEscapeChar(writer: anytype, char: u8) !void {
 }
 
 pub fn writeEscapeString(writer: anytype, string: []const u8) !void {
-    try writer.print("\"", .{});
+    try writer.print("\\\"", .{});
     for (string) |char| try writeEscapeCharacter(writer, char);
-    try writer.print("\"", .{});
+    try writer.print("\\\"", .{});
 }
 
 pub fn writeString(writer: anytype, string: []const u8) !void {

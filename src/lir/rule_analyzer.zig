@@ -598,8 +598,9 @@ pub fn compressMatches(allocator: Allocator, dfa: *Automaton) !void {
     // populate starts
     starts[dfa.start.id] = true;
     for (dfa.blocks.items) |blk| {
-        assert(blk.insts.items.len == 1);
-        const instr = blk.insts.items[0];
+        const insts = blk.insts.items;
+        assert(insts.len == 1 or insts.len == 2);
+        const instr = blk.insts.getLast();
 
         if (instr.tag != .MATCH) continue;
         const prongs = instr.data.match.items;
@@ -617,14 +618,15 @@ pub fn compressMatches(allocator: Allocator, dfa: *Automaton) !void {
             try match_string.append(c);
         }
 
-        assert(curr_blk.insts.items.len > 0);
-        if (curr_blk.insts.items.len == 2) {
-            const c_instr = &curr_blk.insts.items[0];
+        const insts = curr_blk.insts.items;
+        assert(insts.len > 0);
+        if (insts.len == 2 and insts[0].tag != .PRE_ACCEPT) {
+            const c_instr = &insts[0];
             assert(c_instr.tag == .STRING);
 
             try match_string.appendSlice(c_instr.data.str);
-            assert(curr_blk.insts.items[1].tag == .JMP);
-            curr_blk = curr_blk.insts.items[1].data.jmp;
+            assert(insts[1].tag == .JMP);
+            curr_blk = insts[1].data.jmp;
         }
 
         if (match_string.items.len == 0) {
@@ -762,6 +764,12 @@ pub const ExecState = struct {
         return if (self.blocks.items.len == 0) self.last_action else null;
     }
 
+    pub fn skipPreAccept(self: *ExecState) bool {
+        const instr = self.getCurrInstr() orelse return false;
+        if (instr.tag == .PRE_ACCEPT) self.instr += 1;
+        return instr.tag == .PRE_ACCEPT;
+    }
+
     pub fn addBranches(
         self: ExecState,
         list: *std.ArrayList(SplitBranch),
@@ -781,6 +789,7 @@ pub const ExecState = struct {
             .MATCH => for (instr.data.match.items) |prong| {
                 try list.append(SplitBranch.initProng(prong, ret_look));
             },
+            .RET => try list.append(SplitBranch.initMatchAll(self.last_action)),
             else => unreachable,
         }
     }

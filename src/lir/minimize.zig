@@ -57,7 +57,8 @@ pub fn minimize(allocator: Allocator, automaton: ra.Automaton) !ra.Automaton {
 
     var base_states = StateSet.init(allocator);
     for (automaton.blocks.items, 0..) |block, i| {
-        const new_state = try ra.ExecState.init(allocator, block);
+        var new_state = try ra.ExecState.init(allocator, block);
+        _ = new_state.skipPreAccept();
         const insts = block.insts.items;
 
         if (insts[0].tag != .RET and
@@ -139,7 +140,7 @@ pub fn minimize(allocator: Allocator, automaton: ra.Automaton) !ra.Automaton {
     for (sets.items) |_| _ = try nerode_dfa.getNew();
     for (sets.items, nerode_dfa.blocks.items) |set, new_block| {
         var repr = set.items[0];
-        assert(repr.instr == 0);
+        repr.instr = 0;
 
         while (repr.getCurrInstrOrNull()) |equivalent| : (repr.instr += 1) {
             switch (equivalent.tag) {
@@ -260,7 +261,8 @@ fn splitOn(set: StateSet, branch: ra.SplitBranch, fail: ra.ExecState) !StateSet 
             continue;
         }
 
-        const split_result = try item.splitOn(branch.set);
+        var split_result = try item.splitOn(branch.set);
+        if (split_result) |*result| _ = result.skipPreAccept();
         try new.append(split_result orelse try fail.clone());
     }
 
