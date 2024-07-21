@@ -7,14 +7,14 @@ const Info = struct {
 };
 %%
 
-Root: '[]const Info' = (&. Comment)* !. { try $*1.toOwnedSlice() };
+Root: '[]const Info' = Comment* !. { try $*1.toOwnedSlice() };
 
 Comment: Info
-    = DOC_COMMENT {  .{ .match = $0, .skip = false, } }
+    = DOC_COMMENT { .{ .match = $0, .skip = false, } }
     | SKIP { .{ .match = $0, .skip = true, } }
     ;
 
-SKIP = WHITESPACE* !WHITESPACE_START ;
+SKIP = WHITESPACE+ !WHITESPACE_START ;
 
 WHITESPACE_START 
     = [ \n]
@@ -32,4 +32,4 @@ LINE_COMMENT
     | '////' (!'\n' .)* !(![\n] .)
     ;
 
-DOC_COMMENT = ('///' (!'\n' .)* [ \n]* SKIP)+ ; 
+DOC_COMMENT = ('///' !'/' (![\n] .)* [ \n]*)+ !'///'; 

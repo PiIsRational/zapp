@@ -1,9 +1,17 @@
 %% NAME Test
 
-Ident = SKIP ;
+Ident = FLOAT ;
 
+FLOAT = DEC_INT [eE] [-+]? DEC_INT ;
+
+DEC_INT = DEC DEC_* ;
+HEX_INT = HEX HEX_* !HEX_ ;
 SKIP = WHITESPACE* !WHITESPACE_START ;
 
+HEX = [0-9a-fA-F] ;
+HEX_ = '_'? HEX ;
+DEC = [0-9] ;
+DEC_ = '_'? DEC ;
 WHITESPACE_START 
     = [ \n]
     | '//' ![!/]

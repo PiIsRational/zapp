@@ -3,7 +3,7 @@
 NumberList: "std.ArrayList(usize)" = Number+ EOF { $1 };
 
 Number: usize = NUMBER Space { $1 };
-NUMBER: usize = [0-9]+ {
+NUMBER: usize = [0-9]+ ![0-9] {
     try std.fmt.parseInt(usize, $0, 10)
 };
 

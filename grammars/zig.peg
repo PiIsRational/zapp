@@ -636,7 +636,7 @@ CHAR_LITERAL = "'" CHAR_CHAR "'" SKIP;
 FLOAT
     = "0x" HEX_INT "."  HEX_INT ([pP] [-+]? DEC_INT)? SKIP
     |      DEC_INT "."  DEC_INT ([eE] [-+]? DEC_INT)? SKIP
-    | "0x" DEC_INT [pP] [-+]? DEC_INT SKIP
+    | "0x" HEX_INT [pP] [-+]? DEC_INT SKIP
     |      DEC_INT [eE] [-+]? DEC_INT SKIP
     ;
 

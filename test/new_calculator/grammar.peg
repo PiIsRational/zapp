@@ -81,12 +81,17 @@ L_PAREN = '(' SPACING ;
 R_PAREN = ')' SPACING ;
 
 Number: isize = NUMBER SPACING { $1 };
-NUMBER: isize = [0-9]+ {
+NUMBER: isize = [0-9]+ ![0-9] {
     try std.fmt.parseInt(isize, $0, 10)
 };
 
 // Spacing
-SPACING = SPACING_INNER* ;
+SPACING = SPACING_INNER* !SPACING_INNER_START ;
+
+SPACING_INNER_START 
+    = '#'
+    | SPACE
+    ;
 
 SPACING_INNER 
     = COMMENT 
