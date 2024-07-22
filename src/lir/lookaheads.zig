@@ -43,6 +43,7 @@ map: LookaheadMap,
 map_keys: std.ArrayList(LookaheadTopState.Key),
 allocator: Allocator,
 nfa: ra.Automaton = undefined, // only set at emit
+key_scratch: std.AutoHashMap(usize, usize),
 
 pub fn init(allocator: Allocator) LookaheadEmitter {
     return .{
@@ -50,6 +51,7 @@ pub fn init(allocator: Allocator) LookaheadEmitter {
         .map = LookaheadMap.init(allocator),
         .states = std.ArrayList(LookaheadTopState).init(allocator),
         .map_keys = std.ArrayList(LookaheadTopState.Key).init(allocator),
+        .key_scratch = std.AutoHashMap(usize, usize).init(allocator),
     };
 }
 
@@ -66,7 +68,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
     self.nfa = ra.Automaton.init(self.allocator);
     const start_block = try self.nfa.getNew();
     var start_state = try LookaheadTopState.blockInit(self.allocator, start);
-    try self.put(try start_state.toKey(), start_block);
+    try self.put(try start_state.toKey(&self.key_scratch), start_block);
     try self.states.append(start_state);
     self.nfa.start = start_block;
 
@@ -78,7 +80,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
     while (self.states.popOrNull()) |popped_state| {
         var state = popped_state;
 
-        const key = try state.toKey();
+        const key = try state.toKey(&self.key_scratch);
         defer key.deinit(self.allocator);
 
         const block = self.map.get(key).?;
@@ -90,7 +92,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
 
         if (try state.canFillLookBranches()) {
             while (try state.fillLookBranches()) {}
-            const new_key = try state.toKey();
+            const new_key = try state.toKey(&self.key_scratch);
             defer new_key.deinit(self.allocator);
 
             try self.states.append(state);
@@ -114,7 +116,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
                 continue;
             }
 
-            const new_key = try state.toKey();
+            const new_key = try state.toKey(&self.key_scratch);
             defer new_key.deinit(self.allocator);
 
             try self.states.append(state);
@@ -140,7 +142,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
 
         for (branches.prongs.items) |branch| {
             var new_state = try state.splitOn(branch);
-            const new_key = try new_state.toKey();
+            const new_key = try new_state.toKey(&self.key_scratch);
             defer new_key.deinit(self.allocator);
             var labels = std.ArrayList(ir.Range).init(self.allocator);
             var iter = branch.set.rangeIter();
@@ -194,7 +196,7 @@ fn getBlockForState(
 fn addEpsilons(self: *LookaheadEmitter, base: *LookaheadTopState) !bool {
     if (!base.canFillBranches()) return false;
 
-    const base_key = try base.toKey();
+    const base_key = try base.toKey(&self.key_scratch);
     defer base_key.deinit(self.allocator);
     const first_block = self.map.get(base_key).?;
     const start = self.states.items.len;
@@ -209,7 +211,7 @@ fn addEpsilons(self: *LookaheadEmitter, base: *LookaheadTopState) !bool {
 
     var last_transition = self.nfa.fail;
     for (self.states.items[start..]) |*state| {
-        const key = try state.toKey();
+        const key = try state.toKey(&self.key_scratch);
         defer key.deinit(self.allocator);
 
         const new_block = try self.getBlockForState(state.*, key);
@@ -239,6 +241,7 @@ pub fn deinit(self: *LookaheadEmitter) void {
     for (self.states.items) |state| state.deinit();
     for (self.map_keys.items) |key| key.deinit(self.allocator);
 
+    self.key_scratch.deinit();
     self.map_keys.deinit();
     self.states.deinit();
     self.map.deinit();
@@ -393,8 +396,9 @@ fn cleanUp(sub_states: *std.ArrayList(LookaheadState)) void {
 
     const Ctx = struct {
         fn less(_: @This(), lhs: LookaheadState, rhs: LookaheadState) bool {
-            const l_k = lhs.base.toKey();
-            const r_k = rhs.base.toKey();
+            // not as precise as the real this but still enough
+            const l_k = lhs.base.toUnownedKey();
+            const r_k = rhs.base.toUnownedKey();
 
             if (l_k == null) return r_k != null;
             if (r_k == null) return false;
@@ -744,6 +748,7 @@ const LookaheadTopState = struct {
             for (self.sub_states) |sub| {
                 sub.deinit(allocator);
             }
+            self.base.deinit(allocator);
             allocator.free(self.sub_states);
         }
 
@@ -765,19 +770,19 @@ const LookaheadTopState = struct {
         }
     };
 
-    fn toKey(self: *LookaheadTopState) !Key {
+    fn toKey(self: *LookaheadTopState, scratch: *std.AutoHashMap(usize, usize)) !Key {
         cleanUp(&self.sub_states);
 
         // here undefined makes sense as accept is first inspected
         const base_key = if (self.action == null)
-            self.base.toKey() orelse undefined
+            try self.base.toKey(scratch) orelse undefined
         else
             undefined;
 
         var sub_states = std.ArrayList(LookaheadState.Key).init(self.sub_states.allocator);
         try sub_states.ensureTotalCapacity(self.sub_states.items.len);
         for (self.sub_states.items) |*from| {
-            if (try from.toKey(self.sub_states.allocator)) |key| {
+            if (try from.toKey(self.sub_states.allocator, scratch)) |key| {
                 try sub_states.append(key);
             }
         }
@@ -1141,6 +1146,7 @@ const LookaheadState = struct {
                 look.deinit(allocator);
             }
             allocator.free(self.lookaheads);
+            if (self.base) |b| b.deinit(allocator);
         }
 
         pub fn format(
@@ -1164,13 +1170,17 @@ const LookaheadState = struct {
         }
     };
 
-    fn toKey(self: LookaheadState, allocator: Allocator) !?Key {
-        const base_key = self.base.toKey();
+    fn toKey(
+        self: LookaheadState,
+        allocator: Allocator,
+        scratch: *std.AutoHashMap(usize, usize),
+    ) !?Key {
+        const base_key = try self.base.toKey(scratch);
         var looks = std.ArrayList(Key).init(allocator);
         try looks.ensureTotalCapacity(self.lookaheads.items.len);
 
         for (self.lookaheads.items) |look| {
-            const key = try look.toKey(allocator);
+            const key = try look.toKey(allocator, scratch);
             if (key) |k| try looks.append(k);
         }
 

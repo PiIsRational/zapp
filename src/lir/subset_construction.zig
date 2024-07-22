@@ -35,6 +35,7 @@ dfa_states: std.ArrayList(DfaState),
 map: DfaMap,
 map_keys: std.ArrayList(DfaState.Key),
 allocator: Allocator,
+key_scratch: std.AutoHashMap(usize, usize),
 
 pub fn init(allocator: Allocator) DfaGen {
     return .{
@@ -43,6 +44,7 @@ pub fn init(allocator: Allocator) DfaGen {
         .map = DfaMap.init(allocator),
         .map_keys = std.ArrayList(DfaState.Key).init(allocator),
         .allocator = allocator,
+        .key_scratch = std.AutoHashMap(usize, usize).init(allocator),
     };
 }
 
@@ -50,7 +52,7 @@ pub fn init(allocator: Allocator) DfaGen {
 pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
     var start_state = try DfaState.init(self.allocator, start_block);
     try self.dfa_states.append(start_state);
-    try self.put(try start_state.toKey(), try self.dfa.getNew());
+    try self.put(try start_state.toKey(&self.key_scratch), try self.dfa.getNew());
 
     const fail_block = try self.dfa.getNew();
     try fail_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
@@ -68,7 +70,7 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             defer branches.deinit();
 
             // get the block
-            const curr_key = try state.toKey();
+            const curr_key = try state.toKey(&self.key_scratch);
             defer curr_key.deinit(self.allocator);
 
             const block = self.map.get(curr_key).?;
@@ -127,7 +129,7 @@ fn getBlock(self: *DfaGen, state: *DfaState) !*ir.Block {
     const empty = !semi_empty and state.isEmpty();
     if (semi_empty) state.removeEmpty();
 
-    const key = try state.toKey();
+    const key = try state.toKey(&self.key_scratch);
     defer key.deinit(self.allocator);
 
     return self.map.get(key) orelse blk: {
@@ -277,8 +279,8 @@ const DfaState = struct {
     fn reorder(self: *DfaState) void {
         const Ctx = struct {
             pub fn less(_: @This(), lhs: ra.ExecState, rhs: ra.ExecState) bool {
-                const l_k = lhs.toKey();
-                const r_k = rhs.toKey();
+                const l_k = lhs.toUnownedKey();
+                const r_k = rhs.toUnownedKey();
 
                 if (l_k == null) return r_k != null;
                 if (r_k == null) return false;
@@ -388,6 +390,7 @@ const DfaState = struct {
         }
 
         pub fn deinit(self: Key, allocator: Allocator) void {
+            for (self.sub_states) |k| k.deinit(allocator);
             allocator.free(self.sub_states);
         }
 
@@ -437,14 +440,14 @@ const DfaState = struct {
         }
     };
 
-    pub fn toKey(self: *DfaState) !Key {
+    pub fn toKey(self: *DfaState, scratch: *std.AutoHashMap(usize, usize)) !Key {
         self.reorder();
 
         var sub_states = std.ArrayList(ra.ExecState.Key)
             .init(self.sub_states.allocator);
 
         for (self.sub_states.items) |*state| {
-            if (state.toKey()) |key| {
+            if (try state.toKey(scratch)) |key| {
                 try sub_states.append(key);
             }
         }

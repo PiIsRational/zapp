@@ -907,24 +907,43 @@ pub const ExecState = struct {
     pub const Key = struct {
         instr: usize,
         instr_sub_idx: usize,
-        block: *ir.Block,
+        blocks: []*ir.Block,
 
         pub fn eql(self: Key, other: Key) bool {
             return self.instr == other.instr and
                 self.instr_sub_idx == other.instr_sub_idx and
-                self.block == other.block;
+                std.mem.eql(*ir.Block, self.blocks, other.blocks);
         }
 
         pub fn hash(self: Key, hasher: anytype) void {
             hasher.update(std.mem.asBytes(&self.instr));
             hasher.update(std.mem.asBytes(&self.instr_sub_idx));
-            hasher.update(std.mem.asBytes(&@intFromPtr(self.block)));
+            for (self.blocks) |block| hasher.update(std.mem.asBytes(&block.id));
         }
 
         pub fn lessThan(self: Key, other: Key) bool {
-            return self.block.id < other.block.id or
-                self.block.id == other.block.id and (self.instr < other.instr or
-                self.instr == other.instr and self.instr_sub_idx < other.instr_sub_idx);
+            if (self.instr < other.instr or
+                self.instr == other.instr and self.instr_sub_idx < other.instr_sub_idx)
+            {
+                return true;
+            }
+
+            if (self.instr > other.instr or self.instr_sub_idx > other.instr_sub_idx) {
+                return false;
+            }
+
+            if (self.blocks.len < other.blocks.len) return true;
+            for (self.blocks, other.blocks) |t, o| {
+                if (t.id < o.id) return true;
+                if (o.id > t.id) return false;
+            }
+
+            // they are equal
+            return false;
+        }
+
+        pub fn deinit(self: Key, allocator: Allocator) void {
+            allocator.free(self.blocks);
         }
 
         pub fn format(
@@ -933,8 +952,14 @@ pub const ExecState = struct {
             _: std.fmt.FormatOptions,
             writer: anytype,
         ) !void {
-            try writer.print("({d}, {d}, {d})", .{
-                self.block.id,
+            try writer.print("([", .{});
+            for (self.blocks, 0..) |blk, i| {
+                try writer.print("{d}", .{blk.id});
+                if (i + 1 == self.blocks.len) break;
+                try writer.print(", ", .{});
+            }
+
+            try writer.print("], {d}, {d})", .{
                 self.instr,
                 self.instr_sub_idx,
             });
@@ -942,17 +967,59 @@ pub const ExecState = struct {
     };
 
     pub fn eql(self: ExecState, other: ExecState) bool {
-        return self.blocks.getLastOrNull() == other.blocks.getLastOrNull() and
+        const self_top = self.getTopSlice();
+        const other_top = other.getTopSlice();
+        return std.mem.eql(*ir.Block, self_top, other_top) and
             self.instr == other.instr and
             self.instr_sub_idx == other.instr_sub_idx;
     }
 
-    pub fn toKey(self: ExecState) ?Key {
+    fn getTopSlice(self: ExecState) []*ir.Block {
+        const blks = self.blocks.items;
+        var iter = std.mem.reverseIterator(blks);
+        while (iter.next()) |blk| {
+            const last = blk.insts.getLast();
+            if (!last.meta.isConsuming()) break;
+        }
+        return blks[iter.index + 1 ..];
+    }
+
+    /// this is not a proper key and has references to the origiinal
+    /// exec_state. it does not remove loops. but still eql should still work correctly
+    pub fn toUnownedKey(self: ExecState) ?Key {
         if (self.blocks.items.len == 0) return null;
+        const last_slice = self.getTopSlice();
 
         return .{
             .instr_sub_idx = self.instr_sub_idx,
-            .block = self.blocks.getLast(),
+            .blocks = last_slice,
+            .instr = self.instr,
+        };
+    }
+
+    pub fn toKey(self: ExecState, scratch: *std.AutoHashMap(usize, usize)) !?Key {
+        if (self.blocks.items.len == 0) return null;
+
+        const allocator = scratch.allocator;
+
+        // start with getting the lowest sub nfa
+        const last_slice = self.getTopSlice();
+        scratch.clearRetainingCapacity();
+        var key_stack = std.ArrayList(*ir.Block).init(allocator);
+
+        for (last_slice) |blk| {
+            if (scratch.get(blk.id)) |len| {
+                key_stack.shrinkRetainingCapacity(len);
+                continue;
+            }
+
+            try key_stack.append(blk);
+            try scratch.putNoClobber(blk.id, key_stack.items.len);
+        }
+
+        return .{
+            .instr_sub_idx = self.instr_sub_idx,
+            .blocks = try key_stack.toOwnedSlice(),
             .instr = self.instr,
         };
     }
@@ -966,8 +1033,15 @@ pub const ExecState = struct {
         if (self.blocks.items.len == 0) {
             try writer.print("∅ ", .{});
         } else {
-            try writer.print("({d}, {d}, {d})", .{
-                self.blocks.getLast().id,
+            try writer.print("([", .{});
+            const top_slice = self.getTopSlice();
+            for (top_slice, 0..) |blk, i| {
+                try writer.print("{d}", .{blk.id});
+                if (i + 1 == top_slice.len) break;
+                try writer.print(", ", .{});
+            }
+
+            try writer.print("], {d}, {d})", .{
                 self.instr,
                 self.instr_sub_idx,
             });
