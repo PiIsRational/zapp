@@ -921,6 +921,14 @@ pub const ExecState = struct {
             for (self.blocks) |block| hasher.update(std.mem.asBytes(&block.id));
         }
 
+        pub fn clone(self: Key, allocator: Allocator) !Key {
+            return .{
+                .instr = self.instr,
+                .instr_sub_idx = self.instr_sub_idx,
+                .blocks = try allocator.dupe(*ir.Block, self.blocks),
+            };
+        }
+
         pub fn lessThan(self: Key, other: Key) bool {
             if (self.instr < other.instr or
                 self.instr == other.instr and self.instr_sub_idx < other.instr_sub_idx)
@@ -933,9 +941,10 @@ pub const ExecState = struct {
             }
 
             if (self.blocks.len < other.blocks.len) return true;
+            if (self.blocks.len > other.blocks.len) return false;
             for (self.blocks, other.blocks) |t, o| {
                 if (t.id < o.id) return true;
-                if (o.id > t.id) return false;
+                if (t.id > o.id) return false;
             }
 
             // they are equal
@@ -981,7 +990,7 @@ pub const ExecState = struct {
             const last = blk.insts.getLast();
             if (!last.meta.isConsuming()) break;
         }
-        return blks[iter.index + 1 ..];
+        return blks[iter.index..];
     }
 
     /// this is not a proper key and has references to the origiinal

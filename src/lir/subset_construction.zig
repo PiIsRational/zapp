@@ -164,6 +164,7 @@ pub fn deinit(self: *DfaGen) void {
     for (self.dfa_states.items) |dfa_state| dfa_state.deinit();
     for (self.map_keys.items) |key| key.deinit(self.allocator);
 
+    self.key_scratch.deinit();
     self.dfa_states.deinit();
     self.map_keys.deinit();
     self.map.deinit();
@@ -385,7 +386,8 @@ const DfaState = struct {
         action: ?usize,
 
         pub fn clone(self: Key, allocator: Allocator) !Key {
-            const sub_states = try allocator.dupe(ra.ExecState.Key, self.sub_states);
+            const sub_states = try allocator.alloc(ra.ExecState.Key, self.sub_states.len);
+            for (sub_states, self.sub_states) |*s, o| s.* = try o.clone(allocator);
             return .{ .sub_states = sub_states, .action = self.action };
         }
 

@@ -81,7 +81,7 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
     try ra.compressMatches(allocator, &nerode);
     nerode.setFail();
     gvgen.genAutomaton(stdout, nfa, "d") catch unreachable;
-    gvgen.genAutomaton(stdout, dfa, "d") catch unreachable;
+    gvgen.genAutomaton(stdout, nerode, "d") catch unreachable;
     try self.appendAutomaton(&nerode, blk);
 }
 

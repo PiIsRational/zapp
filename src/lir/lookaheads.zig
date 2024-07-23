@@ -55,15 +55,6 @@ pub fn init(allocator: Allocator) LookaheadEmitter {
     };
 }
 
-/// goal:
-/// generate an nfa:
-/// the difference between an nfa and a dfa is epsilon transitions
-/// as having multiple possibilities to match a char can be replaced by epsilon transitions
-///
-///
-/// the spolution is to use the backtracking feature and normal jumps in blocks
-/// this solution would not be executable, but it would be understandable
-/// for the dfa generator
 pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
     self.nfa = ra.Automaton.init(self.allocator);
     const start_block = try self.nfa.getNew();
@@ -238,8 +229,8 @@ pub fn put(self: *LookaheadEmitter, key: LookaheadTopState.Key, value: *ir.Block
 }
 
 pub fn deinit(self: *LookaheadEmitter) void {
-    for (self.states.items) |state| state.deinit();
     for (self.map_keys.items) |key| key.deinit(self.allocator);
+    for (self.states.items) |state| state.deinit();
 
     self.key_scratch.deinit();
     self.map_keys.deinit();
@@ -394,6 +385,9 @@ fn cleanUp(sub_states: *std.ArrayList(LookaheadState)) void {
         cleanUp(&sub.lookaheads);
     }
 
+    //remove doubled sub_states
+    if (sub_states.items.len <= 1) return;
+
     const Ctx = struct {
         fn less(_: @This(), lhs: LookaheadState, rhs: LookaheadState) bool {
             // not as precise as the real this but still enough
@@ -418,9 +412,6 @@ fn cleanUp(sub_states: *std.ArrayList(LookaheadState)) void {
 
     // sort the sub_states
     std.sort.pdq(LookaheadState, sub_states.items, Ctx{}, Ctx.less);
-
-    //remove doubled sub_states
-    if (sub_states.items.len <= 1) return;
 
     var i: usize = 1;
     var idx: usize = 1;
@@ -738,7 +729,7 @@ const LookaheadTopState = struct {
             for (self.sub_states, sub_states) |from, *to| to.* = try from.clone(allocator);
 
             return .{
-                .base = self.base,
+                .base = try self.base.clone(allocator),
                 .action = self.action,
                 .sub_states = sub_states,
             };
@@ -759,19 +750,22 @@ const LookaheadTopState = struct {
             writer: anytype,
         ) !void {
             if (self.action) |act| {
-                try writer.print("(act: {d})", .{act});
+                try writer.print("(act: {d}) {{", .{act});
             } else {
                 try writer.print("{s} {{", .{self.base});
-                for (self.sub_states) |sub| {
-                    try writer.print("{s}, ", .{sub});
-                }
-                try writer.print("}}", .{});
             }
+
+            for (self.sub_states) |sub| {
+                try writer.print("{s}, ", .{sub});
+            }
+            try writer.print("}}", .{});
         }
     };
 
     fn toKey(self: *LookaheadTopState, scratch: *std.AutoHashMap(usize, usize)) !Key {
+        std.debug.print("b {s}\n", .{self});
         cleanUp(&self.sub_states);
+        std.debug.print("a {s}\n", .{self});
 
         // here undefined makes sense as accept is first inspected
         const base_key = if (self.action == null)
@@ -1136,7 +1130,7 @@ const LookaheadState = struct {
 
             return .{
                 .lookaheads = looks,
-                .base = self.base,
+                .base = if (self.base) |b| try b.clone(allocator) else null,
                 .look = self.look,
             };
         }
