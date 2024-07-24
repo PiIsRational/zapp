@@ -235,7 +235,6 @@ const DfaState = struct {
 
         while (try self.fillBranches() or try self.execJumps()) {}
         self.resetHadFill();
-        self.deduplicate();
 
         if (self.isSemiEmpty()) {
             assert(self.sub_states.items.len > 0);
@@ -253,17 +252,20 @@ const DfaState = struct {
     }
 
     /// deduplicates the sub states of the dfa state
-    fn deduplicate(self: *DfaState) void {
+    fn deduplicate(self: *DfaState, key: *DfaState.Key) void {
+        // This assertion will probably fail on accepting states
+        assert(self.sub_states.items.len == key.sub_states.len);
+
         if (self.sub_states.items.len <= 1) return;
-        self.reorder();
+        const keys = key.sub_states;
+        self.reorder(keys);
 
         var i: usize = 1;
         var idx: usize = 1;
         while (i < self.sub_states.items.len) : (i += 1) {
-            const last = self.sub_states.items[idx - 1];
             const curr = &self.sub_states.items[i];
 
-            if (last.eql(curr.*)) {
+            if (keys[i - 1].eql(keys[i])) {
                 curr.deinit();
                 continue;
             }
@@ -277,20 +279,28 @@ const DfaState = struct {
 
     /// reordering the sub states of the dfa state to get
     /// a canonical representation of dfa states for hashing purposes
-    fn reorder(self: *DfaState) void {
+    fn reorder(self: *DfaState, keys: []ra.ExecState.Key) void {
         const Ctx = struct {
-            pub fn less(_: @This(), lhs: ra.ExecState, rhs: ra.ExecState) bool {
-                const l_k = lhs.toUnownedKey();
-                const r_k = rhs.toUnownedKey();
+            states: []ra.ExecState,
+            keys: []ra.ExecState.Key,
 
-                if (l_k == null) return r_k != null;
-                if (r_k == null) return false;
+            pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
+                const l_k = ctx.keys[lhs];
+                const r_k = ctx.keys[rhs];
 
-                return l_k.?.lessThan(r_k.?);
+                return l_k.lessThan(r_k);
+            }
+
+            pub fn swap(ctx: @This(), lhs: usize, rhs: usize) void {
+                std.mem.swap(ra.ExecState, &ctx.states[lhs], &ctx.states[rhs]);
+                std.mem.swap(ra.ExecState.Key, &ctx.keys[lhs], &ctx.keys[rhs]);
             }
         };
 
-        std.sort.pdq(ra.ExecState, self.sub_states.items, Ctx{}, Ctx.less);
+        std.sort.pdqContext(0, self.sub_states.items.len, Ctx{
+            .states = self.sub_states.items,
+            .keys = keys,
+        });
     }
 
     pub fn clone(self: DfaState) !DfaState {
@@ -382,7 +392,7 @@ const DfaState = struct {
     }
 
     pub const Key = struct {
-        sub_states: []const ra.ExecState.Key,
+        sub_states: []ra.ExecState.Key,
         action: ?usize,
 
         pub fn clone(self: Key, allocator: Allocator) !Key {
@@ -443,8 +453,14 @@ const DfaState = struct {
     };
 
     pub fn toKey(self: *DfaState, scratch: *std.AutoHashMap(usize, usize)) !Key {
-        self.reorder();
+        var k = try self.toKeyNoDedupe(scratch);
+        defer k.deinit(scratch.allocator);
+        self.deduplicate(&k);
 
+        return try self.toKeyNoDedupe(scratch);
+    }
+
+    pub fn toKeyNoDedupe(self: *DfaState, scratch: *std.AutoHashMap(usize, usize)) !Key {
         var sub_states = std.ArrayList(ra.ExecState.Key)
             .init(self.sub_states.allocator);
 

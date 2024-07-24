@@ -993,19 +993,6 @@ pub const ExecState = struct {
         return blks[iter.index..];
     }
 
-    /// this is not a proper key and has references to the origiinal
-    /// exec_state. it does not remove loops. but still eql should still work correctly
-    pub fn toUnownedKey(self: ExecState) ?Key {
-        if (self.blocks.items.len == 0) return null;
-        const last_slice = self.getTopSlice();
-
-        return .{
-            .instr_sub_idx = self.instr_sub_idx,
-            .blocks = last_slice,
-            .instr = self.instr,
-        };
-    }
-
     pub fn toKey(self: ExecState, scratch: *std.AutoHashMap(usize, usize)) !?Key {
         if (self.blocks.items.len == 0) return null;
 

@@ -1,6 +1,6 @@
 %% NAME Test
 
-Ident = FLOAT ;
+Ident = IDENTIFIER ;
 
 FLOAT = DEC_INT [eE] [-+]? DEC_INT ;
 

@@ -87,7 +87,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             defer new_key.deinit(self.allocator);
 
             try self.states.append(state);
-            assert(!new_key.eql(key));
+            if (new_key.eql(key)) continue;
 
             const blk = try self.getBlockForState(state, new_key);
 
@@ -380,46 +380,58 @@ fn addSubBranches(
 }
 
 /// the goal of cleanup is to order and deduplicate lookahead states
-fn cleanUp(sub_states: *std.ArrayList(LookaheadState)) void {
-    for (sub_states.items) |*sub| {
-        cleanUp(&sub.lookaheads);
+fn cleanUp(
+    sub_states: *std.ArrayList(LookaheadState),
+    keys: []LookaheadState.Key,
+) void {
+    assert(sub_states.items.len == keys.len);
+    for (sub_states.items, keys) |*sub, other| {
+        cleanUp(&sub.lookaheads, other.lookaheads);
     }
 
     //remove doubled sub_states
     if (sub_states.items.len <= 1) return;
 
     const Ctx = struct {
-        fn less(_: @This(), lhs: LookaheadState, rhs: LookaheadState) bool {
+        sub_states: *std.ArrayList(LookaheadState),
+        keys: []LookaheadState.Key,
+
+        pub fn lessThan(self: @This(), lhs: usize, rhs: usize) bool {
             // not as precise as the real this but still enough
-            const l_k = lhs.base.toUnownedKey();
-            const r_k = rhs.base.toUnownedKey();
+            const l_k = self.keys[lhs];
+            const r_k = self.keys[rhs];
 
-            if (l_k == null) return r_k != null;
-            if (r_k == null) return false;
+            if (l_k.base == null) return r_k.base != null;
+            if (r_k.base == null) return false;
 
-            if (l_k.?.lessThan(r_k.?)) return true;
-            if (!l_k.?.eql(r_k.?)) return false;
+            if (l_k.base.?.lessThan(r_k.base.?)) return true;
+            if (!l_k.base.?.eql(r_k.base.?)) return false;
 
-            if (lhs.look.less(rhs.look)) return true;
-            if (lhs.look != rhs.look) return false;
-
-            if (lhs.start.less(rhs.start)) return true;
-            if (!lhs.start.eql(rhs.start)) return false;
+            if (l_k.look.less(r_k.look)) return true;
+            if (l_k.look != r_k.look) return false;
 
             return false;
+        }
+
+        pub fn swap(self: @This(), lhs: usize, rhs: usize) void {
+            const subs = self.sub_states.items;
+            std.mem.swap(LookaheadState, &subs[lhs], &subs[rhs]);
+            std.mem.swap(LookaheadState.Key, &self.keys[lhs], &self.keys[rhs]);
         }
     };
 
     // sort the sub_states
-    std.sort.pdq(LookaheadState, sub_states.items, Ctx{}, Ctx.less);
+    std.sort.pdqContext(0, sub_states.items.len, Ctx{
+        .sub_states = sub_states,
+        .keys = keys,
+    });
 
     var i: usize = 1;
     var idx: usize = 1;
     while (i < sub_states.items.len) : (i += 1) {
-        const last = sub_states.items[idx - 1];
         const curr = &sub_states.items[i];
 
-        if (last.eql(curr.*)) {
+        if (keys[i - 1].eql(keys[i])) {
             curr.deinit();
             continue;
         }
@@ -545,9 +557,9 @@ const LookaheadTopState = struct {
     }
 
     fn eql(self: LookaheadTopState, other: LookaheadTopState) bool {
-        if ((self.action == null and other.action == null and
-            !self.base.eql(other.base) or self.action != other.action) or
-            self.look != other.look or !self.start.eql(other.start) or
+        if ((self.action == null and other.action == null and !self.base.eql(other.base) or
+            self.action != other.action) or self.look != other.look or
+            !self.start.eql(other.start) or
             self.sub_states.items.len != other.sub_states.items.len)
         {
             return false;
@@ -695,7 +707,7 @@ const LookaheadTopState = struct {
     const Key = struct {
         base: ra.ExecState.Key,
         action: ?usize,
-        sub_states: []const LookaheadState.Key,
+        sub_states: []LookaheadState.Key,
 
         fn eql(self: Key, other: Key) bool {
             if (self.sub_states.len != other.sub_states.len) return false;
@@ -763,10 +775,17 @@ const LookaheadTopState = struct {
     };
 
     fn toKey(self: *LookaheadTopState, scratch: *std.AutoHashMap(usize, usize)) !Key {
-        std.debug.print("b {s}\n", .{self});
-        cleanUp(&self.sub_states);
-        std.debug.print("a {s}\n", .{self});
+        // TODO: make this much better somtime
+        var pre_key = try self.toKeyNoCleanup(scratch);
+        defer pre_key.deinit(scratch.allocator);
+        cleanUp(&self.sub_states, pre_key.sub_states);
+        return try self.toKeyNoCleanup(scratch);
+    }
 
+    fn toKeyNoCleanup(
+        self: *LookaheadTopState,
+        scratch: *std.AutoHashMap(usize, usize),
+    ) !Key {
         // here undefined makes sense as accept is first inspected
         const base_key = if (self.action == null)
             try self.base.toKey(scratch) orelse undefined
@@ -1090,7 +1109,7 @@ const LookaheadState = struct {
     const Key = struct {
         base: ?ra.ExecState.Key,
         look: LookaheadType,
-        lookaheads: []const Key,
+        lookaheads: []Key,
 
         fn eql(self: Key, other: Key) bool {
             if (self.look != other.look or
