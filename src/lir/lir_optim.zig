@@ -31,15 +31,6 @@ ir: *ir.LowIr,
 
 const PassError = Allocator.Error;
 
-// the plan would be to treat everything in two passes:
-//
-// * first try to remove lookahead and get a simple model for an nfa
-// * second implement the nfa to dfa conversion (already implemented)
-//
-// it would be nice to have some minimization algorithms.
-// there woule also be a benefit from refactoring some of the code to
-// make all the analyses simpler and more reusable.
-
 pub fn optimize(lir: *ir.LowIr) !void {
     var self: PassManager = .{
         .ir = lir,
@@ -49,7 +40,7 @@ pub fn optimize(lir: *ir.LowIr) !void {
 }
 
 fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
-    const stdout = std.io.getStdErr().writer();
+    //const stdout = std.io.getStdErr().writer();
     if (!blk.meta.is_target or !blk.meta.used_terminal) return;
     const allocator = self.ir.allocator;
 
@@ -80,8 +71,8 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
 
     try ra.compressMatches(allocator, &nerode);
     nerode.setFail();
-    gvgen.genAutomaton(stdout, nfa, "d") catch unreachable;
-    gvgen.genAutomaton(stdout, nerode, "d") catch unreachable;
+    //gvgen.genAutomaton(stdout, nfa, "d") catch unreachable;
+    //gvgen.genAutomaton(stdout, nerode, "d") catch unreachable;
     try self.appendAutomaton(&nerode, blk);
 }
 

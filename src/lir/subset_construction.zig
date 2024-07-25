@@ -253,19 +253,44 @@ const DfaState = struct {
 
     /// deduplicates the sub states of the dfa state
     fn deduplicate(self: *DfaState, key: *DfaState.Key) void {
-        // This assertion will probably fail on accepting states
-        assert(self.sub_states.items.len == key.sub_states.len);
-
         if (self.sub_states.items.len <= 1) return;
+
+        var i: usize = 1;
+        const subs = self.sub_states.items;
+        var len = subs.len;
+        while (i <= len) : (i += 1) {
+            if (subs[i - 1].blocks.items.len != 0) continue;
+            len -= 1;
+            i -= 1;
+            std.mem.swap(ra.ExecState, &subs[i], &subs[len]);
+        }
+
+        assert(len == key.sub_states.len);
+
         const keys = key.sub_states;
         self.reorder(keys);
 
-        var i: usize = 1;
+        i = 1;
         var idx: usize = 1;
-        while (i < self.sub_states.items.len) : (i += 1) {
+        // normal states
+        while (i < len) : (i += 1) {
             const curr = &self.sub_states.items[i];
 
             if (keys[i - 1].eql(keys[i])) {
+                curr.deinit();
+                continue;
+            }
+
+            self.sub_states.items[idx] = curr.*;
+            idx += 1;
+        }
+
+        // terminal states
+        while (i < self.sub_states.items.len) : (i += 1) {
+            const curr = &self.sub_states.items[i];
+            const last = self.sub_states.items[idx - 1];
+
+            if (i != len and curr.eql(last)) {
                 curr.deinit();
                 continue;
             }
@@ -280,7 +305,7 @@ const DfaState = struct {
     /// reordering the sub states of the dfa state to get
     /// a canonical representation of dfa states for hashing purposes
     fn reorder(self: *DfaState, keys: []ra.ExecState.Key) void {
-        const Ctx = struct {
+        const BaseCtx = struct {
             states: []ra.ExecState,
             keys: []ra.ExecState.Key,
 
@@ -297,10 +322,19 @@ const DfaState = struct {
             }
         };
 
-        std.sort.pdqContext(0, self.sub_states.items.len, Ctx{
+        const TermCtx = struct {
+            pub fn less(_: void, lhs: ra.ExecState, rhs: ra.ExecState) bool {
+                assert(lhs.blocks.items.len == 0 and rhs.blocks.items.len == 0);
+                return lhs.last_action < rhs.last_action;
+            }
+        };
+
+        std.sort.pdqContext(0, keys.len, BaseCtx{
             .states = self.sub_states.items,
             .keys = keys,
         });
+
+        std.sort.pdq(ra.ExecState, self.sub_states.items[keys.len..], void{}, TermCtx.less);
     }
 
     pub fn clone(self: DfaState) !DfaState {
@@ -437,11 +471,10 @@ const DfaState = struct {
         ) !void {
             if (self.sub_states.len == 0) {
                 if (self.action) |act| {
-                    try writer.print("(∅ , {d})", .{act});
+                    try writer.print("(∅ , {d}) ", .{act});
                 } else {
-                    try writer.print("(∅ )", .{});
+                    try writer.print("(∅ ) ", .{});
                 }
-                return;
             }
 
             try writer.print("{{ ", .{});
@@ -489,11 +522,10 @@ const DfaState = struct {
     ) !void {
         if (self.isEmpty()) {
             if (self.action) |act| {
-                try writer.print("(∅ , {d})", .{act});
+                try writer.print("(∅ , {d}) ", .{act});
             } else {
-                try writer.print("(∅ )", .{});
+                try writer.print("(∅ ) ", .{});
             }
-            return;
         }
 
         try writer.print("{{ ", .{});
