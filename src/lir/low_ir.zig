@@ -378,7 +378,7 @@ pub const Instr = struct {
             }),
             .TERM => try writer.print("  (term jmp: %{d}, ret: {d}{s})", .{
                 self.data.ctx_jmp.next.id,
-                self.darta.ctx_jmo.returns.id,
+                self.data.ctx_jmp.returns.id,
                 self.meta,
             }),
             .PRE_ACCEPT => try writer.print("  (pre accept: {d})", .{self.data.action}),

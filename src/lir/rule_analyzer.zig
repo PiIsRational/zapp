@@ -590,6 +590,15 @@ pub fn deleteUnreachable(allocator: Allocator, dfa: *Automaton) !void {
     dfa.blocks.shrinkRetainingCapacity(index);
 }
 
+pub const LookaheadType = enum {
+    POSITIVE,
+    NEGATIVE,
+
+    pub fn less(self: LookaheadType, other: LookaheadType) bool {
+        return @intFromEnum(self) < @intFromEnum(other);
+    }
+};
+
 pub fn compressMatches(allocator: Allocator, dfa: *Automaton) !void {
     var starts = try allocator.alloc(bool, dfa.blocks.items.len);
     defer allocator.free(starts);
@@ -991,6 +1000,56 @@ pub const ExecState = struct {
             if (!last.meta.isConsuming()) break;
         }
         return blks[iter.index..];
+    }
+
+    pub const SplitOffResult = struct {
+        blk: *ir.Block,
+        instr: usize,
+        look: LookaheadType,
+    };
+
+    pub fn splitOff(self: *ExecState) SplitOffResult {
+        const instr = self.getCurrInstr() orelse unreachable;
+        const blocks = self.blocks.items;
+        const curr_blk = &blocks[blocks.len - 1];
+
+        assert(!instr.meta.isConsuming());
+        var look: LookaheadType = undefined;
+        const instr_idx = self.instr;
+        switch (instr.tag) {
+            .NONTERM => {
+                look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
+
+                // got to the next block
+                curr_blk.* = instr.data.ctx_jmp.returns;
+                self.instr = 0;
+            },
+            .STRING => {
+                look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
+
+                // string match cannot be the last instruction of a block
+                self.instr += 1;
+            },
+            .MATCH => {
+                look = .POSITIVE;
+
+                // got to the next block
+
+                // there should be only one way
+                // (this causes no problems because lowering only generates one)
+                assert(instr.data.match.items.len == 1);
+                curr_blk.* = instr.data.match.items[0].dest;
+                self.instr = 0;
+            },
+            else => unreachable,
+        }
+
+        self.instr_sub_idx = 0;
+        return .{
+            .blk = curr_blk.*,
+            .instr = instr_idx,
+            .look = look,
+        };
     }
 
     pub fn toKey(self: ExecState, scratch: *std.AutoHashMap(usize, usize)) !?Key {

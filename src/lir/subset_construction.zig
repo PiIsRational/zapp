@@ -50,9 +50,13 @@ pub fn init(allocator: Allocator) DfaGen {
 
 /// generates a Dfa (automaton with only match and ret/fail)
 pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
-    var start_state = try DfaState.init(self.allocator, start_block);
+    var look_buf = std.ArrayList(ra.ExecState.SplitOffResult).init(self.allocator);
+    defer look_buf.deinit();
+
+    var start_state = try DfaState.init(self.allocator, start_block, &look_buf);
     try self.dfa_states.append(start_state);
     try self.put(try start_state.toKey(&self.key_scratch), try self.dfa.getNew());
+    look_buf.clearRetainingCapacity();
 
     const fail_block = try self.dfa.getNew();
     try fail_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
@@ -91,7 +95,8 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             // add the prongs and get the destination block
             for (branches.prongs.items) |prong| {
                 var split_state = try state.splitOn(prong);
-                try split_state.goEps();
+                try split_state.goEps(&look_buf);
+                defer look_buf.clearRetainingCapacity();
 
                 var labels = std.ArrayList(ir.Range).init(self.allocator);
                 var iter = prong.set.rangeIter();
@@ -174,11 +179,19 @@ const DfaState = struct {
     sub_states: std.ArrayList(ra.ExecState),
     action: ?usize,
 
-    pub fn init(allocator: Allocator, block: *ir.Block) !DfaState {
-        return try initFromExec(allocator, try ra.ExecState.init(allocator, block));
+    pub fn init(
+        allocator: Allocator,
+        block: *ir.Block,
+        buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+    ) !DfaState {
+        return try initFromExec(allocator, try ra.ExecState.init(allocator, block), buf);
     }
 
-    pub fn initFromExec(allocator: Allocator, exec: ra.ExecState) !DfaState {
+    pub fn initFromExec(
+        allocator: Allocator,
+        exec: ra.ExecState,
+        buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+    ) !DfaState {
         var sub_states = std.ArrayList(ra.ExecState).init(allocator);
         try sub_states.append(exec);
 
@@ -187,7 +200,7 @@ const DfaState = struct {
             .action = null,
         };
 
-        try self.goEps();
+        try self.goEps(buf);
         return self;
     }
 
@@ -230,10 +243,34 @@ const DfaState = struct {
         return true;
     }
 
-    pub fn goEps(self: *DfaState) !void {
+    pub fn goEps(
+        self: *DfaState,
+        buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+    ) !void {
         if (self.isEmpty()) return;
 
-        while (try self.fillBranches() or try self.execJumps()) {}
+        while (try self.fillBranches() or try self.execJumps(false, buf)) {}
+
+        if (self.isSemiEmpty()) {
+            assert(self.sub_states.items.len > 0);
+            self.action = null;
+            for (self.sub_states.items) |sub| {
+                if (sub.blocks.items.len == 0) {
+                    self.action = sub.last_action;
+                    break;
+                }
+
+                const instr = sub.getCurrInstr().?;
+                if (instr.tag != .PRE_ACCEPT) continue;
+
+                self.action = instr.data.action;
+                break;
+            }
+            assert(self.action != null);
+        }
+
+        while (try self.fillBranches() or try self.execJumps(true, buf)) {}
+
         self.resetHadFill();
 
         if (self.isSemiEmpty()) {
@@ -399,11 +436,25 @@ const DfaState = struct {
         for (self.sub_states.items) |*sub| sub.had_fill = false;
     }
 
-    fn execJumps(self: *DfaState) !bool {
+    fn execJumps(
+        self: *DfaState,
+        skip_accept: bool,
+        call_buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+    ) !bool {
         var had_change = false;
         for (self.sub_states.items) |*sub| {
+            if (skip_accept) {
+                had_change = sub.skipPreAccept() or had_change;
+            }
+
             const jmp_result = try sub.execJumps();
             had_change = jmp_result == .CHANGE or had_change;
+
+            const instr = sub.getCurrInstr() orelse continue;
+            if (jmp_result != .LOOKAHEAD or instr.meta.isConsuming()) continue;
+
+            try call_buf.append(sub.splitOff());
+            had_change = true;
         }
 
         return had_change;

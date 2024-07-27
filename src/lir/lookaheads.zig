@@ -22,15 +22,6 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 
 const LookaheadEmitter = @This();
-const LookaheadType = enum {
-    POSITIVE,
-    NEGATIVE,
-
-    pub fn less(self: LookaheadType, other: LookaheadType) bool {
-        return @intFromEnum(self) < @intFromEnum(other);
-    }
-};
-
 const LookaheadMap = std.HashMap(
     LookaheadTopState.Key,
     *ir.Block,
@@ -643,9 +634,9 @@ const LookaheadTopState = struct {
         const blocks = self.base.blocks.items;
         const curr_blk = &blocks[blocks.len - 1];
 
+        assert(!instr.meta.isConsuming());
         switch (instr.tag) {
             .NONTERM => {
-                assert(!instr.meta.isConsuming());
                 new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
 
                 // got to the next block
@@ -653,14 +644,12 @@ const LookaheadTopState = struct {
                 self.base.instr = 0;
             },
             .STRING => {
-                assert(!instr.meta.isConsuming());
                 new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
 
                 // string match cannot be the last instruction of a block
                 self.base.instr += 1;
             },
             .MATCH => {
-                assert(!instr.meta.isConsuming());
                 new_branch.look = .POSITIVE;
 
                 // got to the next block
@@ -722,7 +711,7 @@ const LookaheadTopState = struct {
         }
 
         fn hash(self: Key, hasher: anytype) void {
-            assert(std.meta.hasUniqueRepresentation(LookaheadType));
+            assert(std.meta.hasUniqueRepresentation(ra.LookaheadType));
             if (self.action) |action| {
                 hasher.update("1"); // action
                 hasher.update(std.mem.asBytes(&action));
@@ -829,7 +818,7 @@ const LookaheadTopState = struct {
 
 const LookaheadState = struct {
     base: ra.ExecState,
-    look: LookaheadType,
+    look: ra.LookaheadType,
     start: ra.ExecPlace,
     lookaheads: std.ArrayList(LookaheadState),
 
@@ -1108,7 +1097,7 @@ const LookaheadState = struct {
 
     const Key = struct {
         base: ?ra.ExecState.Key,
-        look: LookaheadType,
+        look: ra.LookaheadType,
         lookaheads: []Key,
 
         fn eql(self: Key, other: Key) bool {
@@ -1127,7 +1116,7 @@ const LookaheadState = struct {
         }
 
         fn hash(self: Key, hasher: anytype) void {
-            assert(std.meta.hasUniqueRepresentation(LookaheadType));
+            assert(std.meta.hasUniqueRepresentation(ra.LookaheadType));
 
             if (self.base) |base| {
                 hasher.update("1");
