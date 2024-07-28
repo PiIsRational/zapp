@@ -44,12 +44,20 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
     if (!blk.meta.is_target or !blk.meta.used_terminal) return;
     const allocator = self.ir.allocator;
 
+    var automatizer = DfaGen.Automatizer.init(allocator);
+    defer automatizer.deinit();
     var emitter = LookaheadEmitter.init(allocator);
     defer emitter.deinit();
     var dfa_gen = DfaGen.init(allocator);
     defer dfa_gen.deinit();
 
-    const nfa = try emitter.emit(blk);
+    const automata = try automatizer.genLookAutomata(blk);
+    defer {
+        for (automata.items) |it| it.deinit(allocator);
+        automata.deinit();
+    }
+
+    const nfa = try emitter.emit(automata.items[0].block.items[0]);
     defer nfa.deinit(allocator);
 
     const dfa = try dfa_gen.genDfa(nfa.start);

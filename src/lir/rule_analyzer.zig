@@ -242,6 +242,45 @@ pub const Automaton = struct {
         };
     }
 
+    /// this creates an automaton equivalen to the given instruction
+    /// the lookahead information of the instruction gets ignored and
+    /// should be added afterwards
+    pub fn initInstr(allocator: Allocator, instr: ir.Instr) !Automaton {
+        var self = init(allocator);
+
+        const fail_blk = try self.getNew();
+        try fail_blk.insts.append(ir.Instr.initTag(.TERM_FAIL));
+
+        var curr_blk = try self.getNew();
+        self.start = curr_blk;
+        self.fail = fail_blk;
+
+        switch (instr.tag) {
+            .MATCH => {
+                assert(instr.data.match.items.len == 1);
+                try curr_blk.insts.append(try instr.clone(allocator));
+                const branch = &curr_blk.instr.items[0].data.match.items[0];
+                curr_blk = try self.getNew();
+                branch.dest = curr_blk;
+            },
+            .STR => for (instr.data.str) |char| {
+                const next = try self.getNew();
+                try curr_blk.insts.append(try ir.Instr.initClass(
+                    allocator,
+                    .{ .from = char, .to = char },
+                    next,
+                    ir.InstrMeta.Empty,
+                ));
+                curr_blk = next;
+            },
+            else => unreachable,
+        }
+
+        var pass_instr = ir.Instr.initTag(.RET);
+        pass_instr.data = .{ .action = 0 }; // the current default
+        try curr_blk.insts.append(pass_instr);
+    }
+
     pub fn deinit(self: Automaton, allocator: Allocator) void {
         for (self.blocks.items) |block| block.deinit(allocator);
         self.blocks.deinit();
@@ -1006,6 +1045,21 @@ pub const ExecState = struct {
         blk: *ir.Block,
         instr: usize,
         look: LookaheadType,
+
+        pub fn toExecPlace(self: SplitOffResult) ExecPlace {
+            return ExecPlace.init(self.blk.id, self.instr);
+        }
+
+        pub fn lessThan(_: void, self: SplitOffResult, other: SplitOffResult) bool {
+            return self.blk.id < other.blk.id or
+                self.blk.id == other.blk.id and (self.instr < other.instr or
+                self.instr == other.instr and self.look.less(other.look));
+        }
+
+        pub fn eql(self: SplitOffResult, other: SplitOffResult) bool {
+            return self.blk.id == other.blk.id and
+                self.instr == other.instr and self.look == other.look;
+        }
     };
 
     pub fn splitOff(self: *ExecState) SplitOffResult {

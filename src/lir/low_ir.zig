@@ -301,12 +301,47 @@ pub const Instr = struct {
         return out;
     }
 
+    pub fn initClass(
+        allocator: Allocator,
+        range: Range,
+        next: *Block,
+        meta: InstrMeta,
+    ) !Instr {
+        var self = initMetaTag(.MATCH, meta);
+        self.data = .{ .match = o_blk: {
+            var match = std.ArrayList(MatchProng).init(allocator);
+            try match.append(.{
+                .dest = next,
+                .labels = blk: {
+                    var list = std.ArrayList(Range).init(allocator);
+                    try list.append(range);
+                    break :blk list;
+                },
+                .consuming = meta.isConsuming(),
+            });
+
+            break :o_blk match;
+        } };
+
+        if (!meta.isConsuming()) {
+            try self.data.match.items[0].invert();
+        }
+
+        return self;
+    }
+
     pub fn initTag(tag: InstrTag) Instr {
         return .{
             .tag = tag,
             .meta = InstrMeta.Empty,
             .data = InstrData.Empty,
         };
+    }
+
+    pub fn initNonterm(next: *Block, returns: *Block, meta: InstrMeta) Instr {
+        var self = initMetaTag(.NONTERM, meta);
+        self.data = .{ .ctx_jmp = .{ .returns = returns, .next = next } };
+        return self;
     }
 
     pub fn initJmp(to: *Block) Instr {
@@ -433,6 +468,13 @@ pub const InstrData = union {
 pub const InstrMeta = struct {
     pos: bool,
     neg: bool,
+
+    pub fn initLookahead(pos: bool) InstrMeta {
+        return .{
+            .pos = pos,
+            .neg = !pos,
+        };
+    }
 
     pub fn isConsuming(self: InstrMeta) bool {
         return !self.pos and !self.neg;
