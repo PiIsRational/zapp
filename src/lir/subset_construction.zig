@@ -30,20 +30,22 @@ pub const DfaMap = std.HashMap(
     std.hash_map.default_max_load_percentage,
 );
 
-dfa: ra.Automaton,
+// this is a reference to the current dfa
+dfa: ?*ra.Automaton = null,
+dfa_val: ra.Automaton,
 dfa_states: std.ArrayList(DfaState),
 map: DfaMap,
 map_keys: std.ArrayList(DfaState.Key),
 allocator: Allocator,
 key_scratch: std.AutoHashMap(usize, usize),
 look_refs: ?*std.AutoHashMap(ra.ExecPlace, u32) = null,
-automata: ?*std.ArrayList(*ra.Automaton) = null,
+automata: ?*std.ArrayList(ra.Automaton) = null,
 
 /// takes in the first block elegible to become a dfa and
 /// returns dfas connected witch each other using lookahead calls
 pub const Automatizer = struct {
     look_refs: std.AutoHashMap(ra.ExecPlace, u32),
-    automata: std.ArrayList(*ra.Automaton),
+    automata: std.ArrayList(ra.Automaton),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) Automatizer {
@@ -61,20 +63,22 @@ pub const Automatizer = struct {
         var sub_generator = initTable(self.allocator, &self.look_refs, &self.automata);
         defer sub_generator.deinit();
 
-        try self.look_refs.put(.{ .block_id = start_block.id }, 0);
-        try self.automata.append(&sub_generator.dfa);
+        try self.look_refs.putNoClobber(.{ .block_id = start_block.id }, 0);
+        try self.automata.append(sub_generator.dfa_val);
+        sub_generator.dfa = &self.automata.items[0];
 
-        return sub_generator.genDfa(start_block);
+        _ = try sub_generator.genDfa(start_block);
+        return self.automata;
     }
 
-    pub fn deinit(self: Automatizer) void {
+    pub fn deinit(self: *Automatizer) void {
         self.look_refs.deinit();
     }
 };
 
 pub fn init(allocator: Allocator) DfaGen {
     return .{
-        .dfa = ra.Automaton.init(allocator),
+        .dfa_val = ra.Automaton.init(allocator),
         .dfa_states = std.ArrayList(DfaState).init(allocator),
         .map = DfaMap.init(allocator),
         .map_keys = std.ArrayList(DfaState.Key).init(allocator),
@@ -86,7 +90,7 @@ pub fn init(allocator: Allocator) DfaGen {
 fn initTable(
     allocator: Allocator,
     look_refs: *std.AutoHashMap(ra.ExecPlace, u32),
-    automata: *std.ArrayList(*ra.Automaton),
+    automata: *std.ArrayList(ra.Automaton),
 ) DfaGen {
     var self = init(allocator);
     self.look_refs = look_refs;
@@ -96,20 +100,22 @@ fn initTable(
 }
 
 /// generates a Dfa (automaton with only match and ret/fail)
+/// returns `dfa_val` so if the reference has been updated this is not the created automaton
 pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
+    if (self.dfa == null) self.dfa = &self.dfa_val;
     var look_buf = std.ArrayList(ra.ExecState.SplitOffResult).init(self.allocator);
     defer look_buf.deinit();
 
     var start_state = try DfaState.init(self.allocator, start_block, &look_buf);
     try self.dfa_states.append(start_state);
-    try self.put(try start_state.toKey(&self.key_scratch), try self.dfa.getNew());
+    try self.put(try start_state.toKey(&self.key_scratch), try self.dfa.?.getNew());
     look_buf.clearRetainingCapacity();
 
-    const fail_block = try self.dfa.getNew();
+    const fail_block = try self.dfa.?.getNew();
     try fail_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
 
-    self.dfa.start = self.dfa.blocks.items[0];
-    self.dfa.fail = fail_block;
+    self.dfa.?.start = self.dfa.?.blocks.items[0];
+    self.dfa.?.fail = fail_block;
 
     var new_states = std.ArrayList(DfaState).init(self.allocator);
     defer new_states.deinit();
@@ -172,8 +178,8 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
         new_states.clearRetainingCapacity();
     }
 
-    try ra.mergeDest(self.allocator, &self.dfa);
-    return self.dfa;
+    try ra.mergeDest(self.allocator, self.dfa.?);
+    return self.dfa_val;
 }
 
 fn getBlock(
@@ -181,6 +187,21 @@ fn getBlock(
     state: *DfaState,
     buf: *std.ArrayList(ra.ExecState.SplitOffResult),
 ) !*ir.Block {
+    const semi_empty = state.isSemiEmpty();
+    const empty = !semi_empty and state.isEmpty();
+    if (semi_empty) state.removeEmpty();
+
+    const key = try state.toKey(&self.key_scratch);
+    defer key.deinit(self.allocator);
+
+    if (self.map.get(key)) |block| {
+        const insts = block.insts.items;
+        return if (insts.len == 1 and insts[0].tag == .NONTERM)
+            insts[0].data.ctx_jmp.returns
+        else
+            block;
+    }
+
     const SplitOffResult = ra.ExecState.SplitOffResult;
     if (buf.items.len >= 1) {
         std.sort.pdq(SplitOffResult, buf.items, {}, SplitOffResult.lessThan);
@@ -193,18 +214,7 @@ fn getBlock(
         buf.shrinkRetainingCapacity(count);
     }
 
-    const semi_empty = state.isSemiEmpty();
-    const empty = !semi_empty and state.isEmpty();
-    if (semi_empty) state.removeEmpty();
-
-    const key = try state.toKey(&self.key_scratch);
-    defer key.deinit(self.allocator);
-
-    if (self.map.get(key)) |block| {
-        return block;
-    }
-
-    const dst_blk = try self.dfa.getNew();
+    const dst_blk = try self.dfa.?.getNew();
 
     // if the prong is not consuming the state of
     // the block will be accepting
@@ -220,7 +230,9 @@ fn getBlock(
         try dst_blk.insts.append(pass_instr);
     }
 
-    try self.put(try key.clone(self.allocator), dst_blk);
+    const look_block = try self.genLooks(dst_blk, buf);
+    try self.put(try key.clone(self.allocator), look_block);
+
     return dst_blk;
 }
 
@@ -241,7 +253,7 @@ fn genLooks(
             base_block,
             ir.InstrMeta.initLookahead(off_split.look),
         ));
-        const new_block = try self.dfa.getNew();
+        const new_block = try self.dfa.?.getNew();
         curr_block.fail = new_block;
         curr_block = new_block;
     }
@@ -258,24 +270,25 @@ fn getSubAutomaton(self: *DfaGen, off_split: ra.ExecState.SplitOffResult) void {
 
     const insts = off_split.blk.insts.items;
     const instr = insts[off_split.instr];
-    const new_at = if (instr.tag == .NONTERM) blk: {
-        var sub_generator = initTable(
-            self.allocator,
-            self.look_refs.?,
-            self.automata.?,
-        );
-
-        defer sub_generator.deinit();
-        const block = instr.data.ctx_jmp.dest;
-        try self.look_refs.?.putNoClobber(.{ .block_id = block.id }, automata.len);
-        break :blk sub_generator.genDfa(block);
-    } else blk: {
+    if (instr.tag != .NONTERM) {
+        const automaton = try ra.Automaton.initInstr(self.allocator, instr);
         try self.look_refs.?.putNoClobber(off_split.toExecPlace(), automata.len);
-        break :blk try ra.Automaton.initInstr(self.allocator, instr);
-    };
+        try self.automata.?.append(automaton);
+        return;
+    }
+    var sub_generator = initTable(
+        self.allocator,
+        self.look_refs.?,
+        self.automata.?,
+    );
 
-    try self.automata.?.append(new_at);
-    return new_at;
+    defer sub_generator.deinit();
+    const block = instr.data.ctx_jmp.dest;
+    try self.look_refs.?.putNoClobber(.{ .block_id = block.id }, automata.len);
+    try self.automata.?.append(sub_generator.dfa_val);
+    sub_generator.dfa = &self.automata.?.items[automata.len];
+
+    _ = try sub_generator.genDfa(block);
 }
 
 fn put(self: *DfaGen, key: DfaState.Key, value: *ir.Block) !void {

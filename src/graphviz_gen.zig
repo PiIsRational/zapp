@@ -120,6 +120,18 @@ fn genAutomatonNode(w: Writer, block: *lir.Block) !void {
                 .{ block.id, next_instr.data.jmp.id },
             );
         },
+        .NONTERM => {
+            assert(!instr.meta.isConsuming());
+            try w.print("    {d} [xlabel = \"{s}{d}\"];\n", .{
+                block.id,
+                if (instr.meta.pos) "&" else "!",
+                instr.data.ctx_jmp.next.id,
+            });
+            try w.print(
+                "    {d} -> {d} [label = \"ε\"];\n",
+                .{ block.id, instr.data.ctx_jmp.returns.id },
+            );
+        },
         else => {},
     }
 }

@@ -40,7 +40,7 @@ pub fn optimize(lir: *ir.LowIr) !void {
 }
 
 fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
-    //const stdout = std.io.getStdErr().writer();
+    const stdout = std.io.getStdErr().writer();
     if (!blk.meta.is_target or !blk.meta.used_terminal) return;
     const allocator = self.ir.allocator;
 
@@ -52,12 +52,16 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
     defer dfa_gen.deinit();
 
     const automata = try automatizer.genLookAutomata(blk);
+    gvgen.genAutomaton(stdout, automata.items[0], "d") catch unreachable;
+    std.debug.print("{d}\n", .{automata.items.len});
     defer {
         for (automata.items) |it| it.deinit(allocator);
         automata.deinit();
     }
 
-    const nfa = try emitter.emit(automata.items[0].block.items[0]);
+    if (true) return;
+
+    const nfa = try emitter.emit(automata.items[0].start);
     defer nfa.deinit(allocator);
 
     const dfa = try dfa_gen.genDfa(nfa.start);
@@ -79,7 +83,7 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
 
     try ra.compressMatches(allocator, &nerode);
     nerode.setFail();
-    //gvgen.genAutomaton(stdout, nfa, "d") catch unreachable;
+    gvgen.genAutomaton(stdout, nfa, "d") catch unreachable;
     //gvgen.genAutomaton(stdout, nerode, "d") catch unreachable;
     try self.appendAutomaton(&nerode, blk);
 }

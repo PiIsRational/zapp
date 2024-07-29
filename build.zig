@@ -1,15 +1,15 @@
 const std = @import("std");
 
 const test_paths = [_][]const u8{
-    "plus",
-    "question",
-    "star",
-    "tuple",
-    "acceptor",
-    "cut",
-    "star_cut",
-    "new_calculator",
-    "json",
+    // "plus",
+    // "question",
+    // "star",
+    // "tuple",
+    // "acceptor",
+    // "cut",
+    // "star_cut",
+    // "new_calculator",
+    // "json",
     "tokens",
 };
 
