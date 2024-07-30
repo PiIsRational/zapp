@@ -54,7 +54,6 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
     try self.states.append(start_state);
     self.nfa.start = start_block;
 
-    // the second state of the nfa is always the failing state (similar to dfa)
     const fail_block = try self.nfa.getNew();
     try fail_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
     self.nfa.fail = fail_block;
@@ -484,10 +483,12 @@ const LookaheadTopState = struct {
 
         try addSubBranches(prongs, &base_buffer, buffer, self.sub_states.items);
 
+        var offset: usize = 0; // the offset is needed as `items()` changes with `appendBack`
         for (base_buffer.items(), 0..) |branch, i| {
             if (branch.set.isEmpty()) continue;
             assert(prongs.id + 1 == base_buffer.id);
-            base_buffer.appendBack(i);
+            base_buffer.appendBack(i - offset);
+            offset += 1;
         }
     }
 

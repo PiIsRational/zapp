@@ -259,11 +259,11 @@ pub const Automaton = struct {
             .MATCH => {
                 assert(instr.data.match.items.len == 1);
                 try curr_blk.insts.append(try instr.clone(allocator));
-                const branch = &curr_blk.instr.items[0].data.match.items[0];
+                const branch = &curr_blk.insts.items[0].data.match.items[0];
                 curr_blk = try self.getNew();
                 branch.dest = curr_blk;
             },
-            .STR => for (instr.data.str) |char| {
+            .STRING => for (instr.data.str) |char| {
                 const next = try self.getNew();
                 try curr_blk.insts.append(try ir.Instr.initClass(
                     allocator,
@@ -279,6 +279,7 @@ pub const Automaton = struct {
         var pass_instr = ir.Instr.initTag(.RET);
         pass_instr.data = .{ .action = 0 }; // the current default
         try curr_blk.insts.append(pass_instr);
+        return self;
     }
 
     pub fn deinit(self: Automaton, allocator: Allocator) void {
@@ -1066,6 +1067,7 @@ pub const ExecState = struct {
         const instr = self.getCurrInstr() orelse unreachable;
         const blocks = self.blocks.items;
         const curr_blk = &blocks[blocks.len - 1];
+        var first_blk = curr_blk.*;
 
         assert(!instr.meta.isConsuming());
         var look: LookaheadType = undefined;
@@ -1076,6 +1078,7 @@ pub const ExecState = struct {
 
                 // got to the next block
                 curr_blk.* = instr.data.ctx_jmp.returns;
+                first_blk = instr.data.ctx_jmp.next;
                 self.instr = 0;
             },
             .STRING => {
@@ -1100,7 +1103,7 @@ pub const ExecState = struct {
 
         self.instr_sub_idx = 0;
         return .{
-            .blk = curr_blk.*,
+            .blk = first_blk,
             .instr = instr_idx,
             .look = look,
         };
