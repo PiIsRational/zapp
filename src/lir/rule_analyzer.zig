@@ -637,6 +637,18 @@ pub const LookaheadType = enum {
     pub fn less(self: LookaheadType, other: LookaheadType) bool {
         return @intFromEnum(self) < @intFromEnum(other);
     }
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        if (self == .POSITIVE)
+            try writer.print("&", .{})
+        else
+            try writer.print("!", .{});
+    }
 };
 
 pub fn compressMatches(allocator: Allocator, dfa: *Automaton) !void {
@@ -1047,8 +1059,19 @@ pub const ExecState = struct {
         instr: usize,
         look: LookaheadType,
 
-        pub fn toExecPlace(self: SplitOffResult) ExecPlace {
-            return ExecPlace.init(self.blk.id, self.instr);
+        pub const SplitKey = struct {
+            blk_id: usize,
+            instr: ?usize = null,
+        };
+
+        pub fn toKey(self: SplitOffResult) SplitKey {
+            const instr = self.blk.insts.items[self.instr];
+            return if (instr.tag == .NONTERM) .{
+                .blk_id = instr.data.ctx_jmp.next.id,
+            } else .{
+                .blk_id = self.blk.id,
+                .instr = self.instr,
+            };
         }
 
         pub fn lessThan(_: void, self: SplitOffResult, other: SplitOffResult) bool {
@@ -1061,13 +1084,25 @@ pub const ExecState = struct {
             return self.blk.id == other.blk.id and
                 self.instr == other.instr and self.look == other.look;
         }
+
+        pub fn format(
+            self: @This(),
+            comptime _: []const u8,
+            _: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            try writer.print(
+                "{s}({d} {d})",
+                .{ self.look, self.blk.id, self.instr },
+            );
+        }
     };
 
     pub fn splitOff(self: *ExecState) SplitOffResult {
         const instr = self.getCurrInstr() orelse unreachable;
         const blocks = self.blocks.items;
         const curr_blk = &blocks[blocks.len - 1];
-        var first_blk = curr_blk.*;
+        const first_blk = curr_blk.*;
 
         assert(!instr.meta.isConsuming());
         var look: LookaheadType = undefined;
@@ -1078,7 +1113,7 @@ pub const ExecState = struct {
 
                 // got to the next block
                 curr_blk.* = instr.data.ctx_jmp.returns;
-                first_blk = instr.data.ctx_jmp.next;
+
                 self.instr = 0;
             },
             .STRING => {
@@ -1194,6 +1229,9 @@ pub const ExecPlace = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        try writer.print("({d} {d} {d})", .{ self.block_id, self.instr, self.instr_sub_idx });
+        try writer.print(
+            "({d} {d} {d})",
+            .{ self.block_id, self.instr, self.instr_sub_idx },
+        );
     }
 };

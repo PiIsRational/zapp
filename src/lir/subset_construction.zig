@@ -20,6 +20,7 @@ const Allocator = std.mem.Allocator;
 
 const ir = @import("low_ir.zig");
 const ra = @import("rule_analyzer.zig");
+const SplitKey = ra.ExecState.SplitOffResult.SplitKey;
 
 const DfaGen = @This();
 const Context = DfaCtx(std.hash.Wyhash);
@@ -38,20 +39,20 @@ map: DfaMap,
 map_keys: std.ArrayList(DfaState.Key),
 allocator: Allocator,
 key_scratch: std.AutoHashMap(usize, usize),
-look_refs: ?*std.AutoHashMap(ra.ExecPlace, usize) = null,
+look_refs: ?*std.AutoHashMap(SplitKey, usize) = null,
 automata: ?*std.ArrayList(ra.Automaton) = null,
 
 /// takes in the first block elegible to become a dfa and
 /// returns dfas connected witch each other using lookahead calls
 pub const Automatizer = struct {
-    look_refs: std.AutoHashMap(ra.ExecPlace, usize),
+    look_refs: std.AutoHashMap(SplitKey, usize),
     automata: std.ArrayList(ra.Automaton),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) Automatizer {
         return .{
             .allocator = allocator,
-            .look_refs = std.AutoHashMap(ra.ExecPlace, usize).init(allocator),
+            .look_refs = std.AutoHashMap(SplitKey, usize).init(allocator),
             .automata = std.ArrayList(ra.Automaton).init(allocator),
         };
     }
@@ -63,7 +64,7 @@ pub const Automatizer = struct {
         var sub_generator = initTable(self.allocator, &self.look_refs, &self.automata);
         defer sub_generator.deinit();
 
-        try self.look_refs.putNoClobber(.{ .block_id = start_block.id }, 0);
+        try self.look_refs.putNoClobber(.{ .blk_id = start_block.id }, 0);
         try self.automata.append(sub_generator.dfa_val);
         sub_generator.dfa = &self.automata.items[0];
 
@@ -100,7 +101,7 @@ pub fn init(allocator: Allocator) DfaGen {
 
 fn initTable(
     allocator: Allocator,
-    look_refs: *std.AutoHashMap(ra.ExecPlace, usize),
+    look_refs: *std.AutoHashMap(SplitKey, usize),
     automata: *std.ArrayList(ra.Automaton),
 ) DfaGen {
     var self = init(allocator);
@@ -284,7 +285,7 @@ fn getSubAutomaton(
     off_split: ra.ExecState.SplitOffResult,
 ) Allocator.Error!ra.Automaton {
     const automata = self.automata.?.items;
-    if (self.look_refs.?.get(off_split.toExecPlace())) |at_key| {
+    if (self.look_refs.?.get(off_split.toKey())) |at_key| {
         return automata[at_key];
     }
 
@@ -292,7 +293,7 @@ fn getSubAutomaton(
     const instr = insts[off_split.instr];
     if (instr.tag != .NONTERM) {
         const automaton = try ra.Automaton.initInstr(self.allocator, instr);
-        try self.look_refs.?.putNoClobber(off_split.toExecPlace(), automata.len);
+        try self.look_refs.?.putNoClobber(off_split.toKey(), automata.len);
         try self.automata.?.append(automaton);
         return automaton;
     }
@@ -305,7 +306,7 @@ fn getSubAutomaton(
 
     defer sub_generator.deinit();
     const block = instr.data.ctx_jmp.next;
-    try self.look_refs.?.putNoClobber(.{ .block_id = block.id }, automata.len);
+    try self.look_refs.?.putNoClobber(.{ .blk_id = block.id }, automata.len);
     try self.automata.?.append(sub_generator.dfa_val);
     sub_generator.dfa = &self.automata.?.items[automata.len];
 
