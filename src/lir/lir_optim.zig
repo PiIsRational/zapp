@@ -52,11 +52,6 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
     defer dfa_gen.deinit();
 
     const automata = try automatizer.genLookAutomata(blk);
-    for (automata.items, 0..) |at, id| {
-        std.debug.print("printing {d}\n", .{id});
-        gvgen.genAutomaton(stdout, at.*, self.ir.rule_names[blk.base]) catch unreachable;
-    }
-
     defer {
         for (automata.items) |it| {
             it.deinit(allocator);
@@ -65,7 +60,6 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
         automata.deinit();
     }
 
-    if (true) return;
     const nfa = try emitter.emit(automata.items[0].start);
     defer nfa.deinit(allocator);
 

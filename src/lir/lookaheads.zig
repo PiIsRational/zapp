@@ -61,7 +61,9 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
     while (self.states.popOrNull()) |popped_state| {
         var state = popped_state;
 
+        std.debug.print("{s}\n", .{state});
         const key = try state.toKey(&self.key_scratch);
+        if (!key.check()) unreachable;
         defer key.deinit(self.allocator);
 
         const block = self.map.get(key).?;
@@ -90,7 +92,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             continue;
         }
 
-        if (try state.execJumps()) {
+        if (try state.execJumps(true)) {
             if (try state.isLookFail()) {
                 try block.insts.append(ir.Instr.initJmp(self.nfa.fail));
                 state.deinit();
@@ -98,6 +100,10 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             }
 
             const new_key = try state.toKey(&self.key_scratch);
+            if (!new_key.check()) {
+                std.debug.print("{s}\n", .{state});
+                unreachable;
+            }
             defer new_key.deinit(self.allocator);
 
             try self.states.append(state);
@@ -338,6 +344,9 @@ fn addSubBranches(
 
     for (subs) |sub| {
         try sub.addBranches(&sub_buffer, buffer);
+
+        // the offset is needed as `items()` changes with `appendTwoBack`
+        var offset: usize = 0;
         var index: usize = 0;
         for (sub_buffer.items(), 0..) |*branch, i| {
             if (branch.final_action != null) {
@@ -351,7 +360,8 @@ fn addSubBranches(
             if (!branch.set.isEmpty()) {
                 assert(prongs.id + 1 == base_buffer.id and
                     base_buffer.id + 1 == sub_buffer.id);
-                sub_buffer.appendBackTwo(base_buffer, i);
+                sub_buffer.appendBackTwo(base_buffer, i - offset);
+                offset += 1;
             }
         }
 
@@ -595,7 +605,8 @@ const LookaheadTopState = struct {
         };
     }
 
-    fn execJumps(self: *LookaheadTopState) !bool {
+    fn execJumps(self: *LookaheadTopState, skip_accept: bool) !bool {
+        const jump_skip = skip_accept and self.base.skipPreAccept();
         const result = try self.base.execJumps();
         var buf = std.ArrayList(LookaheadState).init(self.sub_states.allocator);
         defer buf.deinit();
@@ -607,7 +618,7 @@ const LookaheadTopState = struct {
 
         var had_change = result != .NO_CHANGE;
         for (self.sub_states.items) |*sub| {
-            had_change = try sub.execJumps() or had_change;
+            had_change = try sub.execJumps(skip_accept) or had_change;
         }
         try self.sub_states.appendSlice(buf.items);
 
@@ -615,7 +626,7 @@ const LookaheadTopState = struct {
             self.action = self.base.last_action;
         }
 
-        return had_change;
+        return had_change or jump_skip;
     }
 
     /// the state is accepting
@@ -624,49 +635,29 @@ const LookaheadTopState = struct {
     }
 
     fn splitOff(self: *LookaheadTopState) !LookaheadState {
+        const instr = self.base.getCurrInstr() orelse unreachable;
+        const jump_data = instr.data.ctx_jmp;
+        const blocks = self.base.blocks.items;
+        const curr_blk = &blocks[blocks.len - 1];
+
+        assert(!instr.meta.isConsuming() and instr.tag == .NONTERM);
+
+        self.base.instr = 0;
+        self.base.instr_sub_idx = 0;
+
         var new_branch: LookaheadState = .{
             .lookaheads = std.ArrayList(LookaheadState).init(self.sub_states.allocator),
             .base = try self.base.clone(),
             .look = undefined,
             .start = undefined,
         };
-
-        const instr = self.base.getCurrInstr() orelse unreachable;
-        const blocks = self.base.blocks.items;
-        const curr_blk = &blocks[blocks.len - 1];
-
-        assert(!instr.meta.isConsuming());
-        switch (instr.tag) {
-            .NONTERM => {
-                new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
-
-                // got to the next block
-                curr_blk.* = instr.data.ctx_jmp.returns;
-                self.base.instr = 0;
-            },
-            .STRING => {
-                new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
-
-                // string match cannot be the last instruction of a block
-                self.base.instr += 1;
-            },
-            .MATCH => {
-                new_branch.look = .POSITIVE;
-
-                // got to the next block
-
-                // there should be only one way
-                // (this causes no problems because lowering only generates one)
-                assert(instr.data.match.items.len == 1);
-                curr_blk.* = instr.data.match.items[0].dest;
-                self.base.instr = 0;
-            },
-            else => unreachable,
-        }
-
-        self.base.instr_sub_idx = 0;
-
+        new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
         new_branch.setRoot();
+
+        curr_blk.* = jump_data.returns;
+        const new_blocks = new_branch.base.blocks.items;
+        new_blocks[new_blocks.len - 1] = jump_data.next;
+
         return new_branch;
     }
 
@@ -724,6 +715,14 @@ const LookaheadTopState = struct {
             for (self.sub_states) |sub| {
                 sub.hash(hasher);
             }
+        }
+
+        fn check(self: Key) bool {
+            for (self.sub_states) |sub| {
+                if (!sub.check()) return false;
+            }
+
+            return self.base.blocks.len <= 1;
         }
 
         fn clone(self: Key, allocator: Allocator) !Key {
@@ -830,8 +829,7 @@ const LookaheadState = struct {
         while (val == .CHANGE) : (val = try next.execJumps()) {
             const blocks = next.blocks.items;
 
-            if (blocks.len == 0 or
-                blocks.len == 1 and
+            if (blocks.len == 0 or blocks.len == 1 and
                 (blocks[0].id != self.start.block_id or next.instr != self.start.instr))
             {
                 return true;
@@ -973,8 +971,12 @@ const LookaheadState = struct {
         };
     }
 
-    fn execJumps(self: *LookaheadState) !bool {
-        if (try self.isDone(false)) return try self.execJumpsChilds();
+    fn execJumps(self: *LookaheadState, skip_accept: bool) !bool {
+        std.debug.print("{s}\n", .{self});
+        const jump_skip = skip_accept and self.base.skipPreAccept();
+        if (try self.isDone(false)) {
+            return try self.execJumpsChilds(skip_accept) or jump_skip;
+        }
 
         const result = if (self.lookaheadOnStart())
             try self.base.execForceJumps()
@@ -987,16 +989,17 @@ const LookaheadState = struct {
                 try self.lookaheads.append(new);
             }
 
-            return split_result != null;
+            return split_result != null or jump_skip;
         }
 
-        return try self.execJumpsChilds() or result == .CHANGE;
+        return try self.execJumpsChilds(skip_accept) or
+            result == .CHANGE or jump_skip;
     }
 
-    fn execJumpsChilds(self: *LookaheadState) Allocator.Error!bool {
+    fn execJumpsChilds(self: *LookaheadState, skip_accept: bool) Allocator.Error!bool {
         var change = false;
         for (self.lookaheads.items) |*sub| {
-            change = try sub.execJumps() or change;
+            change = try sub.execJumps(skip_accept) or change;
         }
 
         return change;
@@ -1026,10 +1029,12 @@ const LookaheadState = struct {
 
         try addSubBranches(prongs, &base_buffer, buffer, self.lookaheads.items);
 
+        var offset: usize = 0; // the offset is needed as `items()` changes with `appendBack`
         for (base_buffer.items(), 0..) |branch, i| {
             if (branch.set.isEmpty()) continue;
             assert(prongs.id + 1 == base_buffer.id);
-            base_buffer.appendBack(i);
+            base_buffer.appendBack(i - offset);
+            offset += 1;
         }
     }
 
@@ -1131,6 +1136,14 @@ const LookaheadState = struct {
             for (self.lookaheads) |look| {
                 look.hash(hasher);
             }
+        }
+
+        fn check(self: Key) bool {
+            for (self.lookaheads) |sub| {
+                if (!sub.check()) return false;
+            }
+
+            return if (self.base) |b| b.blocks.len <= 1 else true;
         }
 
         fn clone(self: Key, allocator: Allocator) !Key {

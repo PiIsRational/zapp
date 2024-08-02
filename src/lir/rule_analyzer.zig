@@ -851,7 +851,6 @@ pub const ExecState = struct {
                 try list.append(SplitBranch.initProng(prong, ret_look));
             },
             .RET => try list.append(SplitBranch.initMatchAll(self.last_action)),
-            .PRE_ACCEPT => @panic("TODO: implement"),
             else => {
                 std.debug.print("{s}\n", .{@tagName(instr.tag)});
                 unreachable;

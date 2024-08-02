@@ -125,7 +125,6 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
     defer look_buf.deinit();
 
     var start_state = try DfaState.init(self.allocator, start_block, &look_buf);
-    if (look_buf.items.len != 0) std.debug.print("here!\n", .{});
 
     // creates the first block
     const first_block = try self.getBlockTail(&start_state, &look_buf);
@@ -397,7 +396,8 @@ const DfaState = struct {
         var found_full = false;
 
         for (self.sub_states.items) |sub| {
-            const empty = sub.blocks.items.len == 0;
+            const empty = sub.blocks.items.len == 0 or
+                sub.getCurrInstr().?.tag == .PRE_ACCEPT;
             found_full = found_full or !empty;
             found_empty = found_empty or empty;
         }
