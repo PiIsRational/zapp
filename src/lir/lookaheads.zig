@@ -61,9 +61,8 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
     while (self.states.popOrNull()) |popped_state| {
         var state = popped_state;
 
-        std.debug.print("{s}\n", .{state});
         const key = try state.toKey(&self.key_scratch);
-        if (!key.check()) unreachable;
+        assert(key.check());
         defer key.deinit(self.allocator);
 
         const block = self.map.get(key).?;
@@ -92,19 +91,17 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             continue;
         }
 
-        if (try state.execJumps(true)) {
+        if (try state.execJumps(false)) {
             if (try state.isLookFail()) {
+                std.debug.print("look fail\n", .{});
                 try block.insts.append(ir.Instr.initJmp(self.nfa.fail));
                 state.deinit();
                 continue;
             }
 
             const new_key = try state.toKey(&self.key_scratch);
-            if (!new_key.check()) {
-                std.debug.print("{s}\n", .{state});
-                unreachable;
-            }
             defer new_key.deinit(self.allocator);
+            assert(new_key.check());
 
             try self.states.append(state);
             if (new_key.eql(key)) continue;
@@ -112,6 +109,17 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             const blk = try self.getBlockForState(state, new_key);
             try block.insts.append(ir.Instr.initJmp(blk));
             continue;
+        }
+
+        // there is an accepting state somewhere
+        if (try state.execJumps(true)) {
+            if (try state.isLookFail()) {
+                try block.insts.append(ir.Instr.initJmp(self.nfa.fail));
+                state.deinit();
+                continue;
+            }
+
+            @panic("TODO: add the PRE_ACCEPT here");
         }
 
         defer state.deinit();
@@ -313,6 +321,7 @@ fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
 
     var curr: usize = 0;
     var i: usize = 0;
+    const start_id = nfa.start.id;
     while (i < nfa.blocks.items.len) : (i += 1) {
         const s = nfa.blocks.items[i];
         if (markers[s.id]) {
@@ -326,6 +335,11 @@ fn removeFails(self: LookaheadEmitter, nfa: *ra.Automaton) !void {
     }
 
     nfa.blocks.shrinkRetainingCapacity(curr);
+
+    if (markers[start_id]) {
+        nfa.start = nfa.fail;
+        assert(nfa.blocks.items.len == 1);
+    }
 }
 
 fn addSubBranches(
@@ -972,7 +986,6 @@ const LookaheadState = struct {
     }
 
     fn execJumps(self: *LookaheadState, skip_accept: bool) !bool {
-        std.debug.print("{s}\n", .{self});
         const jump_skip = skip_accept and self.base.skipPreAccept();
         if (try self.isDone(false)) {
             return try self.execJumpsChilds(skip_accept) or jump_skip;
