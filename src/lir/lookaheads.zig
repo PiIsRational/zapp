@@ -67,7 +67,8 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
 
         const block = self.map.get(key).?;
 
-        if (block.insts.items.len != 0) {
+        if (block.insts.items.len > 1) {
+            assert(block.insts.items[0].tag != .PRE_ACCEPT);
             state.deinit();
             continue;
         }
@@ -91,12 +92,18 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             continue;
         }
 
-        if (try state.execJumps(false)) {
+        if (try state.execJumps()) {
             if (try state.isLookFail()) {
-                std.debug.print("look fail\n", .{});
                 try block.insts.append(ir.Instr.initJmp(self.nfa.fail));
                 state.deinit();
                 continue;
+            }
+
+            if (state.base.getCurrInstr()) |instr| {
+                if (instr.tag == .PRE_ACCEPT) {
+                    try block.insts.append(instr);
+                    _ = state.base.skipPreAccept();
+                }
             }
 
             const new_key = try state.toKey(&self.key_scratch);
@@ -109,17 +116,6 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             const blk = try self.getBlockForState(state, new_key);
             try block.insts.append(ir.Instr.initJmp(blk));
             continue;
-        }
-
-        // there is an accepting state somewhere
-        if (try state.execJumps(true)) {
-            if (try state.isLookFail()) {
-                try block.insts.append(ir.Instr.initJmp(self.nfa.fail));
-                state.deinit();
-                continue;
-            }
-
-            @panic("TODO: add the PRE_ACCEPT here");
         }
 
         defer state.deinit();
@@ -158,7 +154,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
         }
     }
 
-    try self.removeFails(&self.nfa);
+    //try self.removeFails(&self.nfa);
     return self.nfa;
 }
 
@@ -619,8 +615,7 @@ const LookaheadTopState = struct {
         };
     }
 
-    fn execJumps(self: *LookaheadTopState, skip_accept: bool) !bool {
-        const jump_skip = skip_accept and self.base.skipPreAccept();
+    fn execJumps(self: *LookaheadTopState) !bool {
         const result = try self.base.execJumps();
         var buf = std.ArrayList(LookaheadState).init(self.sub_states.allocator);
         defer buf.deinit();
@@ -632,7 +627,7 @@ const LookaheadTopState = struct {
 
         var had_change = result != .NO_CHANGE;
         for (self.sub_states.items) |*sub| {
-            had_change = try sub.execJumps(skip_accept) or had_change;
+            had_change = try sub.execJumps() or had_change;
         }
         try self.sub_states.appendSlice(buf.items);
 
@@ -640,11 +635,11 @@ const LookaheadTopState = struct {
             self.action = self.base.last_action;
         }
 
-        return had_change or jump_skip;
+        return had_change;
     }
 
     /// the state is accepting
-    fn isEmpty(self: *const LookaheadTopState) bool {
+    fn isEmpty(self: LookaheadTopState) bool {
         return self.action != null and self.sub_states.items.len == 0;
     }
 
@@ -909,18 +904,16 @@ const LookaheadState = struct {
         }
 
         const blocks = copy.blocks.items;
-        if (blocks.len != 0 and (blocks.len != 1 or
-            blocks[0].id == self.start.block_id and
+        if (blocks.len != 0 and !copy.skipPreAccept() and
+            (blocks.len != 1 or blocks[0].id == self.start.block_id and
             copy.instr == self.start.instr))
         {
             return false;
         }
 
-        if (deep) {
-            for (self.lookaheads.items) |look| {
-                if (!try look.isDone(true)) return false;
-            }
-        }
+        if (deep) for (self.lookaheads.items) |look| {
+            if (!try look.isDone(true)) return false;
+        };
 
         return true;
     }
@@ -985,10 +978,9 @@ const LookaheadState = struct {
         };
     }
 
-    fn execJumps(self: *LookaheadState, skip_accept: bool) !bool {
-        const jump_skip = skip_accept and self.base.skipPreAccept();
+    fn execJumps(self: *LookaheadState) !bool {
         if (try self.isDone(false)) {
-            return try self.execJumpsChilds(skip_accept) or jump_skip;
+            return try self.execJumpsChilds();
         }
 
         const result = if (self.lookaheadOnStart())
@@ -1002,17 +994,16 @@ const LookaheadState = struct {
                 try self.lookaheads.append(new);
             }
 
-            return split_result != null or jump_skip;
+            return split_result != null;
         }
 
-        return try self.execJumpsChilds(skip_accept) or
-            result == .CHANGE or jump_skip;
+        return try self.execJumpsChilds() or result == .CHANGE;
     }
 
-    fn execJumpsChilds(self: *LookaheadState, skip_accept: bool) Allocator.Error!bool {
+    fn execJumpsChilds(self: *LookaheadState) Allocator.Error!bool {
         var change = false;
         for (self.lookaheads.items) |*sub| {
-            change = try sub.execJumps(skip_accept) or change;
+            change = try sub.execJumps() or change;
         }
 
         return change;
@@ -1026,6 +1017,8 @@ const LookaheadState = struct {
         var base_buffer = buffer.getNew();
         defer base_buffer.deinit();
 
+        // the shorter the lookahad, the more restrictive the allowed characters sequences
+        // because of this there is no reason to go any further in the lookaheads
         if (try self.isDone(false)) {
             try base_buffer.append(.{
                 .set = ra.AcceptanceSet.Full,
