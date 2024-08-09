@@ -68,7 +68,6 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
         const block = self.map.get(key).?;
 
         if (block.insts.items.len > 1) {
-            assert(block.insts.items[0].tag != .PRE_ACCEPT);
             state.deinit();
             continue;
         }
@@ -92,7 +91,9 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             continue;
         }
 
-        if (try state.execJumps()) {
+        if (try state.execJumps() or state.base.getCurrInstr() != null and
+            state.base.getCurrInstr().?.tag == .PRE_ACCEPT)
+        {
             if (try state.isLookFail()) {
                 try block.insts.append(ir.Instr.initJmp(self.nfa.fail));
                 state.deinit();
@@ -102,7 +103,8 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
             if (state.base.getCurrInstr()) |instr| {
                 if (instr.tag == .PRE_ACCEPT) {
                     try block.insts.append(instr);
-                    _ = state.base.skipPreAccept();
+                    const val = state.base.skipPreAccept();
+                    assert(val);
                 }
             }
 
@@ -124,7 +126,7 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
         defer branches.deinit();
 
         try block.insts.append(ir.Instr.initTag(.MATCH));
-        const instr = &block.insts.items[0];
+        const instr = &block.insts.items[block.insts.items.len - 1];
         instr.data = .{ .match = std.ArrayList(ir.MatchProng).init(self.allocator) };
 
         if (block.fail == null and !branches.fail_set.isEmpty()) {
@@ -990,10 +992,7 @@ const LookaheadState = struct {
 
         if (result == .LOOKAHEAD) {
             const split_result = try self.splitOff();
-            if (split_result) |new| {
-                try self.lookaheads.append(new);
-            }
-
+            if (split_result) |new| try self.lookaheads.append(new);
             return split_result != null;
         }
 

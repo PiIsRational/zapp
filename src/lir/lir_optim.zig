@@ -32,10 +32,7 @@ ir: *ir.LowIr,
 const PassError = Allocator.Error;
 
 pub fn optimize(lir: *ir.LowIr) !void {
-    var self: PassManager = .{
-        .ir = lir,
-    };
-
+    var self: PassManager = .{ .ir = lir };
     try self.blockPass(addAutomaton);
 }
 
@@ -52,6 +49,7 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
     defer dfa_gen.deinit();
 
     const automata = try automatizer.genLookAutomata(blk);
+    gvgen.genAutomaton(stdout, automata.items[0].*, "d") catch unreachable;
     defer {
         for (automata.items) |it| {
             it.deinit(allocator);
