@@ -96,7 +96,9 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
         {
             if (try state.isLookFail()) {
                 try block.insts.append(ir.Instr.initJmp(self.nfa.fail));
+                std.debug.print("{s}\n {s}\n", .{ state, block });
                 state.deinit();
+                assert(false);
                 continue;
             }
 
@@ -110,7 +112,10 @@ pub fn emit(self: *LookaheadEmitter, start: *ir.Block) !ra.Automaton {
 
             const new_key = try state.toKey(&self.key_scratch);
             defer new_key.deinit(self.allocator);
-            assert(new_key.check());
+            if (!new_key.check()) {
+                std.debug.print("{s} {s}\n", .{ new_key, key });
+                unreachable;
+            }
 
             try self.states.append(state);
             if (new_key.eql(key)) continue;
@@ -647,11 +652,11 @@ const LookaheadTopState = struct {
 
     fn splitOff(self: *LookaheadTopState) !LookaheadState {
         const instr = self.base.getCurrInstr() orelse unreachable;
+        assert(!instr.meta.isConsuming() and instr.tag == .NONTERM);
+
         const jump_data = instr.data.ctx_jmp;
         const blocks = self.base.blocks.items;
         const curr_blk = &blocks[blocks.len - 1];
-
-        assert(!instr.meta.isConsuming() and instr.tag == .NONTERM);
 
         self.base.instr = 0;
         self.base.instr_sub_idx = 0;
@@ -897,21 +902,11 @@ const LookaheadState = struct {
 
         while (can_jump and val == .CHANGE) : (val = try copy.execJumps()) {
             const blocks = copy.blocks.items;
-
-            if (blocks.len == 0 or blocks.len == 1 and
-                (blocks[0].id != self.start.block_id or copy.instr != self.start.instr))
-            {
-                break;
-            }
+            if (blocks.len == 0) break;
         }
 
         const blocks = copy.blocks.items;
-        if (blocks.len != 0 and !copy.skipPreAccept() and
-            (blocks.len != 1 or blocks[0].id == self.start.block_id and
-            copy.instr == self.start.instr))
-        {
-            return false;
-        }
+        if (blocks.len != 0 and !copy.skipPreAccept()) return false;
 
         if (deep) for (self.lookaheads.items) |look| {
             if (!try look.isDone(true)) return false;
@@ -1045,39 +1040,30 @@ const LookaheadState = struct {
 
     fn splitOff(self: *LookaheadState) !?LookaheadState {
         if (self.lookaheadOnStart()) return null;
-        var new_branch = try self.clone();
-
         const instr = self.base.getCurrInstr() orelse unreachable;
+        std.debug.print("{s}\n", .{instr});
+        assert(!instr.meta.isConsuming() and instr.tag == .NONTERM);
+
+        const jump_data = instr.data.ctx_jmp;
         const blocks = self.base.blocks.items;
         const curr_blk = &blocks[blocks.len - 1];
 
-        assert(!instr.meta.isConsuming());
-        switch (instr.tag) {
-            .NONTERM => {
-                new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
-                // got to the next block
-                curr_blk.* = instr.data.ctx_jmp.returns;
-                self.base.instr = 0;
-            },
-            .STRING => {
-                new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
-                // string match cannot be the last instruction of a block
-                self.base.instr += 1;
-            },
-            .MATCH => {
-                new_branch.look = .POSITIVE;
-                // there should be only one way
-                // (this causes no problems because lowering only generates one)
-                assert(instr.data.match.items.len == 1);
-                curr_blk.* = instr.data.match.items[0].dest;
-                self.base.instr = 0;
-            },
-            else => unreachable,
-        }
-
+        self.base.instr = 0;
         self.base.instr_sub_idx = 0;
 
+        var new_branch: LookaheadState = .{
+            .lookaheads = std.ArrayList(LookaheadState).init(self.lookaheads.allocator),
+            .base = try self.base.clone(),
+            .look = undefined,
+            .start = undefined,
+        };
+        new_branch.look = if (instr.meta.pos) .POSITIVE else .NEGATIVE;
         new_branch.setRoot();
+
+        curr_blk.* = jump_data.returns;
+        const new_blocks = new_branch.base.blocks.items;
+        new_blocks[new_blocks.len - 1] = jump_data.next;
+
         return new_branch;
     }
 

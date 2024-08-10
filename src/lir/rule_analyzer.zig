@@ -259,9 +259,14 @@ pub const Automaton = struct {
             .MATCH => {
                 assert(instr.data.match.items.len == 1);
                 try curr_blk.insts.append(try instr.clone(allocator));
+
+                assert(curr_blk.insts.items.len == 1);
+                curr_blk.insts.items[0].meta = ir.InstrMeta.Empty;
+
                 const branch = &curr_blk.insts.items[0].data.match.items[0];
                 curr_blk = try self.getNew();
                 branch.dest = curr_blk;
+                branch.consuming = true;
             },
             .STRING => for (instr.data.str) |char| {
                 const next = try self.getNew();
@@ -1051,7 +1056,7 @@ pub const ExecState = struct {
         const blks = self.blocks.items;
         var iter = std.mem.reverseIterator(blks);
         while (iter.next()) |blk| {
-            const last = blk.insts.getLast();
+            const last = blk.insts.getLastOrNull() orelse break;
             if (!last.meta.isConsuming()) break;
         }
         return blks[iter.index..];

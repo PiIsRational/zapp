@@ -61,7 +61,8 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
     const nfa = try emitter.emit(automata.items[0].start);
     defer nfa.deinit(allocator);
     gvgen.genAutomaton(stdout, nfa, "d") catch unreachable;
-    if (true) return;
+    std.debug.print("{s}\n", .{nfa});
+    //if (true) return;
 
     const dfa = try dfa_gen.genDfa(nfa.start);
     defer dfa.deinit(allocator);
@@ -82,7 +83,7 @@ fn addAutomaton(self: *PassManager, blk: *ir.Block) PassError!void {
 
     try ra.compressMatches(allocator, &nerode);
     nerode.setFail();
-    //gvgen.genAutomaton(stdout, nerode, "d") catch unreachable;
+    //gvgen.genAutomaton(stdout, dfa, "nerode") catch unreachable;
     try self.appendAutomaton(&nerode, blk);
 }
 
