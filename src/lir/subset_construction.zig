@@ -43,6 +43,20 @@ automata: ?*std.ArrayList(*ra.Automaton) = null,
 
 /// takes in the first block elegible to become a dfa and
 /// returns dfas connected witch each other using lookahead calls
+///
+/// this currently does not work correctly.
+/// the problem manifests itself here:
+///
+/// A = !B . !B
+///   | !C . !C
+///   ;
+///
+/// this rule cannot really be simplified as the lookaheads are different:
+/// the simplification would result in something like this:
+///
+/// A = (!B | !C) . (!B | !C) ;
+///
+/// which is not equivalent to the original nonterminal `A`.
 pub const Automatizer = struct {
     look_refs: std.AutoHashMap(SplitKey, usize),
     automata: std.ArrayList(*ra.Automaton),
