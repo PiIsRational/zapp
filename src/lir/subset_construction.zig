@@ -57,6 +57,11 @@ automata: ?*std.ArrayList(*ra.Automaton) = null,
 /// A = (!B | !C) . (!B | !C) ;
 ///
 /// which is not equivalent to the original nonterminal `A`.
+///
+/// the important part is that it should generate sub nfas
+/// with epsilons for different lookaheads.
+///
+/// the goal will then be to minimize on top of that.
 pub const Automatizer = struct {
     look_refs: std.AutoHashMap(SplitKey, usize),
     automata: std.ArrayList(*ra.Automaton),
