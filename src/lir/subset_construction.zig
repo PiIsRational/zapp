@@ -505,8 +505,17 @@ const DfaState = struct {
         }
 
         if (!try self.execJumps(true, buf)) return;
-
         self.resetHadFill();
+
+        const no_look = buf.items.len < self.sub_states.items.len;
+        // here we can use that `buf` was collected in the order of `sub_states`
+
+        var curr: usize = 0;
+        for (self.sub_states.items) |sub| {
+            _ = sub;
+            _ = &curr;
+            _ = no_look;
+        }
 
         if (self.isSemiEmpty()) {
             assert(self.sub_states.items.len > 0);
