@@ -371,14 +371,16 @@ const DfaState = struct {
         allocator: Allocator,
         block: *ir.Block,
         buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+        eps: bool,
     ) !DfaState {
-        return try initFromExec(allocator, try ra.ExecState.init(allocator, block), buf);
+        return try initFromExec(allocator, try ra.ExecState.init(allocator, block, eps), buf);
     }
 
     pub fn initFromExec(
         allocator: Allocator,
         exec: ra.ExecState,
         buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+        eps: bool,
     ) !DfaState {
         var sub_states = std.ArrayList(ra.ExecState).init(allocator);
         try sub_states.append(exec);
@@ -388,7 +390,7 @@ const DfaState = struct {
             .action = null,
         };
 
-        try self.goEps(buf);
+        if (eps) try self.goEps(buf);
         return self;
     }
 
@@ -408,6 +410,12 @@ const DfaState = struct {
         }
 
         self.sub_states.shrinkRetainingCapacity(index);
+    }
+
+    pub fn merge(self: *DfaState, other: DfaState) !void {
+        try self.sub_states.appendSlice(other.sub_states.items);
+        other.deinit();
+        self.deduplicate();
     }
 
     pub fn isSemiEmpty(self: DfaState) bool {
@@ -697,7 +705,11 @@ const DfaState = struct {
             const instr = sub.getCurrInstr() orelse continue;
             if (jmp_result != .LOOKAHEAD or instr.meta.isConsuming()) continue;
 
-            try call_buf.append(.{ sub, sub.splitOff() });
+            try call_buf.append(.{
+                // `undefined` works because buf is only needed for the `goEps` case.
+                try initFromExec(self.sub_states.allocator, sub, undefined, false),
+                sub.splitOff(),
+            });
             had_change = true;
         }
 
