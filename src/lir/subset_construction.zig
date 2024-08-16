@@ -515,15 +515,31 @@ const DfaState = struct {
         if (!try self.execJumps(true, buf)) return;
         self.resetHadFill();
 
-        const no_look = buf.items.len < self.sub_states.items.len;
         // here we can use that `buf` was collected in the order of `sub_states`
 
-        var curr: usize = 0;
-        for (self.sub_states.items) |sub| {
-            _ = sub;
-            _ = &curr;
-            _ = no_look;
+        // clean up self (remove the split off states)
+        if (buf.items.len != 0) {
+            var buf_idx: usize = 0;
+            var curr: usize = 0;
+            for (self.sub_states.items) |sub| {
+                if (buf.items[buf_idx].@"1".sub_states.items[0] == sub) {
+                    buf_idx += 1;
+                    continue;
+                }
+
+                self.sub_states.items[curr] = sub;
+                curr += 1;
+            }
         }
+
+        const DfaTuple = struct { DfaState, ra.ExecState.SplitOffResult };
+        const Ctx = struct {
+            pub fn lessThan(_: @This(), lhs: DfaTuple, rhs: DfaTuple) bool {
+                return lhs.@"2".lessThan(rhs.@"2");
+            }
+        };
+
+        std.sort.pdq(DfaTuple, buf.items, Ctx{}, Ctx.lessThan);
 
         if (self.isSemiEmpty()) {
             assert(self.sub_states.items.len > 0);
