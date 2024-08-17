@@ -540,6 +540,18 @@ const DfaState = struct {
         };
 
         std.sort.pdq(DfaTuple, buf.items, Ctx{}, Ctx.lessThan);
+        var i: usize = 1;
+        var curr: usize = 0;
+        while (i < buf.items.len) : (i += 1) {
+            if (buf.items[curr].@"2".eql(buf.items[i].@"2")) {
+                try buf.items[curr].@"1".merge(buf.items[i].@"1");
+                continue;
+            }
+
+            curr += 1;
+            buf.items[curr] = buf.items[i];
+        }
+        buf.shrinkRetainingCapacity(curr + 1);
 
         if (self.isSemiEmpty()) {
             assert(self.sub_states.items.len > 0);
