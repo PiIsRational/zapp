@@ -143,7 +143,7 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
     var look_buf = std.ArrayList(ra.ExecState.SplitOffResult).init(self.allocator);
     defer look_buf.deinit();
 
-    var start_state = try DfaState.init(self.allocator, start_block, &look_buf);
+    var start_state = try DfaState.init(self.allocator, start_block, &look_buf, true);
 
     // creates the first block
     const first_block = try self.getBlockTail(&start_state, &look_buf);
@@ -188,7 +188,8 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             // add the prongs and get the destination block
             for (branches.prongs.items) |prong| {
                 var split_state = try state.splitOn(prong);
-                try split_state.goEps(&look_buf);
+                try split_state.goEpsStep(&look_buf);
+                assert(look_buf.items.len == 0); // TODO: make multiple steps
                 defer look_buf.clearRetainingCapacity();
 
                 var labels = std.ArrayList(ir.Range).init(self.allocator);
@@ -373,7 +374,7 @@ const DfaState = struct {
         buf: *std.ArrayList(ra.ExecState.SplitOffResult),
         eps: bool,
     ) !DfaState {
-        return try initFromExec(allocator, try ra.ExecState.init(allocator, block, eps), buf);
+        return try initFromExec(allocator, try ra.ExecState.init(allocator, block), buf, eps);
     }
 
     pub fn initFromExec(
@@ -438,51 +439,6 @@ const DfaState = struct {
         }
 
         return true;
-    }
-
-    pub fn goEps(
-        self: *DfaState,
-        buf: *std.ArrayList(ra.ExecState.SplitOffResult),
-    ) !void {
-        if (self.isEmpty()) return;
-
-        while (try self.fillBranches() or try self.execJumps(false, buf)) {}
-
-        if (self.isSemiEmpty()) {
-            assert(self.sub_states.items.len > 0);
-            self.action = null;
-            for (self.sub_states.items) |sub| {
-                if (sub.blocks.items.len == 0) {
-                    self.action = sub.last_action;
-                    break;
-                }
-
-                const instr = sub.getCurrInstr().?;
-                if (instr.tag != .PRE_ACCEPT) continue;
-
-                self.action = instr.data.action;
-                break;
-            }
-            assert(self.action != null);
-        }
-
-        while (try self.fillBranches() or try self.execJumps(true, buf)) {}
-
-        self.resetHadFill();
-
-        if (self.isSemiEmpty()) {
-            assert(self.sub_states.items.len > 0);
-            self.action = null;
-            for (self.sub_states.items) |sub| {
-                if (sub.blocks.items.len != 0) continue;
-                self.action = sub.last_action;
-                break;
-            }
-            assert(self.action != null);
-        } else if (self.isEmpty()) {
-            assert(self.sub_states.items.len > 0);
-            self.action = self.sub_states.items[0].last_action;
-        }
     }
 
     fn goEpsStep(
@@ -553,19 +509,25 @@ const DfaState = struct {
         }
         buf.shrinkRetainingCapacity(curr + 1);
 
-        if (self.isSemiEmpty()) {
-            assert(self.sub_states.items.len > 0);
-            self.action = null;
-            for (self.sub_states.items) |sub| {
-                if (sub.blocks.items.len != 0) continue;
-                self.action = sub.last_action;
-                break;
-            }
-            assert(self.action != null);
-        } else if (self.isEmpty()) {
-            assert(self.sub_states.items.len > 0);
+        self.setAction();
+        for (buf.items) |val| val.@"1".setAction();
+    }
+
+    fn setAction(self: *DfaState) void {
+        assert(self.sub_states.items.len > 0);
+        if (self.isEmpty()) {
             self.action = self.sub_states.items[0].last_action;
+            return;
         }
+
+        if (!self.isSemiEmpty()) return;
+        self.action = null;
+        for (self.sub_states.items) |sub| {
+            if (sub.blocks.items.len != 0) continue;
+            self.action = sub.last_action;
+            break;
+        }
+        assert(self.action != null);
     }
 
     /// deduplicates the sub states of the dfa state
