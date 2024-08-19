@@ -140,10 +140,12 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
         self.dfa = at;
     }
 
-    var look_buf = std.ArrayList(ra.ExecState.SplitOffResult).init(self.allocator);
+    var look_buf = std.ArrayList(struct { DfaState, ra.ExecState.SplitOffResult })
+        .init(self.allocator);
     defer look_buf.deinit();
 
-    var start_state = try DfaState.init(self.allocator, start_block, &look_buf, true);
+    var start_state = try DfaState.init(self.allocator, start_block);
+    assert(false); // implement the epsilons for the start state
 
     // creates the first block
     const first_block = try self.getBlockTail(&start_state, &look_buf);
@@ -368,31 +370,21 @@ const DfaState = struct {
     sub_states: std.ArrayList(ra.ExecState),
     action: ?usize,
 
-    pub fn init(
-        allocator: Allocator,
-        block: *ir.Block,
-        buf: *std.ArrayList(ra.ExecState.SplitOffResult),
-        eps: bool,
-    ) !DfaState {
-        return try initFromExec(allocator, try ra.ExecState.init(allocator, block), buf, eps);
+    pub fn init(allocator: Allocator, block: *ir.Block) !DfaState {
+        return try initFromExec(allocator, try ra.ExecState.init(allocator, block));
     }
 
     pub fn initFromExec(
         allocator: Allocator,
         exec: ra.ExecState,
-        buf: *std.ArrayList(ra.ExecState.SplitOffResult),
-        eps: bool,
     ) !DfaState {
         var sub_states = std.ArrayList(ra.ExecState).init(allocator);
         try sub_states.append(exec);
 
-        var self: DfaState = .{
+        return .{
             .sub_states = sub_states,
             .action = null,
         };
-
-        if (eps) try self.goEps(buf);
-        return self;
     }
 
     pub fn removeEmpty(self: *DfaState) void {
