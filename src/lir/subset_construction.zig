@@ -118,6 +118,8 @@ pub fn init(allocator: Allocator) DfaGen {
     };
 }
 
+const LookTuple = struct { DfaState, ra.ExecState.SplitOffResult };
+
 fn initTable(
     allocator: Allocator,
     look_refs: *std.AutoHashMap(SplitKey, usize),
@@ -140,15 +142,17 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
         self.dfa = at;
     }
 
-    var look_buf = std.ArrayList(struct { DfaState, ra.ExecState.SplitOffResult })
+    var look_buf = std.ArrayList(LookTuple)
         .init(self.allocator);
     defer look_buf.deinit();
+    var state_buf = std.ArrayList(DfaState).init(self.allocator);
+    defer state_buf.deinit();
 
-    var start_state = try DfaState.init(self.allocator, start_block);
-    assert(false); // implement the epsilons for the start state
+    const start_state = try DfaState.init(self.allocator, start_block);
 
     // creates the first block
-    const first_block = try self.getBlockTail(&start_state, &look_buf);
+    try state_buf.append(start_state);
+    const first_block = try self.getBlockTail(&state_buf, &look_buf);
     look_buf.clearRetainingCapacity();
 
     try self.dfa_states.append(start_state);
@@ -229,6 +233,7 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
 }
 
 fn getBlockHead(block: *ir.Block) *ir.Block {
+    assert(false); // need to got to all possible sub states!
     const insts = block.insts.items;
     return if (insts.len == 1 and insts[0].tag == .NONTERM)
         insts[0].data.ctx_jmp.returns
@@ -238,9 +243,12 @@ fn getBlockHead(block: *ir.Block) *ir.Block {
 
 fn getBlockTail(
     self: *DfaGen,
-    state: *DfaState,
-    buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+    states: *std.ArrayList(DfaState),
+    buf: *std.ArrayList(LookTuple),
 ) !*ir.Block {
+    assert(buf.items.len == 0);
+    assert(states.items.len == 1);
+    const state = &states.items[0];
     const semi_empty = state.isSemiEmpty();
     const empty = !semi_empty and state.isEmpty();
     if (semi_empty) state.removeEmpty();
@@ -250,35 +258,20 @@ fn getBlockTail(
 
     if (self.map.get(key)) |block| return block;
 
-    const SplitOffResult = ra.ExecState.SplitOffResult;
-    if (buf.items.len > 1) {
-        std.sort.pdq(SplitOffResult, buf.items, {}, SplitOffResult.lessThan);
-
-        var count: usize = 0;
-        for (buf.items[1..]) |item| if (!buf.items[count].eql(item)) {
-            count += 1;
-            buf.items[count] = item;
-        };
-        buf.shrinkRetainingCapacity(count);
-    }
-
     const dst_blk = try self.dfa.?.getNew();
 
     // if the prong is not consuming the state of
     // the block will be accepting
-    if (semi_empty) {
-        var pass_instr = ir.Instr.initTag(.PRE_ACCEPT);
-        const action = state.action.?;
-        pass_instr.data = .{ .action = action };
-        try dst_blk.insts.append(pass_instr);
-    } else if (empty) {
-        var pass_instr = ir.Instr.initTag(.RET);
+    if (semi_empty or empty) {
+        var pass_instr = ir.Instr.initTag(
+            if (semi_empty) .PRE_ACCEPT else .RET,
+        );
         const action = state.action.?;
         pass_instr.data = .{ .action = action };
         try dst_blk.insts.append(pass_instr);
     }
 
-    const look_block = try self.genLooks(dst_blk, buf);
+    const look_block = try self.genLooks(dst_blk, states, buf);
     try self.put(try key.clone(self.allocator), look_block);
 
     return look_block;
@@ -287,9 +280,10 @@ fn getBlockTail(
 fn genLooks(
     self: *DfaGen,
     base_block: *ir.Block,
-    buf: *std.ArrayList(ra.ExecState.SplitOffResult),
+    states: *std.ArrayList(DfaState),
+    buf: *std.ArrayList(LookTuple),
 ) !*ir.Block {
-    if (buf.items.len == 0) return base_block;
+    assert(buf.items.len == 0 and states.items.len == 1);
     const first_block = try self.dfa.?.getNew();
     first_block.meta.is_target = true;
     var curr_block = first_block;
