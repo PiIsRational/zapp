@@ -41,27 +41,6 @@ key_scratch: std.AutoHashMap(usize, usize),
 look_refs: ?*std.AutoHashMap(SplitKey, usize) = null,
 automata: ?*std.ArrayList(*ra.Automaton) = null,
 
-/// takes in the first block elegible to become a dfa and
-/// returns dfas connected witch each other using lookahead calls
-///
-/// this currently does not work correctly.
-/// the problem manifests itself here:
-///
-/// A = !B . !B
-///   | !C . !C
-///   ;
-///
-/// this rule cannot really be simplified as the lookaheads are different:
-/// the simplification would result in something like this:
-///
-/// A = (!B | !C) . (!B | !C) ;
-///
-/// which is not equivalent to the original nonterminal `A`.
-///
-/// the important part is that it should generate sub nfas
-/// with epsilons for different lookaheads.
-///
-/// the goal will then be to minimize on top of that.
 pub const Automatizer = struct {
     look_refs: std.AutoHashMap(SplitKey, usize),
     automata: std.ArrayList(*ra.Automaton),
@@ -284,26 +263,39 @@ fn genLooks(
     buf: *std.ArrayList(LookTuple),
 ) !*ir.Block {
     assert(buf.items.len == 0 and states.items.len == 1);
+
+    var finished_states: usize = 0;
     const first_block = try self.dfa.?.getNew();
     first_block.meta.is_target = true;
     var curr_block = first_block;
 
-    for (buf.items) |off_split| {
-        const sub_automaton = try self.getSubAutomaton(off_split);
+    while (finished_states != states.items.len) {
+        for (states.items) |*state| {
+            if (!try state.goEpsStep(buf)) {
+                std.mem.swap(DfaState, &states.items[finished_states], state);
+                finished_states += 1;
+                continue;
+            }
 
-        try curr_block.insts.append(ir.Instr.initNonterm(
-            sub_automaton.start,
-            base_block,
-            ir.InstrMeta.initLookahead(off_split.look == .POSITIVE),
-        ));
+            for (buf.items) |off_split| {
+                const sub_automaton = try self.getSubAutomaton(off_split);
 
-        const new_block = try self.dfa.?.getNew();
-        curr_block.fail = new_block;
-        curr_block = new_block;
+                try curr_block.insts.append(ir.Instr.initNonterm(
+                    sub_automaton.start,
+                    base_block,
+                    ir.InstrMeta.initLookahead(off_split.look == .POSITIVE),
+                ));
+
+                const new_block = try self.dfa.?.getNew();
+                curr_block.fail = new_block;
+                curr_block = new_block;
+            }
+
+            curr_block.fail = null;
+
+            try curr_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
+        }
     }
-
-    curr_block.fail = null;
-    try curr_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
     return first_block;
 }
 
@@ -431,10 +423,13 @@ const DfaState = struct {
         self: *DfaState,
         buf: *std.ArrayList(struct { DfaState, ra.ExecState.SplitOffResult }),
     ) !bool {
-        if (self.isEmpty()) return;
+        assert(buf.items.len == 0);
+        const start = buf.items.len;
+
+        if (self.isEmpty()) return false;
 
         while (try self.fillBranches() or try self.execJumps(false, buf)) {}
-        assert(buf.items.len == 0);
+        assert(buf.items.len == start);
 
         if (self.isSemiEmpty()) {
             assert(self.sub_states.items.len > 0);
@@ -460,8 +455,8 @@ const DfaState = struct {
         // here we can use that `buf` was collected in the order of `sub_states`
 
         // clean up self (remove the split off states)
-        if (buf.items.len != 0) {
-            var buf_idx: usize = 0;
+        if (buf.items.len != start) {
+            var buf_idx: usize = start;
             var curr: usize = 0;
             for (self.sub_states.items) |sub| {
                 if (buf.items[buf_idx].@"1".sub_states.items[0] == sub) {
@@ -481,9 +476,9 @@ const DfaState = struct {
             }
         };
 
-        std.sort.pdq(DfaTuple, buf.items, Ctx{}, Ctx.lessThan);
-        var i: usize = 1;
-        var curr: usize = 0;
+        std.sort.pdq(DfaTuple, buf.items[start..], Ctx{}, Ctx.lessThan);
+        var i: usize = start + 1;
+        var curr: usize = start;
         while (i < buf.items.len) : (i += 1) {
             if (buf.items[curr].@"2".eql(buf.items[i].@"2")) {
                 try buf.items[curr].@"1".merge(buf.items[i].@"1");
@@ -496,7 +491,7 @@ const DfaState = struct {
         buf.shrinkRetainingCapacity(curr + 1);
 
         self.setAction();
-        for (buf.items) |val| val.@"1".setAction();
+        for (buf.items[start..]) |val| val.@"1".setAction();
     }
 
     fn setAction(self: *DfaState) void {
