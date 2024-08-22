@@ -259,44 +259,50 @@ fn getBlockTail(
 fn genLooks(
     self: *DfaGen,
     base_block: *ir.Block,
-    states: *std.ArrayList(DfaState),
+    states: *std.ArrayList(struct { DfaState, *ir.Block }),
     buf: *std.ArrayList(LookTuple),
 ) !*ir.Block {
     assert(buf.items.len == 0 and states.items.len == 1);
 
     var finished_states: usize = 0;
-    const first_block = try self.dfa.?.getNew();
-    first_block.meta.is_target = true;
-    var curr_block = first_block;
+    const very_first_block = states.items[0].@"2";
 
-    while (finished_states != states.items.len) {
-        for (states.items) |*state| {
-            if (!try state.goEpsStep(buf)) {
-                std.mem.swap(DfaState, &states.items[finished_states], state);
-                finished_states += 1;
-                continue;
-            }
+    while (finished_states < states.items.len) {
+        const state_tuple = &states.items[finished_states];
+        const state = state_tuple.@"1";
 
-            for (buf.items) |off_split| {
-                const sub_automaton = try self.getSubAutomaton(off_split);
+        const first_block = state_tuple.@"2";
+        first_block.meta.is_target = true;
+        var curr_block = first_block;
 
-                try curr_block.insts.append(ir.Instr.initNonterm(
-                    sub_automaton.start,
-                    base_block,
-                    ir.InstrMeta.initLookahead(off_split.look == .POSITIVE),
-                ));
-
-                const new_block = try self.dfa.?.getNew();
-                curr_block.fail = new_block;
-                curr_block = new_block;
-            }
-
-            curr_block.fail = null;
-
-            try curr_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
+        if (!try state.goEpsStep(buf)) {
+            std.mem.swap(DfaState, &states.items[finished_states], state);
+            finished_states += 1;
+            continue;
         }
+        assert(buf.items.len > 0);
+
+        for (buf.items) |tuple| {
+            const off_split = tuple.@"2";
+            const sub_automaton = try self.getSubAutomaton(off_split);
+
+            try curr_block.insts.append(ir.Instr.initNonterm(
+                sub_automaton.start,
+                base_block,
+                ir.InstrMeta.initLookahead(off_split.look == .POSITIVE),
+            ));
+
+            const new_block = try self.dfa.?.getNew();
+            curr_block.fail = new_block;
+            curr_block = new_block;
+        }
+
+        // add a fail
+        curr_block.fail = null;
+        try curr_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
     }
-    return first_block;
+
+    return very_first_block;
 }
 
 fn getSubAutomaton(
