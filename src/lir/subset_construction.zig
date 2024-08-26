@@ -98,6 +98,7 @@ pub fn init(allocator: Allocator) DfaGen {
 }
 
 const LookTuple = struct { DfaState, ra.ExecState.SplitOffResult };
+const StateTuple = struct { DfaState, *ir.Block };
 
 fn initTable(
     allocator: Allocator,
@@ -121,16 +122,15 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
         self.dfa = at;
     }
 
-    var look_buf = std.ArrayList(LookTuple)
-        .init(self.allocator);
-    defer look_buf.deinit();
-    var state_buf = std.ArrayList(DfaState).init(self.allocator);
+    var state_buf = std.ArrayList(StateTuple).init(self.allocator);
+    var look_buf = std.ArrayList(LookTuple).init(self.allocator);
     defer state_buf.deinit();
+    defer look_buf.deinit();
 
     const start_state = try DfaState.init(self.allocator, start_block);
 
     // creates the first block
-    try state_buf.append(start_state);
+    try state_buf.append(.{ start_state, try self.dfa.?.getNew() });
     const first_block = try self.getBlockTail(&state_buf, &look_buf);
     look_buf.clearRetainingCapacity();
 
@@ -222,12 +222,12 @@ fn getBlockHead(block: *ir.Block) *ir.Block {
 
 fn getBlockTail(
     self: *DfaGen,
-    states: *std.ArrayList(DfaState),
+    states: *std.ArrayList(StateTuple),
     buf: *std.ArrayList(LookTuple),
 ) !*ir.Block {
     assert(buf.items.len == 0);
     assert(states.items.len == 1);
-    const state = &states.items[0];
+    const state = &states.items[0].@"0";
     const semi_empty = state.isSemiEmpty();
     const empty = !semi_empty and state.isEmpty();
     if (semi_empty) state.removeEmpty();
@@ -237,20 +237,17 @@ fn getBlockTail(
 
     if (self.map.get(key)) |block| return block;
 
-    const dst_blk = try self.dfa.?.getNew();
-
     // if the prong is not consuming the state of
     // the block will be accepting
-    if (semi_empty or empty) {
+    const instr = if (semi_empty or empty) blk: {
         var pass_instr = ir.Instr.initTag(
             if (semi_empty) .PRE_ACCEPT else .RET,
         );
-        const action = state.action.?;
-        pass_instr.data = .{ .action = action };
-        try dst_blk.insts.append(pass_instr);
-    }
+        pass_instr.data = .{ .action = state.action.? };
+        break :blk pass_instr;
+    } else null;
 
-    const look_block = try self.genLooks(dst_blk, states, buf);
+    const look_block = try self.genLooks(instr, states, buf);
     try self.put(try key.clone(self.allocator), look_block);
 
     return look_block;
@@ -258,20 +255,20 @@ fn getBlockTail(
 
 fn genLooks(
     self: *DfaGen,
-    base_block: *ir.Block,
-    states: *std.ArrayList(struct { DfaState, *ir.Block }),
+    base_instr: ?ir.Instr,
+    states: *std.ArrayList(StateTuple),
     buf: *std.ArrayList(LookTuple),
 ) !*ir.Block {
     assert(buf.items.len == 0 and states.items.len == 1);
 
     var finished_states: usize = 0;
-    const very_first_block = states.items[0].@"2";
+    const very_first_block = states.items[0].@"1";
 
     while (finished_states < states.items.len) {
         const state_tuple = &states.items[finished_states];
-        const state = state_tuple.@"1";
+        const state = &state_tuple.@"0";
 
-        const first_block = state_tuple.@"2";
+        const first_block = state_tuple.@"1";
         first_block.meta.is_target = true;
         var curr_block = first_block;
 
@@ -282,24 +279,46 @@ fn genLooks(
         }
         assert(buf.items.len > 0);
 
+        if (state.sub_states.items.len != 0) {
+            const next = try self.dfa.?.getNew();
+            try curr_block.insts.append(ir.Instr.initJmp(next));
+            state_tuple.@"1" = next;
+
+            const new_block = try self.dfa.?.getNew();
+            curr_block.next = new_block;
+            curr_block = new_block;
+        } else {
+            state.deinit();
+
+            // should be safe to do even when state_tuple is last in states
+            state_tuple.* = states.pop();
+        }
+
         for (buf.items) |tuple| {
-            const off_split = tuple.@"2";
+            const off_split = tuple.@"1";
             const sub_automaton = try self.getSubAutomaton(off_split);
+            const next = try self.dfa.?.getNew();
 
             try curr_block.insts.append(ir.Instr.initNonterm(
                 sub_automaton.start,
-                base_block,
+                next,
                 ir.InstrMeta.initLookahead(off_split.look == .POSITIVE),
             ));
+
+            try states.append(.{ tuple.@"1", next });
 
             const new_block = try self.dfa.?.getNew();
             curr_block.fail = new_block;
             curr_block = new_block;
         }
 
-        // add a fail
+        buf.clearRetainingCapacity();
         curr_block.fail = null;
         try curr_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
+    }
+
+    if (base_instr) |instr| {
+        for (states.items) |tuple| try tuple.@"1".append(instr);
     }
 
     return very_first_block;
@@ -427,7 +446,7 @@ const DfaState = struct {
 
     fn goEpsStep(
         self: *DfaState,
-        buf: *std.ArrayList(struct { DfaState, ra.ExecState.SplitOffResult }),
+        buf: *std.ArrayList(LookTuple),
     ) !bool {
         assert(buf.items.len == 0);
         const start = buf.items.len;
@@ -455,7 +474,7 @@ const DfaState = struct {
             assert(self.action != null);
         }
 
-        if (!try self.execJumps(true, buf)) return;
+        if (!(try self.execJumps(true, buf))) return false;
         self.resetHadFill();
 
         // here we can use that `buf` was collected in the order of `sub_states`
@@ -465,7 +484,7 @@ const DfaState = struct {
             var buf_idx: usize = start;
             var curr: usize = 0;
             for (self.sub_states.items) |sub| {
-                if (buf.items[buf_idx].@"1".sub_states.items[0] == sub) {
+                if (buf.items[buf_idx].@"0".sub_states.items[0].eql(sub)) {
                     buf_idx += 1;
                     continue;
                 }
@@ -668,7 +687,7 @@ const DfaState = struct {
     fn execJumps(
         self: *DfaState,
         skip_accept: bool,
-        call_buf: *std.ArrayList(struct { DfaState, ra.ExecState.SplitOffResult }),
+        call_buf: *std.ArrayList(LookTuple),
     ) !bool {
         var had_change = false;
         for (self.sub_states.items) |*sub| {
@@ -684,7 +703,7 @@ const DfaState = struct {
 
             try call_buf.append(.{
                 // `undefined` works because buf is only needed for the `goEps` case.
-                try initFromExec(self.sub_states.allocator, sub, undefined, false),
+                try initFromExec(self.sub_states.allocator, sub.*),
                 sub.splitOff(),
             });
             had_change = true;
