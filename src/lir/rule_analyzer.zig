@@ -1082,7 +1082,7 @@ pub const ExecState = struct {
             };
         }
 
-        pub fn lessThan(_: void, self: SplitOffResult, other: SplitOffResult) bool {
+        pub fn lessThan(self: SplitOffResult, other: SplitOffResult) bool {
             return self.blk.id < other.blk.id or
                 self.blk.id == other.blk.id and (self.instr < other.instr or
                 self.instr == other.instr and self.look.less(other.look));

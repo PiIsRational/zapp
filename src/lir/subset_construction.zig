@@ -494,19 +494,18 @@ const DfaState = struct {
             }
         }
 
-        const DfaTuple = struct { DfaState, ra.ExecState.SplitOffResult };
         const Ctx = struct {
-            pub fn lessThan(_: @This(), lhs: DfaTuple, rhs: DfaTuple) bool {
-                return lhs.@"2".lessThan(rhs.@"2");
+            pub fn lessThan(_: @This(), lhs: LookTuple, rhs: LookTuple) bool {
+                return lhs.@"1".lessThan(rhs.@"1");
             }
         };
 
-        std.sort.pdq(DfaTuple, buf.items[start..], Ctx{}, Ctx.lessThan);
+        std.sort.pdq(LookTuple, buf.items[start..], Ctx{}, Ctx.lessThan);
         var i: usize = start + 1;
         var curr: usize = start;
         while (i < buf.items.len) : (i += 1) {
-            if (buf.items[curr].@"2".eql(buf.items[i].@"2")) {
-                try buf.items[curr].@"1".merge(buf.items[i].@"1");
+            if (buf.items[curr].@"1".eql(buf.items[i].@"1")) {
+                try buf.items[curr].@"0".merge(buf.items[i].@"0");
                 continue;
             }
 
