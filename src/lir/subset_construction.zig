@@ -112,7 +112,6 @@ fn initTable(
     return self;
 }
 
-/// generates a Dfa (automaton with only match and ret/fail)
 pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
     var created = false;
     if (self.dfa == null) {
@@ -132,9 +131,12 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
     // creates the first block
     try state_buf.append(.{ start_state, try self.dfa.?.getNew() });
     const first_block = try self.getBlockTail(&state_buf, &look_buf);
-    look_buf.clearRetainingCapacity();
+    assert(look_buf.items.len == 0);
 
-    try self.dfa_states.append(start_state);
+    for (state_buf.items) |tuple| {
+        try self.dfa_states.append(tuple.@"0");
+    }
+    state_buf.clearRetainingCapacity();
 
     const fail_block = try self.dfa.?.getNew();
     try fail_block.insts.append(ir.Instr.initTag(.TERM_FAIL));
@@ -173,15 +175,14 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
             // add the prongs and get the destination block
             for (branches.prongs.items) |prong| {
                 var split_state = try state.splitOn(prong);
-                try split_state.goEpsStep(&look_buf);
-                assert(look_buf.items.len == 0); // TODO: make multiple steps
                 defer look_buf.clearRetainingCapacity();
 
                 var labels = std.ArrayList(ir.Range).init(self.allocator);
                 var iter = prong.set.rangeIter();
                 while (iter.next()) |range| try labels.append(range);
 
-                const dst_blk_tail = try self.getBlockTail(&split_state, &look_buf);
+                try state_buf.append(.{ start_state, try self.dfa.?.getNew() });
+                const dst_blk_tail = try self.getBlockTail(&state_buf, &look_buf);
 
                 try instr.data.match.append(.{
                     .labels = labels,
@@ -194,8 +195,10 @@ pub fn genDfa(self: *DfaGen, start_block: *ir.Block) !ra.Automaton {
                     dst_blk.insts.items[0].tag == .PRE_ACCEPT)
                 {
                     try new_states.append(split_state);
+                    state_buf.clearRetainingCapacity();
                 } else {
                     split_state.deinit();
+                    assert(state_buf.items.len == 0);
                 }
             }
         }
@@ -249,6 +252,12 @@ fn getBlockTail(
 
     const look_block = try self.genLooks(instr, states, buf);
     try self.put(try key.clone(self.allocator), look_block);
+    for (states.items) |*tuple| {
+        try self.put(
+            try tuple.@"0".toKey(&self.key_scratch),
+            tuple.@"1",
+        );
+    }
 
     return look_block;
 }
@@ -272,8 +281,7 @@ fn genLooks(
         first_block.meta.is_target = true;
         var curr_block = first_block;
 
-        if (!try state.goEpsStep(buf)) {
-            std.mem.swap(DfaState, &states.items[finished_states], state);
+        if (!try state.goEpsStep(buf, &self.key_scratch)) {
             finished_states += 1;
             continue;
         }
@@ -285,7 +293,7 @@ fn genLooks(
             state_tuple.@"1" = next;
 
             const new_block = try self.dfa.?.getNew();
-            curr_block.next = new_block;
+            curr_block.fail = new_block;
             curr_block = new_block;
         } else {
             state.deinit();
@@ -305,7 +313,7 @@ fn genLooks(
                 ir.InstrMeta.initLookahead(off_split.look == .POSITIVE),
             ));
 
-            try states.append(.{ tuple.@"1", next });
+            try states.append(.{ tuple.@"0", next });
 
             const new_block = try self.dfa.?.getNew();
             curr_block.fail = new_block;
@@ -318,7 +326,7 @@ fn genLooks(
     }
 
     if (base_instr) |instr| {
-        for (states.items) |tuple| try tuple.@"1".append(instr);
+        for (states.items) |tuple| try tuple.@"1".insts.append(instr);
     }
 
     return very_first_block;
@@ -416,10 +424,14 @@ const DfaState = struct {
         self.sub_states.shrinkRetainingCapacity(index);
     }
 
-    pub fn merge(self: *DfaState, other: DfaState) !void {
+    /// merges self to other. deinits other and returns the new key of self.
+    pub fn merge(self: *DfaState, other: DfaState, scratch: *std.AutoHashMap(usize, usize)) !DfaState.Key {
         try self.sub_states.appendSlice(other.sub_states.items);
         other.deinit();
-        self.deduplicate();
+
+        var key = try self.toKey(scratch);
+        self.deduplicate(&key);
+        return key;
     }
 
     pub fn isSemiEmpty(self: DfaState) bool {
@@ -447,6 +459,7 @@ const DfaState = struct {
     fn goEpsStep(
         self: *DfaState,
         buf: *std.ArrayList(LookTuple),
+        scratch: *std.AutoHashMap(usize, usize),
     ) !bool {
         assert(buf.items.len == 0);
         const start = buf.items.len;
@@ -505,7 +518,8 @@ const DfaState = struct {
         var curr: usize = start;
         while (i < buf.items.len) : (i += 1) {
             if (buf.items[curr].@"1".eql(buf.items[i].@"1")) {
-                try buf.items[curr].@"0".merge(buf.items[i].@"0");
+                const key = try buf.items[curr].@"0".merge(buf.items[i].@"0", scratch);
+                key.deinit(self.sub_states.allocator);
                 continue;
             }
 
@@ -515,7 +529,8 @@ const DfaState = struct {
         buf.shrinkRetainingCapacity(curr + 1);
 
         self.setAction();
-        for (buf.items[start..]) |val| val.@"1".setAction();
+        for (buf.items[start..]) |*val| val.@"0".setAction();
+        return true;
     }
 
     fn setAction(self: *DfaState) void {
@@ -537,19 +552,19 @@ const DfaState = struct {
 
     /// deduplicates the sub states of the dfa state
     fn deduplicate(self: *DfaState, key: *DfaState.Key) void {
+        const subs = self.sub_states.items;
+        var len = subs.len;
+        assert(len == key.sub_states.len);
+
         if (self.sub_states.items.len <= 1) return;
 
         var i: usize = 1;
-        const subs = self.sub_states.items;
-        var len = subs.len;
         while (i <= len) : (i += 1) {
             if (subs[i - 1].blocks.items.len != 0) continue;
             len -= 1;
             i -= 1;
             std.mem.swap(ra.ExecState, &subs[i], &subs[len]);
         }
-
-        assert(len == key.sub_states.len);
 
         const keys = key.sub_states;
         self.reorder(keys);
