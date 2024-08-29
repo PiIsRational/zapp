@@ -281,11 +281,14 @@ fn genLooks(
         first_block.meta.is_target = true;
         var curr_block = first_block;
 
-        if (!try state.goEpsStep(buf, &self.key_scratch)) {
+        while (try state.goEpsStep(buf, &self.key_scratch) and
+            buf.items.len == 0)
+        {}
+
+        if (buf.items.len == 0) {
             finished_states += 1;
             continue;
         }
-        assert(buf.items.len > 0);
 
         if (state.sub_states.items.len != 0) {
             const next = try self.dfa.?.getNew();
@@ -462,39 +465,21 @@ const DfaState = struct {
         scratch: *std.AutoHashMap(usize, usize),
     ) !bool {
         assert(buf.items.len == 0);
-        const start = buf.items.len;
-
         if (self.isEmpty()) return false;
 
-        while (try self.fillBranches() or try self.execJumps(false, buf)) {}
-        assert(buf.items.len == start);
+        const full_fail = !try self.fillBranches() and
+            !try self.execJumps(false, buf) and
+            !try self.execJumps(true, buf);
 
-        if (self.isSemiEmpty()) {
-            assert(self.sub_states.items.len > 0);
-            self.action = null;
-            for (self.sub_states.items) |sub| {
-                if (sub.blocks.items.len == 0) {
-                    self.action = sub.last_action;
-                    break;
-                }
-
-                const instr = sub.getCurrInstr().?;
-                if (instr.tag != .PRE_ACCEPT) continue;
-
-                self.action = instr.data.action;
-                break;
-            }
-            assert(self.action != null);
+        if (full_fail) {
+            self.resetHadFill();
+            if (!try self.fillBranches()) return false;
         }
 
-        if (!(try self.execJumps(true, buf))) return false;
-        self.resetHadFill();
-
         // here we can use that `buf` was collected in the order of `sub_states`
-
         // clean up self (remove the split off states)
-        if (buf.items.len != start) {
-            var buf_idx: usize = start;
+        if (buf.items.len > 0) {
+            var buf_idx: usize = 0;
             var curr: usize = 0;
             for (self.sub_states.items) |sub| {
                 if (buf.items[buf_idx].@"0".sub_states.items[0].eql(sub)) {
@@ -507,15 +492,29 @@ const DfaState = struct {
             }
         }
 
+        try self.mergeNeighbors(buf, scratch);
+        self.setAction();
+        for (buf.items[0..]) |*val| val.@"0".setAction();
+        return true;
+    }
+
+    /// merge all DfaStates from tuples with the same SplitOffResult
+    fn mergeNeighbors(
+        self: DfaState,
+        buf: *std.ArrayList(LookTuple),
+        scratch: *std.AutoHashMap(usize, usize),
+    ) !void {
+        if (buf.items.len <= 1) return;
+
         const Ctx = struct {
             pub fn lessThan(_: @This(), lhs: LookTuple, rhs: LookTuple) bool {
                 return lhs.@"1".lessThan(rhs.@"1");
             }
         };
 
-        std.sort.pdq(LookTuple, buf.items[start..], Ctx{}, Ctx.lessThan);
-        var i: usize = start + 1;
-        var curr: usize = start;
+        std.sort.pdq(LookTuple, buf.items[0..], Ctx{}, Ctx.lessThan);
+        var i: usize = 1;
+        var curr: usize = 0;
         while (i < buf.items.len) : (i += 1) {
             if (buf.items[curr].@"1".eql(buf.items[i].@"1")) {
                 const key = try buf.items[curr].@"0".merge(buf.items[i].@"0", scratch);
@@ -527,10 +526,6 @@ const DfaState = struct {
             buf.items[curr] = buf.items[i];
         }
         buf.shrinkRetainingCapacity(curr + 1);
-
-        self.setAction();
-        for (buf.items[start..]) |*val| val.@"0".setAction();
-        return true;
     }
 
     fn setAction(self: *DfaState) void {
@@ -543,8 +538,15 @@ const DfaState = struct {
         if (!self.isSemiEmpty()) return;
         self.action = null;
         for (self.sub_states.items) |sub| {
-            if (sub.blocks.items.len != 0) continue;
-            self.action = sub.last_action;
+            if (sub.blocks.items.len == 0) {
+                self.action = sub.last_action;
+                break;
+            }
+
+            const instr = sub.getCurrInstr().?;
+            if (instr.tag != .PRE_ACCEPT) continue;
+
+            self.action = instr.data.action;
             break;
         }
         assert(self.action != null);
@@ -552,19 +554,21 @@ const DfaState = struct {
 
     /// deduplicates the sub states of the dfa state
     fn deduplicate(self: *DfaState, key: *DfaState.Key) void {
-        const subs = self.sub_states.items;
-        var len = subs.len;
-        assert(len == key.sub_states.len);
-
         if (self.sub_states.items.len <= 1) return;
+        const subs = self.sub_states.items;
 
+        // put all empty exec states at the end and
+        // adjust length to just be nonempty states
         var i: usize = 1;
+        var len = subs.len;
         while (i <= len) : (i += 1) {
             if (subs[i - 1].blocks.items.len != 0) continue;
             len -= 1;
             i -= 1;
             std.mem.swap(ra.ExecState, &subs[i], &subs[len]);
         }
+
+        assert(len == key.sub_states.len);
 
         const keys = key.sub_states;
         self.reorder(keys);
@@ -716,7 +720,6 @@ const DfaState = struct {
             if (jmp_result != .LOOKAHEAD or instr.meta.isConsuming()) continue;
 
             try call_buf.append(.{
-                // `undefined` works because buf is only needed for the `goEps` case.
                 try initFromExec(self.sub_states.allocator, sub.*),
                 sub.splitOff(),
             });
