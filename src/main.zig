@@ -42,7 +42,7 @@ pub fn main() !void {
     try parseArgs(allocator, args);
 }
 
-fn parseArgs(allocator: Allocator, args: [][]const u8) !void {
+fn parseArgs(allocator: Allocator, args: [][:0]u8) !void {
     const stdout = std.io.getStdOut().writer();
     if (args.len < 2) {
         try Error.print("no command was specified", null, "", &.{});
@@ -220,10 +220,7 @@ fn parserGen(
 
 fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type {
     return struct {
-        const OptionParseError = error{
-            BadBool,
-        };
-
+        const OptionParseError = error{BadBool};
         pub fn parse(input: []const []const u8) OptionParseError!T {
             for (input) |option| {
                 if (option.len <= 4 + name.len) continue;

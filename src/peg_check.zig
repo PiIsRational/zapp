@@ -17,13 +17,13 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
-const ir = @import("peg_ir.zig");
+const pir = @import("peg_ir.zig");
 const Error = @import("errors.zig");
 
 const FirstPass = @This();
 
 idents: std.StringHashMap(usize),
-ir: *ir.PegIr,
+ir: *pir.PegIr,
 pass: bool,
 relations: []bool,
 reachable: []bool,
@@ -31,7 +31,7 @@ main_progress: std.Progress.Node,
 
 pub fn optimize(
     self: *FirstPass,
-    pIr: *ir.PegIr,
+    pIr: *pir.PegIr,
     p_node: *std.Progress.Node,
     inlining: bool,
 ) !bool {
@@ -115,7 +115,7 @@ pub fn optimize(
 }
 
 /// the error message writer for `findEmptyRules`
-fn errorOnEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn errorOnEmptyRules(self: *FirstPass, def: *pir.Definition) anyerror!void {
     if (self.reachable[def.id]) return;
 
     self.pass = false;
@@ -138,7 +138,7 @@ fn errorOnEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * no inlining by now
 /// change bounds:
 ///     * adds the correct return type to actions
-fn addActionReturnType(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn addActionReturnType(self: *FirstPass, def: *pir.Definition) anyerror!void {
     const allocator = self.ir.allocator;
     for (def.sequences.items) |seq| {
         const action = seq.action;
@@ -163,7 +163,7 @@ fn addActionReturnType(self: *FirstPass, def: *ir.Definition) anyerror!void {
 /// asserts:
 ///     * mostly no empty rules
 ///      (no empty rules through forced recursion)
-fn findEmptyRules(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn findEmptyRules(self: *FirstPass, def: *pir.Definition) anyerror!void {
     for (def.sequences.items) |seq| {
         var good = true;
         for (seq.operateds.items) |op| {
@@ -198,7 +198,7 @@ fn Orientation(extra: type) type {
         op_id: usize,
         other: extra,
 
-        pub fn index(orient: @This(), pass: *FirstPass) ?*ir.Operated {
+        pub fn index(orient: @This(), pass: *FirstPass) ?*pir.Operated {
             const defs = pass.ir.defs.items;
             const seqs = defs[orient.rule_id].sequences.items;
             if (orient.seq_id >= seqs.len) return null;
@@ -254,7 +254,7 @@ pub fn findRecursions(self: *FirstPass) !void {
     });
     flags[0] = .FOUND;
 
-    while (backtracking.popOrNull()) |o| {
+    while (backtracking.pop()) |o| {
         var orient = o;
         if (orient.other.next_id) |id| {
             var this_rule = self.getDefinition(orient.rule_id);
@@ -348,7 +348,7 @@ pub fn findRecursions(self: *FirstPass) !void {
 ///     * all canonicalizations should be passed
 /// change bounds:
 ///     * the action rets are set
-fn setActionRets(_: *FirstPass, seq: *ir.Sequence) !void {
+fn setActionRets(_: *FirstPass, seq: *pir.Sequence) !void {
     try seq.action.setRets(seq.*);
 }
 
@@ -360,7 +360,7 @@ fn setActionRets(_: *FirstPass, seq: *ir.Sequence) !void {
 /// asserts:
 ///     * no misplaced cut operators in the grammar
 ///      (with the `checkDoubledCut` pass)
-fn checkLastSeqCut(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn checkLastSeqCut(self: *FirstPass, def: *pir.Definition) anyerror!void {
     const last_seq = def.sequences.items[0];
     var fail: bool = true;
     for (last_seq.operateds.items) |op| {
@@ -396,7 +396,7 @@ fn checkLastSeqCut(self: *FirstPass, def: *ir.Definition) anyerror!void {
 /// asserts:
 ///     * no misplaced cut operators in the grammar
 ///      (with the `checkLastSeqCut` pass)
-fn checkDoubledCut(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn checkDoubledCut(self: *FirstPass, seq: *pir.Sequence) anyerror!void {
     var fail = false;
     var found_cut = false;
     var other_str: []const u8 = undefined;
@@ -457,7 +457,7 @@ fn checkDoubledCut(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
 ///     * `self.ir.is_acceptor` should be set to `true`
 /// change bounds:
 ///     * `self.ir.is_acceptor` is set to `false` if an action is encountered
-fn checkIsAcceptor(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn checkIsAcceptor(self: *FirstPass, seq: *pir.Sequence) anyerror!void {
     if (!seq.action.isEmpty()) {
         self.ir.is_acceptor = false;
     }
@@ -476,7 +476,7 @@ fn deleteDef(self: *FirstPass, def: usize) !void {
     const OpUpdate = struct {
         var def_num: usize = 0;
 
-        pub fn update(pass: *FirstPass, op: *ir.Operated) anyerror!void {
+        pub fn update(pass: *FirstPass, op: *pir.Operated) anyerror!void {
             _ = pass;
             switch (op.value) {
                 .ID => |*id| if (id.* > def_num) {
@@ -494,7 +494,7 @@ fn deleteDef(self: *FirstPass, def: usize) !void {
     const DefUpdate = struct {
         var def_num: usize = 0;
 
-        pub fn update(pass: *FirstPass, defn: *ir.Definition) anyerror!void {
+        pub fn update(pass: *FirstPass, defn: *pir.Definition) anyerror!void {
             _ = pass;
             if (defn.id > def_num) defn.id -= 1;
         }
@@ -510,7 +510,7 @@ fn deleteDef(self: *FirstPass, def: usize) !void {
     try self.defPass(false, DefUpdate.update, "delete ops");
 }
 
-fn sameAsRoot(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn sameAsRoot(self: *FirstPass, def: *pir.Definition) anyerror!void {
     if (self.reachable[def.id]) return;
     if (def.generated()) return;
     try Error.print(
@@ -534,7 +534,7 @@ fn checkAccess(self: *FirstPass) !void {
     try search_stack.append(0);
     self.reachable[0] = true;
 
-    while (search_stack.popOrNull()) |id| {
+    while (search_stack.pop()) |id| {
         const def = self.getDefinition(id);
         const seqs = def.sequences.items;
 
@@ -559,7 +559,7 @@ fn checkAccess(self: *FirstPass) !void {
 ///     * no double def
 /// change bounds:
 ///     * the literals are set
-fn doubleDefCheck(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn doubleDefCheck(self: *FirstPass, def: *pir.Definition) anyerror!void {
     const result = try self.idents.fetchPut(
         def.identifier,
         def.id,
@@ -590,7 +590,7 @@ fn doubleDefCheck(self: *FirstPass, def: *ir.Definition) anyerror!void {
 /// needs: none
 /// asserts:
 ///     * no empty expressions
-fn checkNoActionReturn(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn checkNoActionReturn(self: *FirstPass, def: *pir.Definition) anyerror!void {
     for (def.sequences.items) |seq| {
         if (!def.return_type.isNone() and seq.action.isEmpty()) {
             try Error.print(
@@ -620,7 +620,7 @@ fn checkNoActionReturn(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * there should be no inlined actions here (bases.len == 1)
 /// asserts:
 ///     * actions use only available vars
-fn checkActionVars(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn checkActionVars(self: *FirstPass, seq: *pir.Sequence) anyerror!void {
     var arg_count: usize = 0;
     const action = seq.action;
     const ops = seq.operateds.items;
@@ -701,7 +701,7 @@ fn checkActionVars(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
 /// needs: none
 /// asserts:
 ///     * all classes are correct
-fn checkClass(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn checkClass(self: *FirstPass, op: *pir.Operated) anyerror!void {
     const cls = switch (op.value) {
         .CLASS => |cl| cl,
         else => return,
@@ -717,7 +717,7 @@ fn checkClass(self: *FirstPass, op: *ir.Operated) anyerror!void {
 /// needs: none
 /// asserts:
 ///     * ranges are correct
-fn checkRange(self: *FirstPass, r: ir.Range) !void {
+fn checkRange(self: *FirstPass, r: pir.Range) !void {
     if (r.isChar() or r.from < r.to) {
         return;
     }
@@ -747,7 +747,7 @@ fn checkRange(self: *FirstPass, r: ir.Range) !void {
 ///
 /// needs:
 ///     * the identifiers hash map should be populated
-fn checkIdentifier(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn checkIdentifier(self: *FirstPass, op: *pir.Operated) anyerror!void {
     const ident = switch (op.value) {
         .IDENTIFIER => |id| id,
         .ID => unreachable,
@@ -773,7 +773,7 @@ fn checkIdentifier(self: *FirstPass, op: *ir.Operated) anyerror!void {
 ///     * accpepts_eps needs to be set correctly
 /// asserts:
 ///     * no possible left recursions in the grammar
-fn buildRelations(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn buildRelations(self: *FirstPass, def: *pir.Definition) anyerror!void {
     const seqs = def.sequences.items;
     for (seqs) |seq| {
         const ops = seq.operateds.items;
@@ -859,7 +859,7 @@ fn addRelation(
 ///     * the identifiers hash map should be populated
 /// change bounds:
 ///     * no operateds have the `IDENTIFIER` field populated
-fn desugarIdentifierSequence(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn desugarIdentifierSequence(self: *FirstPass, seq: *pir.Sequence) anyerror!void {
     for (seq.operateds.items) |*op| {
         op.value = switch (op.value) {
             .IDENTIFIER => |ident| .{ .ID = self.idents.get(ident).? },
@@ -880,8 +880,8 @@ fn desugarIdentifierSequence(self: *FirstPass, seq: *ir.Sequence) anyerror!void 
 ///     * no operateds with the star operator will exist
 fn desugarStarSequence(
     self: *FirstPass,
-    seq: *ir.Sequence,
-) anyerror!?ir.Definition {
+    seq: *pir.Sequence,
+) anyerror!?pir.Definition {
     var i: usize = 0;
     const allocator = self.ir.allocator;
     while (i < seq.operateds.items.len) : (i += 1) {
@@ -890,11 +890,11 @@ fn desugarStarSequence(
             continue;
         }
 
-        var sequences = std.ArrayList(ir.Sequence).init(allocator);
-        var body_ops = std.ArrayList(ir.Operated).init(allocator);
-        var end_ops = std.ArrayList(ir.Operated).init(allocator);
+        var sequences = std.ArrayList(pir.Sequence).init(allocator);
+        var body_ops = std.ArrayList(pir.Operated).init(allocator);
+        var end_ops = std.ArrayList(pir.Operated).init(allocator);
         const new_id = self.ir.defs.items.len;
-        try body_ops.append(ir.Operated.initId(
+        try body_ops.append(pir.Operated.initId(
             new_id,
             try op.return_type.clone(allocator),
             .NONE,
@@ -911,16 +911,16 @@ fn desugarStarSequence(
             .prefix_op = .NONE,
             .postfix_op = .NONE,
             .value = .EPSILON,
-            .return_type = ir.ReturnType.empty(),
+            .return_type = pir.ReturnType.empty(),
         });
 
-        const ActionList = std.ArrayList(ir.ActionVar);
+        const ActionList = std.ArrayList(pir.ActionVar);
         try sequences.append(.{
             .operateds = end_ops,
             .action = if (op.return_type.isExistant()) .{
-                .rets = std.ArrayList(ir.ActionReturn).init(allocator),
+                .rets = std.ArrayList(pir.ActionReturn).init(allocator),
                 .bases = blk: {
-                    var bases = std.ArrayList(ir.ActionBase).init(allocator);
+                    var bases = std.ArrayList(pir.ActionBase).init(allocator);
                     try bases.append(.{
                         .data = try std.fmt.allocPrint(
                             allocator,
@@ -929,7 +929,7 @@ fn desugarStarSequence(
                         ),
                         .owned = true,
                         .action_vars = ActionList.init(allocator),
-                        .return_type = ir.ReturnType.impl(),
+                        .return_type = pir.ReturnType.impl(),
                         .id = 0,
                         .mut = false,
                     });
@@ -937,15 +937,15 @@ fn desugarStarSequence(
                 },
                 .implicit = false,
                 .use_match = false,
-            } else ir.Action.empty(allocator),
+            } else pir.Action.empty(allocator),
             .string = "",
         });
         try sequences.append(.{
             .operateds = body_ops,
             .action = if (!op.return_type.isNone())
-                try ir.Action.popAddList(allocator, 1, 0)
+                try pir.Action.popAddList(allocator, 1, 0)
             else
-                ir.Action.empty(allocator),
+                pir.Action.empty(allocator),
             .string = "",
         });
         op.value.deinit(allocator);
@@ -954,7 +954,7 @@ fn desugarStarSequence(
         };
         op.postfix_op = .NONE;
         const defs = self.ir.defs.items;
-        const new_def: ir.Definition = .{
+        const new_def: pir.Definition = .{
             .identifier = "",
             .return_type = try op.return_type.clone(allocator),
             .sequences = sequences,
@@ -978,7 +978,7 @@ fn desugarStarSequence(
 ///     * sequences should be canonicalized
 /// asserts:
 ///     * no weird epsilons
-fn checkEpsWithOp(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn checkEpsWithOp(self: *FirstPass, op: *pir.Operated) anyerror!void {
     switch (op.value) {
         .EPSILON => {},
         // an empty literal is essentially an epsilon
@@ -1007,7 +1007,7 @@ fn checkEpsWithOp(self: *FirstPass, op: *ir.Operated) anyerror!void {
 ///
 /// needs:
 ///     * no operated sequences
-fn typingPass(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn typingPass(self: *FirstPass, def: *pir.Definition) anyerror!void {
     for (def.sequences.items) |*seq| {
         for (seq.operateds.items) |*op| {
             assert(op.return_type.isImplicit() or op.return_type.isNone());
@@ -1025,7 +1025,7 @@ fn typingPass(self: *FirstPass, def: *ir.Definition) anyerror!void {
     // the inferred type for the definition (if needed)
     // is the tupelized type of the first branch
     const allocator = self.ir.allocator;
-    var returns = std.ArrayList(ir.ReturnType).init(allocator);
+    var returns = std.ArrayList(pir.ReturnType).init(allocator);
     defer returns.deinit();
 
     const first_sequence = def.sequences.items[0];
@@ -1034,7 +1034,7 @@ fn typingPass(self: *FirstPass, def: *ir.Definition) anyerror!void {
         try returns.append(op.return_type);
     }
 
-    def.return_type = try ir.ReturnType.tupelize(allocator, returns.items);
+    def.return_type = try pir.ReturnType.tupelize(allocator, returns.items);
 }
 
 /// resolve implicit actions
@@ -1043,7 +1043,7 @@ fn typingPass(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///     * all types should be set
 /// change bounds:
 ///     * no implicit actions are left
-fn appendImplicitActions(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn appendImplicitActions(self: *FirstPass, seq: *pir.Sequence) anyerror!void {
     if (!seq.action.implicit) return;
     const allocator = self.ir.allocator;
     var return_types = std.ArrayList(usize).init(allocator);
@@ -1060,7 +1060,7 @@ fn appendImplicitActions(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
         try return_types.append(i);
     }
 
-    seq.action = try ir.Action.returnBack(allocator, return_types.items);
+    seq.action = try pir.Action.returnBack(allocator, return_types.items);
 }
 
 /// linearize the grammar
@@ -1069,7 +1069,7 @@ fn appendImplicitActions(self: *FirstPass, seq: *ir.Sequence) anyerror!void {
 ///     * no resolved types
 /// change bounds:
 ///     * no operated sequences
-fn desugarSequences(self: *FirstPass, op: *ir.Operated) anyerror!?ir.Definition {
+fn desugarSequences(self: *FirstPass, op: *pir.Operated) anyerror!?pir.Definition {
     return switch (op.value) {
         .SEQ => try self.extractDefinition(op),
         else => null,
@@ -1084,19 +1084,19 @@ fn desugarSequences(self: *FirstPass, op: *ir.Operated) anyerror!?ir.Definition 
 ///     * no question operators for operateds
 fn desugarQuestionOp(
     self: *FirstPass,
-    op: *ir.Operated,
-) anyerror!?ir.Definition {
+    op: *pir.Operated,
+) anyerror!?pir.Definition {
     const allocator = self.ir.allocator;
     if (op.postfix_op != .QUESTION)
         return null;
 
     op.postfix_op = .NONE;
     var def = try self.extractDefinition(op);
-    var empty_seq = try ir.Sequence.empty(allocator);
+    var empty_seq = try pir.Sequence.empty(allocator);
     empty_seq.action = if (def.return_type.isNone())
-        ir.Action.empty(allocator)
+        pir.Action.empty(allocator)
     else
-        try ir.Action.nullAction(allocator);
+        try pir.Action.nullAction(allocator);
     try def.sequences.insert(0, empty_seq);
 
     return def;
@@ -1110,8 +1110,8 @@ fn desugarQuestionOp(
 ///     * there are no plus operators for operateds
 fn desugarPlusSequence(
     self: *FirstPass,
-    seq: *ir.Sequence,
-) anyerror!?ir.Definition {
+    seq: *pir.Sequence,
+) anyerror!?pir.Definition {
     const ops = seq.operateds.items;
     const allocator = self.ir.allocator;
     for (ops) |*op| {
@@ -1135,7 +1135,7 @@ fn desugarPlusSequence(
 
         if (new_def.return_type.isExistant()) {
             new_sequence.action.deinit(allocator);
-            new_sequence.action = try ir.Action.popAddList(allocator, 1, 0);
+            new_sequence.action = try pir.Action.popAddList(allocator, 1, 0);
         }
 
         assert(op.postfix_op == .NONE);
@@ -1152,7 +1152,7 @@ fn desugarPlusSequence(
 /// change bounds:
 ///     * no epsilons left
 ///     (an epsilon is everything that matches a string of length 0)
-fn removeEps(_: *FirstPass, seq: *ir.Sequence) anyerror!void {
+fn removeEps(_: *FirstPass, seq: *pir.Sequence) anyerror!void {
     var ops = &seq.operateds;
     var read: usize = 0;
 
@@ -1178,7 +1178,7 @@ fn removeEps(_: *FirstPass, seq: *ir.Sequence) anyerror!void {
 ///     * all epsilons should be removed
 /// change bounds:
 ///     * the `accpets_eps` field is correctly set
-fn setAcceptsEps(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn setAcceptsEps(self: *FirstPass, def: *pir.Definition) anyerror!void {
     const seqs = def.sequences.items;
     outer: for (seqs) |seq| {
         const ops = seq.operateds.items;
@@ -1209,8 +1209,8 @@ fn setAcceptsEps(self: *FirstPass, def: *ir.Definition) anyerror!void {
 ///         the prefix operator will remain on the base
 fn extractDefinition(
     self: *FirstPass,
-    op: *ir.Operated,
-) !ir.Definition {
+    op: *pir.Operated,
+) !pir.Definition {
     const allocator = self.ir.allocator;
     const new_seq = switch (op.value) {
         .SEQ => |*seq| blk: {
@@ -1229,18 +1229,18 @@ fn extractDefinition(
 
             assert(!all_impl or vals.items.len == 0);
             seq.action = if (all_impl)
-                ir.Action.impl()
+                pir.Action.impl()
             else
-                try ir.Action.returnBack(allocator, vals.items);
+                try pir.Action.returnBack(allocator, vals.items);
             break :blk seq.*;
         },
-        else => try ir.Sequence.init(
+        else => try pir.Sequence.init(
             allocator,
             &.{op.*},
             if (op.return_type.isImplicit())
-                ir.Action.impl()
+                pir.Action.impl()
             else
-                try ir.Action.returnBack(
+                try pir.Action.returnBack(
                     allocator,
                     if (op.return_type.isNone()) &.{} else &.{0},
                 ),
@@ -1249,7 +1249,7 @@ fn extractDefinition(
     };
 
     const return_types = try allocator.alloc(
-        ir.ReturnType,
+        pir.ReturnType,
         new_seq.operateds.items.len,
     );
     defer allocator.free(return_types);
@@ -1258,17 +1258,17 @@ fn extractDefinition(
         return_types[i] = ret.return_type;
     }
 
-    const return_type = try ir.ReturnType.tupelize(allocator, return_types);
+    const return_type = try pir.ReturnType.tupelize(allocator, return_types);
 
     const defs = self.ir.defs.items;
-    const def = try ir.Definition.init(
+    const def = try pir.Definition.init(
         allocator,
         &.{new_seq},
         "",
         return_type,
         defs.len,
     );
-    op.* = ir.Operated.initId(
+    op.* = pir.Operated.initId(
         defs.len,
         try return_type.clone(allocator),
         op.prefix_op,
@@ -1283,7 +1283,7 @@ fn extractDefinition(
 }
 
 /// currently not used
-fn inlineDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn inlineDefs(self: *FirstPass, def: *pir.Definition) anyerror!void {
     var i: usize = 1;
     const allocator = self.ir.allocator;
     const seqs = &def.sequences;
@@ -1291,7 +1291,7 @@ fn inlineDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
         const seq = &seqs.items[i - 1];
         var id: usize = 0;
         var index: usize = 0;
-        var to_inline: *ir.Definition = undefined;
+        var to_inline: *pir.Definition = undefined;
         var found = false;
 
         outer: for (seq.operateds.items, 0..) |op, j| {
@@ -1349,14 +1349,14 @@ fn inlineDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
     }
 }
 
-fn inlineOneSeqDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
+fn inlineOneSeqDefs(self: *FirstPass, def: *pir.Definition) anyerror!void {
     var i: usize = 1;
     const seqs = &def.sequences;
     while (i <= seqs.items.len) : (i += 1) {
         const seq = &seqs.items[i - 1];
         var id: usize = 0;
         var index: usize = 0;
-        var to_inline: *ir.Definition = undefined;
+        var to_inline: *pir.Definition = undefined;
         var found = false;
 
         for (seq.operateds.items, 0..) |op, j| {
@@ -1411,8 +1411,8 @@ fn inlineOneSeqDefs(self: *FirstPass, def: *ir.Definition) anyerror!void {
 
 fn inlineSeq(
     self: *FirstPass,
-    to: *ir.Sequence,
-    from: *const ir.Sequence,
+    to: *pir.Sequence,
+    from: *const pir.Sequence,
     replace: usize,
     var_name: usize,
 ) !void {
@@ -1433,7 +1433,7 @@ fn inlineSeq(
     for (to.action.rets.items) |*ret| {
         const old_index = @divExact(
             @intFromPtr(ret.ret_op) - @intFromPtr(base_ptr),
-            @sizeOf(ir.Operated),
+            @sizeOf(pir.Operated),
         );
         const new_index = old_index +
             @as(usize, if (old_index >= replace) clone.operateds.items.len else 1) - 1;
@@ -1451,10 +1451,10 @@ fn inlineSeq(
 
 fn inlineAction(
     self: *FirstPass,
-    to: *ir.Action,
-    from: ir.Action,
-    old_ops: []const ir.Operated,
-    added_ops: []const ir.Operated,
+    to: *pir.Action,
+    from: pir.Action,
+    old_ops: []const pir.Operated,
+    added_ops: []const pir.Operated,
     id: usize,
 ) !void {
     const allocator = self.ir.allocator;
@@ -1491,7 +1491,7 @@ fn inlineAction(
     for (from_rets, append_slice) |from_ret, *to_ret| {
         const op_index = @divExact(
             @intFromPtr(from_ret.ret_op) - @intFromPtr(old_ops.ptr),
-            @sizeOf(ir.Operated),
+            @sizeOf(pir.Operated),
         );
 
         assert(&old_ops[op_index] == from_ret.ret_op);
@@ -1527,7 +1527,7 @@ fn inlineAction(
 
 fn defAppendPass(
     self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, def: *ir.Definition) anyerror!?ir.Definition,
+    comptime pass: fn (self: *FirstPass, def: *pir.Definition) anyerror!?pir.Definition,
     comptime name: []const u8,
 ) !void {
     var progress = self.main_progress.start(name, 0);
@@ -1550,7 +1550,7 @@ fn defAppendPass(
 fn defPass(
     self: *FirstPass,
     comptime backwards: bool,
-    comptime pass: fn (self: *FirstPass, def: *ir.Definition) anyerror!void,
+    comptime pass: fn (self: *FirstPass, def: *pir.Definition) anyerror!void,
     comptime name: []const u8,
 ) !void {
     var progress = self.main_progress.start(name, 0);
@@ -1570,11 +1570,11 @@ fn defPass(
 
 fn seqPass(
     self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!void,
+    comptime pass: fn (self: *FirstPass, seq: *pir.Sequence) anyerror!void,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!void {
+        pub fn sequence_iter(s: *FirstPass, def: *pir.Definition) anyerror!void {
             for (def.sequences.items) |*seq| {
                 try pass(s, seq);
             }
@@ -1586,11 +1586,11 @@ fn seqPass(
 
 fn seqAppendDefPass(
     self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Definition,
+    comptime pass: fn (self: *FirstPass, seq: *pir.Sequence) anyerror!?pir.Definition,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!?ir.Definition {
+        pub fn sequence_iter(s: *FirstPass, def: *pir.Definition) anyerror!?pir.Definition {
             for (def.sequences.items) |*seq| {
                 if (try pass(s, seq)) |new_def| {
                     return new_def;
@@ -1606,11 +1606,11 @@ fn seqAppendDefPass(
 
 fn seqAppendPass(
     self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Sequence,
+    comptime pass: fn (self: *FirstPass, seq: *pir.Sequence) anyerror!?pir.Sequence,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, def: *ir.Definition) anyerror!void {
+        pub fn sequence_iter(s: *FirstPass, def: *pir.Definition) anyerror!void {
             var i: usize = 0;
             while (i < def.sequences.items.len) {
                 const seq = &def.sequences.items[i];
@@ -1630,11 +1630,11 @@ fn seqAppendPass(
 
 fn opAppendDefPass(
     self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, op: *ir.Operated) anyerror!?ir.Definition,
+    comptime pass: fn (self: *FirstPass, op: *pir.Operated) anyerror!?pir.Definition,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn sequence_iter(s: *FirstPass, seq: *ir.Sequence) anyerror!?ir.Definition {
+        pub fn sequence_iter(s: *FirstPass, seq: *pir.Sequence) anyerror!?pir.Definition {
             for (seq.operateds.items) |*op| {
                 if (try pass(s, op)) |new_def| {
                     return new_def;
@@ -1650,11 +1650,11 @@ fn opAppendDefPass(
 
 fn opPass(
     self: *FirstPass,
-    comptime pass: fn (self: *FirstPass, op: *ir.Operated) anyerror!void,
+    comptime pass: fn (self: *FirstPass, op: *pir.Operated) anyerror!void,
     comptime name: []const u8,
 ) !void {
     const Iter = struct {
-        pub fn op_iter(s: *FirstPass, seq: *ir.Sequence) anyerror!void {
+        pub fn op_iter(s: *FirstPass, seq: *pir.Sequence) anyerror!void {
             for (seq.operateds.items) |*op| {
                 try pass(s, op);
             }
@@ -1672,7 +1672,7 @@ fn opPass(
 ///     * there are no operated sequences
 /// change bounds:
 ///     * the given operated is typed
-fn setReturnType(self: *FirstPass, op: *ir.Operated) anyerror!void {
+fn setReturnType(self: *FirstPass, op: *pir.Operated) anyerror!void {
     const allocator = self.ir.allocator;
 
     op.return_type.deinit(allocator);
@@ -1681,32 +1681,32 @@ fn setReturnType(self: *FirstPass, op: *ir.Operated) anyerror!void {
             const def = self.getDefinition(id);
             assert(!def.return_type.isImplicit());
             if (op.prefix_op != .NONE) {
-                break :blk ir.ReturnType.empty();
+                break :blk pir.ReturnType.empty();
             }
 
             if (op.postfix_op == .QUESTION) {
-                break :blk try ir.ReturnType.nullablize(
+                break :blk try pir.ReturnType.nullablize(
                     allocator,
                     def.return_type,
                 );
             }
 
             break :blk if (op.postfix_op != .NONE)
-                try ir.ReturnType.listify(allocator, &def.return_type)
+                try pir.ReturnType.listify(allocator, &def.return_type)
             else
                 try def.return_type.clone(allocator);
         },
         .IDENTIFIER,
         .SEQ,
         => unreachable,
-        else => ir.ReturnType.empty(),
+        else => pir.ReturnType.empty(),
     };
 }
 
 fn typeError(
     self: *FirstPass,
-    current_op: *ir.Operated,
-    new_op: *ir.Operated,
+    current_op: *pir.Operated,
+    new_op: *pir.Operated,
 ) !void {
     self.pass = false;
     const allocator = self.ir.allocator;
@@ -1734,6 +1734,6 @@ fn typeError(
     );
 }
 
-fn getDefinition(self: *FirstPass, id: usize) *ir.Definition {
+fn getDefinition(self: *FirstPass, id: usize) *pir.Definition {
     return &self.ir.defs.items[id];
 }

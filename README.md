@@ -18,7 +18,7 @@ so the project has to be built from source.
 
 ### Build Requirements
 
-* zig >= 0.13.0-dev.344+b2588de6c
+* zig >= 0.14.0
 
 ### Building The project
 

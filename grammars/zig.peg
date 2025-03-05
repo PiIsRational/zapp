@@ -494,7 +494,6 @@ PrefixTypeOp
     ;
 
 PtrTypeSpecifier
-    // Would like to find an example of that one
     = KEYWORD_align LPAREN Expr COLON ^ Expr COLON Expr RPAREN
     | SliceTypeSpecifier
     ;
@@ -719,7 +718,7 @@ SEMICOLON            = ';'                skip ;
 SLASH                = '/'      ![=]      skip ;
 SLASHEQUAL           = '/='               skip ;
 TILDE                = '~'                skip ;
- 
+
 end_of_word = ![a-zA-Z0-9_] skip ;
 KEYWORD_addrspace   = 'addrspace'   end_of_word ;
 KEYWORD_align       = 'align'       end_of_word ;

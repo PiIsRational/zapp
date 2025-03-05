@@ -46,9 +46,7 @@ pub fn main() !void {
     var parser = try Parser.init(allocator);
     defer parser.deinit();
 
-    const dir = try std.fs.cwd().openDir(args[1], .{
-        .iterate = true,
-    });
+    const dir = try std.fs.cwd().openDir(args[1], .{ .iterate = true });
 
     var files_total: usize = 0;
     var passed_files: usize = 0;

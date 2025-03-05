@@ -298,7 +298,7 @@ const funcs =
     \\    failed: bool, 
     \\    memo: bool, 
     \\) Allocator.Error!void {
-    \\    const frame = self.stack.popOrNull() orelse blk: {
+    \\    const frame = self.stack.pop() orelse blk: {
     \\        self.did_fail = failed;
     \\        break :blk EvalFrame{
     \\            .stack_start = 0,
@@ -423,7 +423,7 @@ const inferFuncs =
     \\}
     \\
     \\fn returnFromInfer(self: *@This(), state: State) Allocator.Error!void {
-    \\    const frame = self.infer_stack.popOrNull() orelse blk: {
+    \\    const frame = self.infer_stack.pop() orelse blk: {
     \\        self.infer_done = true;
     \\        break :blk InferFrame{
     \\            .state = self.infer_state,
@@ -697,9 +697,7 @@ fn parse(self: *CodeGen) !void {
         \\    chars: [:0]const u8, 
         \\) ParserError!ParseReturn {
         \\
-        \\if (chars.len > MaxInputSize) {
-        \\    return error.InputTooLarge;
-        \\}
+        \\if (chars.len > MaxInputSize) return error.InputTooLarge;
         \\
         \\self.reset(chars);
         \\
@@ -899,7 +897,7 @@ fn actionReturnExec(self: *CodeGen, rets: []const lir.LabeledRet) !void {
         const ret = rets[rets.len - 1 - i];
         if (ret.ret.isNone()) continue;
         try self.writer.print(
-            "const @\"${d}\" = self.calc_stack.pop().type_{d};\n",
+            "const @\"${d}\" = self.calc_stack.pop().?.type_{d};\n",
             .{ ret.lbl, ret.place.base },
         );
 
@@ -1014,7 +1012,7 @@ fn infer(self: *CodeGen) !void {
         if (self.parse_return.isNone())
             "void{}"
         else
-            "self.calc_stack.pop().type_0",
+            "self.calc_stack.pop().?.type_0",
     });
 }
 
