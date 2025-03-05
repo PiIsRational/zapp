@@ -15,7 +15,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
+
 const ir = @import("peg_ir.zig");
 const PegIr = ir.PegIr;
 const Passes = @import("peg_check.zig");
@@ -29,17 +31,22 @@ const config = @import("config");
 
 pub const MaxInputSize = 1024 * 1024 * 1024;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer {
-        const leak = gpa.deinit();
-        assert(leak == .ok);
-    }
-    const allocator = gpa.allocator();
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-    try parseArgs(allocator, args);
+pub fn main() !void {
+    const gpa, const is_debug = switch (builtin.mode) {
+        .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+        .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, true },
+    };
+
+    defer if (is_debug) {
+        assert(debug_allocator.deinit() == .ok);
+    };
+
+    const args = try std.process.argsAlloc(gpa);
+    defer std.process.argsFree(gpa, args);
+
+    try parseArgs(gpa, args);
 }
 
 fn parseArgs(allocator: Allocator, args: [][:0]u8) !void {
