@@ -32,18 +32,6 @@ const imports =
     \\const assert = std.debug.assert;
 ;
 
-const helper =
-    \\fn invert(comptime T: type, s: []T) []T {
-    \\    for (0..@divFloor(s.len, 2)) |i| {
-    \\        const j = s.len - 1 - i;
-    \\        std.mem.swap(T, &s[i], &s[j]);
-    \\    }
-    \\
-    \\    return s;
-    \\}
-    \\
-;
-
 const structs =
     \\
     \\const State = u16;
@@ -465,9 +453,6 @@ pub fn generate(
     try writer.print("{s}\n", .{imports});
     try writer.print("\n{s}\n", .{self.ir.top_header});
 
-    // helper(s)
-    try writer.print("{s}\n", .{helper});
-
     // type declarations
     try writer.writeAll(@embedFile("./runtime/memo.zig"));
     try self.returnTypes();
@@ -528,14 +513,10 @@ fn parseReturn(self: *CodeGen) !void {
 
 fn genTopLevelComment(self: *CodeGen) !void {
     const writer = self.writer;
-
     for (self.ir.top_level_comment) |content| {
         try writer.print("//{s}\n", .{content});
     }
-
-    if (self.ir.top_level_comment.len > 0) {
-        try writer.print("\n", .{});
-    }
+    if (self.ir.top_level_comment.len > 0) try writer.writeByte('\n');
 }
 
 fn resetMemo(self: *CodeGen) !void {
@@ -549,13 +530,12 @@ fn resetMemo(self: *CodeGen) !void {
         \\    self.memo.resetTo(new_begin);
         \\}
     ;
-    try self.writer.print(
-        "fn resetMemo(self: *@This(), new_begin: usize) Allocator.Error!void {{\n",
-        .{},
+    try self.writer.writeAll(
+        "fn resetMemo(self: *@This(), new_begin: usize) Allocator.Error!void {\n",
     );
 
     if (!self.ir.is_acceptor) {
-        try self.writer.print("try self.finalizeInferInstrs();\n", .{});
+        try self.writer.writeAll("try self.finalizeInferInstrs();\n");
     }
     try self.writer.print("{s}\n", .{resetMemoRest});
 }

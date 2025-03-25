@@ -108,7 +108,7 @@ fn sendHelp(err: bool) !void {
         \\
         \\the options are:
         \\
-        \\  --name=[string]      sets the name to the genrated parser 
+        \\  --name=[string]      sets the name to the generated parser 
         \\                       (default: the grammar name)
         \\  --verbose-ir=[bool]  prints the peg ir of the source after
         \\                       transformations (default: false)

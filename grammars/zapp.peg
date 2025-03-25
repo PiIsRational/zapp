@@ -39,7 +39,9 @@ ir: PegIr,
 %%
 
 Grammar = Spacing (TopLevelComment Spacing)* Name MetaData Definition+ FileEnd {
-    self.ir.top_level_comment = invert([]const u8, try $*2.toOwnedSlice());
+    const slice = try $*2.toOwnedSlice();
+    std.mem.reverse([]const u8, slice);
+    self.ir.top_level_comment = slice;
 };
 
 // the metadata
@@ -237,8 +239,18 @@ IdentCont
     ;
 
 Literal: "[]const u8" 
-    = ['] (!['] Char)* ['] Spacing { invert(u8, try $*2.toOwnedSlice()) }
-    | ["] (!["] Char)* ["] Spacing { invert(u8, try $*2.toOwnedSlice()) }
+    = ['] (!['] Char)* ['] Spacing { blk: {
+        const slice =  try $*2.toOwnedSlice();
+        std.mem.reverse(u8, slice);
+        break: blk slice;
+    }
+}
+    | ["] (!["] Char)* ["] Spacing { blk: {
+        const slice =  try $*2.toOwnedSlice();
+        std.mem.reverse(u8, slice);
+        break: blk slice;
+    }
+}
     ;
 
 Class: Class = '[' (!']' Range)* ']' Spacing { .{ .content = $2 } };
