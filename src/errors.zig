@@ -16,6 +16,7 @@
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Writer = std.io.Writer;
 
 const su = @import("string_utils.zig");
 
@@ -67,6 +68,7 @@ pub const PrintError = error{
 
 pub fn parseError(
     allocator: Allocator,
+    writer: *Writer,
     path: ?[]const u8,
     src: []const u8,
     last_matched: []const u8,
@@ -74,12 +76,13 @@ pub fn parseError(
 ) !void {
     const message = try std.fmt.allocPrint(
         allocator,
-        "expected '{s}'",
+        "expected '{f}'",
         .{su.toLower(expected_after)},
     );
     defer allocator.free(message);
 
     try print(
+        writer,
         "unexpected character sequence",
         path,
         src,
@@ -102,7 +105,8 @@ pub fn parseError(
     );
 }
 
-/// sends a message to stderr
+/// sends a message to writer
+/// `writer`: the writer for the error message (should be stderr)
 /// `message`: the main error message
 /// `file`: the path to the file in which the error occured
 /// `base`: the text representation of the file
@@ -110,6 +114,7 @@ pub fn parseError(
 ///
 /// the function shows one main place (the first arg)
 pub fn print(
+    writer: *Writer,
     message: []const u8,
     file: ?[]const u8,
     base: []const u8,
@@ -122,40 +127,31 @@ pub fn print(
         return PrintError.TOO_MUCH_ARGS;
     }
 
-    const stderr = std.io.getStdErr().writer();
     if (args.len == 0) {
-        try sendError(
-            message,
-            Names.get(.ERROR),
-            Colors.get(.ERROR),
-        );
-        try stderr.print("\n", .{});
+        try sendError(writer, message, Names.get(.ERROR), Colors.get(.ERROR));
+        try writer.writeByte('\n');
         return;
     }
 
-    try sendError(
-        message,
-        Names.get(args[0].t),
-        Colors.get(args[0].t),
-    );
+    try sendError(writer, message, Names.get(args[0].t), Colors.get(args[0].t));
 
     const place = args[0].place;
     const first_line = getFirstLineOf(base, place) orelse {
-        try stderr.print("\n", .{});
+        try writer.writeByte('\n');
         return;
     };
 
     if (file) |file_name| {
-        try stderr.print(Dim ++ " [{s}:{d}:{d}]\n" ++ Reset, .{
+        try writer.print(Dim ++ " [{s}:{d}:{d}]\n" ++ Reset, .{
             file_name,
             first_line.line.lineno,
             first_line.content_start + 1,
         });
     } else {
-        try stderr.print("\n", .{});
+        try writer.print("\n", .{});
     }
 
-    try stderr.print(Dim ++ "     |\n" ++ Reset, .{});
+    try writer.print(Dim ++ "     |\n" ++ Reset, .{});
 
     var lineData: [MaxArgs]LineContent = undefined;
     var conversions: [MaxArgs]usize = undefined;
@@ -179,69 +175,58 @@ pub fn print(
 
         if (arg.t == .HELP) {
             try sendSimpleMessage(
+                writer,
                 Colors.get(arg.t),
                 Names.get(arg.t),
                 arg.msg,
             );
         } else {
-            try sendLineMessage(
-                Colors.get(arg.t),
-                arg.msg,
-                line,
-            );
+            try sendLineMessage(writer, Colors.get(arg.t), arg.msg, line);
         }
 
         if (multiple_lines) {
-            try stderr.print(Dim ++ "    ...\n" ++ Reset, .{});
+            try writer.writeAll(Dim ++ "    ...\n" ++ Reset);
         }
 
         last_lineno = line.line.lineno;
     }
 
-    try stderr.print("\n", .{});
+    try writer.writeByte('\n');
 }
 
 fn sendSimpleMessage(
+    writer: *Writer,
     color: []const u8,
     base: []const u8,
     msg: []const u8,
 ) !void {
-    const stderr = std.io.getStdErr().writer();
-    try stderr.print("{s}{s}:" ++ Reset ++ " {s}\n", .{ color, base, msg });
+    try writer.print("{s}{s}:" ++ Reset ++ " {s}\n", .{ color, base, msg });
 }
 
 fn sendLineMessage(
+    writer: *Writer,
     color: []const u8,
     message: []const u8,
     line: LineContent,
 ) !void {
-    const stderr = std.io.getStdErr().writer();
-
-    try stderr.print("{d:>4} " ++ Dim ++ "|" ++ Reset ++ " {s}\n", .{
+    try writer.print("{d:>4} " ++ Dim ++ "|" ++ Reset ++ " {s}\n", .{
         line.line.lineno,
         line.line.line,
     });
-    try stderr.print(Dim ++ "     | ", .{});
-
-    for (0..line.content_start) |_| {
-        try stderr.print(" ", .{});
-    }
-
-    try stderr.print(Reset ++ "{s}", .{color});
-    for (0..line.content.len) |_| {
-        try stderr.print("^", .{});
-    }
-
-    try stderr.print(" {s}\n" ++ Reset, .{message});
+    try writer.writeAll(Dim ++ "     | ");
+    _ = try writer.splatByte(' ', line.content_start);
+    try writer.print(Reset ++ "{s}", .{color});
+    _ = try writer.splatByte('^', line.content.len);
+    try writer.print(" {s}\n" ++ Reset, .{message});
 }
 
 fn sendError(
+    writer: *Writer,
     message: []const u8,
     case: []const u8,
     color: []const u8,
 ) !void {
-    const stderr = std.io.getStdErr().writer();
-    try stderr.print(
+    try writer.print(
         "{s}{s}:" ++ Reset ++ Bold ++ " {s}" ++ Reset,
         .{ color, case, message },
     );
@@ -297,7 +282,7 @@ fn getLineOf(
     // check that place is somewhere in base
     if (@intFromPtr(place.ptr) < @intFromPtr(base.ptr) or
         @intFromPtr(place.ptr + place.len) >
-        @intFromPtr(base.ptr + base.len))
+            @intFromPtr(base.ptr + base.len))
     {
         return null;
     }

@@ -23,13 +23,14 @@ const Version = std.SemanticVersion{
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const exe = b.addExecutable(.{
-        .name = "zapp",
+
+    const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
+    const exe = b.addExecutable(.{ .name = "zapp", .root_module = mod });
     const options = b.addOptions();
 
     options.addOption(std.SemanticVersion, "Version", Version);
@@ -48,11 +49,7 @@ pub fn build(b: *std.Build) !void {
     run_step.dependOn(&run_cmd.step);
 
     // test
-    const exe_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const exe_unit_tests = b.addTest(.{ .root_module = mod });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
     const test_step = b.step("test", "Run unit tests");
@@ -76,9 +73,11 @@ pub fn build(b: *std.Build) !void {
         );
 
         const grammar_unit_tests = b.addTest(.{
-            .root_source_file = b.path(main_path),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(main_path),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
 
         grammar_unit_tests.root_module.addAnonymousImport("parser", .{
@@ -122,10 +121,12 @@ pub fn build(b: *std.Build) !void {
 
     const bench = b.addExecutable(.{
         .name = "bench",
-        .root_source_file = b.path("src/bench_main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .omit_frame_pointer = false,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/bench_main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .omit_frame_pointer = false,
+        }),
     });
 
     bench.root_module.addAnonymousImport("parser", .{

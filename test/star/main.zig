@@ -26,10 +26,10 @@ test "Get right list" {
     var p = try Star.init(allocator);
     defer p.deinit();
 
-    const result = try p.parse(to_parse);
+    var result = try p.parse(to_parse);
     try expect(switch (result) {
-        .pass => |val| blk: {
-            defer val.deinit();
+        .pass => |*val| blk: {
+            defer val.deinit(allocator);
             break :blk std.mem.eql(usize, val.items, &to_compare);
         },
         else => false,
@@ -71,10 +71,10 @@ test "Pass empty" {
     var p = try Star.init(allocator);
     defer p.deinit();
 
-    const result = try p.parse(to_parse);
+    var result = try p.parse(to_parse);
     try expect(switch (result) {
-        .pass => |val| blk: {
-            defer val.deinit();
+        .pass => |*val| blk: {
+            defer val.deinit(allocator);
             break :blk val.items.len == 0;
         },
         else => false,

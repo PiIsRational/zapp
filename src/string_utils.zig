@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const Writer = std.fs.File.Writer;
+const Writer = std.io.Writer;
 
 pub fn printDelim(
     comptime T: type,
@@ -35,22 +35,18 @@ fn DelimPrinter(comptime T: type, comptime delimiter: []const u8) type {
 
         const Self = @This();
         pub fn init(values: []const T) Self {
-            return .{
-                .vals = values,
-            };
+            return .{ .vals = values };
         }
 
         pub fn format(
             self: Self,
-            comptime _: []const u8,
-            _: std.fmt.FormatOptions,
-            writer: anytype,
+            writer: *Writer,
         ) !void {
             if (self.vals.len == 0) return;
-            try writer.print("{s}", .{self.vals[0]});
+            try writer.print("{f}", .{self.vals[0]});
             for (self.vals[1..]) |val| {
                 try writer.print("{s}", .{delimiter});
-                try writer.print("{s}", .{val});
+                try writer.print("{f}", .{val});
             }
         }
     };
@@ -65,9 +61,7 @@ pub const LowerCasePrinter = struct {
 
     pub fn format(
         self: @This(),
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
         for (self.string) |char| {
             switch (char) {
@@ -78,23 +72,19 @@ pub const LowerCasePrinter = struct {
     }
 };
 
-pub fn writeChar(writer: anytype, char: u8) !void {
+pub fn writeChar(writer: *Writer, char: u8) !void {
     try writer.print("'", .{});
     try writeCharacter(writer, char);
     try writer.print("'", .{});
 }
 
-pub fn writeString(writer: anytype, string: []const u8) !void {
+pub fn writeString(writer: *Writer, string: []const u8) !void {
     try writer.print("\"", .{});
-
-    for (string) |char| {
-        try writeCharacter(writer, char);
-    }
-
+    for (string) |char| try writeCharacter(writer, char);
     try writer.print("\"", .{});
 }
 
-pub fn writeCharacter(writer: anytype, char: u8) !void {
+pub fn writeCharacter(writer: *Writer, char: u8) !void {
     switch (char) {
         '\n' => try writer.print("\\n", .{}),
         '\t' => try writer.print("\\t", .{}),
@@ -116,20 +106,13 @@ const Times = struct {
 
     const Self = @This();
     pub fn init(value: []const u8, n: usize) Self {
-        return .{
-            .val = value,
-            .n = n,
-        };
+        return .{ .val = value, .n = n };
     }
 
     pub fn format(
         self: Self,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        for (0..self.n) |_| {
-            try writer.print("{s}", .{self.val});
-        }
+        for (0..self.n) |_| try writer.print("{s}", .{self.val});
     }
 };

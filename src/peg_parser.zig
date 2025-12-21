@@ -75,14 +75,15 @@ fn UnorderedMemo(comptime T: type, comptime size: usize) type {
         free_list: MemoIndex,
         values: stdlib.ArrayList(Cell),
 
-        pub fn init(allocator: stdlib.mem.Allocator) @This() {
-            return .{
-                .free_list = .empty,
-                .values = stdlib.ArrayList(Cell).init(allocator),
-            };
+        pub fn init() @This() {
+            return .{ .free_list = .empty, .values = .{} };
         }
 
-        pub fn new(self: *@This(), comptime default: T) !MemoIndex {
+        pub fn new(
+            self: *@This(),
+            comptime default: T,
+            gpa: stdlib.mem.Allocator,
+        ) !MemoIndex {
             const cell_default: Cell = .{ .table = [1]T{default} ** size };
             if (self.free_list.unwrap()) |value| {
                 const index = self.free_list;
@@ -91,8 +92,8 @@ fn UnorderedMemo(comptime T: type, comptime size: usize) type {
                 return index;
             }
 
-            try self.values.append(cell_default);
-            return MemoIndex.init(@intCast(self.values.items.len - 1));
+            try self.values.append(gpa, cell_default);
+            return .init(@intCast(self.values.items.len - 1));
         }
 
         pub fn free(self: *@This(), index: MemoIndex) void {
@@ -114,8 +115,8 @@ fn UnorderedMemo(comptime T: type, comptime size: usize) type {
             return &self.values.items[index.unwrap() orelse unreachable].table[rule];
         }
 
-        pub fn deinit(self: *@This()) void {
-            self.values.deinit();
+        pub fn deinit(self: *@This(), gpa: stdlib.mem.Allocator) void {
+            self.values.deinit(gpa);
         }
     };
 }
@@ -134,6 +135,7 @@ fn MemoTable(comptime config: MemoConfig) type {
         base_table: stdlib.ArrayList([Chunks]MemoIndex),
         lengths: [Chunks]LengthSubMemo,
         states: [Chunks]StateSubMemo,
+        gpa: stdlib.mem.Allocator,
 
         fn chunksFromRules() usize {
             return stdlib.math.sqrt(config.rule_count);
@@ -150,20 +152,21 @@ fn MemoTable(comptime config: MemoConfig) type {
             empty: void,
         };
 
-        pub fn init(allocator: stdlib.mem.Allocator) @This() {
+        pub fn init(gpa: stdlib.mem.Allocator) @This() {
             var states = [1]StateSubMemo{undefined} ** Chunks;
             var lengths = [1]LengthSubMemo{undefined} ** Chunks;
             for (&states, &lengths) |*state, *length| {
-                state.* = StateSubMemo.init(allocator);
-                length.* = LengthSubMemo.init(allocator);
+                state.* = .init();
+                length.* = .init();
             }
 
             return .{
                 .max_chars = 0,
                 .start = 0,
-                .base_table = stdlib.ArrayList([Chunks]MemoIndex).init(allocator),
+                .base_table = .{},
                 .states = states,
                 .lengths = lengths,
+                .gpa = gpa,
             };
         }
 
@@ -179,11 +182,11 @@ fn MemoTable(comptime config: MemoConfig) type {
         }
 
         pub fn deinit(self: *@This()) void {
-            self.base_table.deinit();
+            self.base_table.deinit(self.gpa);
 
             for (&self.states, &self.lengths) |*state, *length| {
-                state.deinit();
-                length.deinit();
+                state.deinit(self.gpa);
+                length.deinit(self.gpa);
             }
         }
 
@@ -192,12 +195,12 @@ fn MemoTable(comptime config: MemoConfig) type {
             const lookup_place = chars - self.start;
             if (chars >= self.base_table.items.len + self.start) {
                 const append_size = chars + 1 - self.base_table.items.len - self.start;
-                try self.base_table.appendNTimes([1]MemoIndex{.empty} ** Chunks, append_size);
+                try self.base_table.appendNTimes(self.gpa, [1]MemoIndex{.empty} ** Chunks, append_size);
             } else if (self.base_table.items[lookup_place][first_level_index] != .empty)
                 return;
 
-            const state_idx = try self.states[first_level_index].new(0);
-            const length_idx = try self.lengths[first_level_index].new(0);
+            const state_idx = try self.states[first_level_index].new(0, self.gpa);
+            const length_idx = try self.lengths[first_level_index].new(0, self.gpa);
             stdlib.debug.assert(state_idx != .empty and state_idx == length_idx);
 
             self.base_table.items[lookup_place][first_level_index] = length_idx;
@@ -481,7 +484,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
     return struct {
         chars: [:0]const u8,
         allocator: Allocator,
-        stack: std.ArrayList(EvalFrame),
+        stack: std.array_list.Managed(EvalFrame),
         stack_alloc: ?std.heap.FixedBufferAllocator,
         infer_stack: std.ArrayList(InferFrame),
         calc_stack: std.ArrayList(InferReturnType),
@@ -513,34 +516,33 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             if (opts.stack_limit) |limit| {
                 var stack_alloc = std.heap.FixedBufferAllocator
                     .init(try self.allocator.alloc(u8, @sizeOf(EvalFrame) * limit));
-                self.stack = std.ArrayList(EvalFrame)
-                    .init(stack_alloc.allocator());
+                self.stack = .init(stack_alloc.allocator());
                 try self.stack.ensureTotalCapacity(limit);
                 self.stack_alloc = stack_alloc;
             } else {
                 self.stack_alloc = null;
-                self.stack = std.ArrayList(EvalFrame).init(allocator);
+                self.stack = .init(allocator);
             }
-            self.infer_stack = std.ArrayList(InferFrame).init(allocator);
+            self.infer_stack = .{};
             self.memo = MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks })
                 .init(allocator);
-            self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
-            self.infer_actions = std.ArrayList(InferInstr).init(allocator);
-            self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
+            self.calc_stack = .{};
+            self.infer_actions = .{};
+            self.infer_instrs = .{};
             self.reset("");
             return self;
         }
 
         pub fn deinit(self: *@This()) void {
-            self.infer_actions.deinit();
-            self.infer_instrs.deinit();
+            self.infer_actions.deinit(self.allocator);
+            self.infer_instrs.deinit(self.allocator);
             self.stack.deinit();
             if (self.stack_alloc) |allocator| {
                 self.allocator.free(allocator.buffer);
             }
-            self.infer_stack.deinit();
+            self.infer_stack.deinit(self.allocator);
             self.memo.deinit();
-            self.calc_stack.deinit();
+            self.calc_stack.deinit(self.allocator);
         }
 
         fn reset(self: *@This(), chars: [:0]const u8) void {
@@ -666,7 +668,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
             }
 
             if (look.consuming and good) {
-                try self.infer_actions.append(.{
+                try self.infer_actions.append(self.allocator, .{
                     .length = self.acc,
                     .state = self.state,
                     .start = self.start,
@@ -2541,7 +2543,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
         fn finalizeInferInstrs(self: *@This()) Allocator.Error!void {
             for (self.infer_actions.items) |frame| {
                 if (!opts.use_memo or !frame.memo) {
-                    try self.infer_instrs.append(frame);
+                    try self.infer_instrs.append(self.allocator, frame);
                 } else {
                     try self.memoInfer(frame.state, frame.start);
                 }
@@ -2557,7 +2559,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
         }
 
         fn inferNonterminal(self: *@This(), state: State) Allocator.Error!void {
-            try self.infer_stack.append(.{
+            try self.infer_stack.append(self.allocator, .{
                 .acc = self.infer_acc,
                 .state = self.infer_state,
             });
@@ -2575,7 +2577,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 };
             };
 
-            try self.infer_instrs.append(.{
+            try self.infer_instrs.append(self.allocator, .{
                 .memo = false,
                 .start = frame.acc,
                 .state = state,
@@ -2593,7 +2595,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     var @"$*1" = @"$1";
                     const @"$9": []const u8 = @"$10";
                     self.ir.name = @"$9";
-                    const slice = try @"$*1".toOwnedSlice();
+                    const slice = try @"$*1".toOwnedSlice(self.allocator);
                     std.mem.reverse([]const u8, slice);
                     self.ir.top_level_comment = slice;
                 },
@@ -2608,7 +2610,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                 24 => {},
                 27 => {
                     const @"$ret": []const u8 = self.chars[start .. start + length];
-                    try self.calc_stack.append(.{ .type_2 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_2 = @"$ret" });
                 },
                 31 => {},
                 33 => {
@@ -2624,9 +2626,9 @@ pub fn Zapp(comptime opts: ParseOptions) type {
 
                     _ = self.chars[start .. start + length]; // to prevent inlining
                     var sequences = @"$4";
-                    try sequences.append(@"$3");
+                    try sequences.append(self.ir.allocator, @"$3");
                     const def_cnt = self.ir.defs.items.len;
-                    try self.ir.defs.append(.{
+                    try self.ir.defs.append(self.ir.allocator, .{
                         .id = def_cnt,
                         .identifier = @"$0",
                         .return_type = @"$1",
@@ -2642,16 +2644,16 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     const @"$2" = self.calc_stack.pop().?.type_16;
                     const @"$1": []const u8 = @"$2";
                     const @"$ret": ReturnType = ReturnType.init(@"$1", false, false);
-                    try self.calc_stack.append(.{ .type_5 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_5 = @"$ret" });
                 },
                 50 => {
                     const @"$1" = self.calc_stack.pop().?.type_18;
                     const @"$ret": ReturnType = ReturnType.init(@"$1", true, false);
-                    try self.calc_stack.append(.{ .type_5 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_5 = @"$ret" });
                 },
                 51 => {
                     const @"$ret": ReturnType = ReturnType.empty();
-                    try self.calc_stack.append(.{ .type_5 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_5 = @"$ret" });
                 },
                 56 => {
                     const @"$2" = self.calc_stack.pop().?.type_8;
@@ -2662,39 +2664,35 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                             seq.action = @"$2";
                             break :blk seq;
                         };
-                    try self.calc_stack.append(.{ .type_6 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_6 = @"$ret" });
                 },
                 58 => {
                     const @"$0" = self.calc_stack.pop().?.type_7;
                     const @"$ret": Sequence = @"$0";
-                    try self.calc_stack.append(.{ .type_6 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_6 = @"$ret" });
                 },
                 62 => {
                     const @"$2" = self.calc_stack.pop().?.type_40;
                     var @"$*2" = @"$2";
                     const @"$1" = self.calc_stack.pop().?.type_12;
                     const @"$0": std.ArrayList(Operated) = blk: {
-                        try @"$*2".append(@"$1");
+                        try @"$*2".append(self.allocator, @"$1");
                         break :blk @"$*2";
                     };
-                    const @"$ret": Sequence = .{
-                        .operateds = @"$0",
-                        .string = self.chars[start .. start + length],
-                        .action = Action.empty(self.ir.allocator),
-                    };
-                    try self.calc_stack.append(.{ .type_7 = @"$ret" });
+                    const @"$ret": Sequence = .{ .operateds = @"$0", .string = self.chars[start .. start + length], .action = .empty() };
+                    try self.calc_stack.append(self.allocator, .{ .type_7 = @"$ret" });
                 },
                 65 => {
                     const @"$0" = self.calc_stack.pop().?.type_9;
                     const @"$ret": Action = .{
                         .implicit = false,
                         .bases = blk: {
-                            var bases = std.ArrayList(ir.ActionBase).init(self.ir.allocator);
-                            try bases.append(.{
+                            var bases: std.ArrayList(ir.ActionBase) = .{};
+                            try bases.append(self.ir.allocator, .{
                                 .data = self.chars[start .. start + length],
                                 .owned = false,
                                 .action_vars = @"$0",
-                                .return_type = ReturnType.impl(),
+                                .return_type = .impl(),
                                 .id = 0,
                                 .mut = false,
                             });
@@ -2707,62 +2705,67 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                             }
                             break :blk false;
                         },
-                        .rets = std.ArrayList(ActionReturn)
-                            .init(self.ir.allocator),
+                        .rets = .{},
                     };
-                    try self.calc_stack.append(.{ .type_8 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_8 = @"$ret" });
                 },
                 70 => {
                     const @"$4" = self.calc_stack.pop().?.type_9;
                     const @"$2" = self.calc_stack.pop().?.type_9;
+                    var @"$*2" = @"$2";
                     const @"$0" = self.calc_stack.pop().?.type_10;
+                    var @"$*0" = @"$0";
                     const @"$ret": std.ArrayList(ActionVar) =
                         blk: {
                             var list = @"$4";
-                            try list.appendSlice(@"$0".items);
-                            try list.appendSlice(@"$2".items);
-                            @"$0".deinit();
-                            @"$2".deinit();
+                            try list.appendSlice(self.ir.allocator, @"$*0".items);
+                            try list.appendSlice(self.ir.allocator, @"$*2".items);
+                            @"$*0".deinit(
+                                self.ir.allocator,
+                            );
+                            @"$*2".deinit(
+                                self.ir.allocator,
+                            );
                             break :blk list;
                         };
-                    try self.calc_stack.append(.{ .type_9 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_9 = @"$ret" });
                 },
                 72 => {
                     const @"$0" = self.calc_stack.pop().?.type_10;
                     const @"$ret": std.ArrayList(ActionVar) = @"$0";
-                    try self.calc_stack.append(.{ .type_9 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_9 = @"$ret" });
                 },
                 73 => {
-                    const @"$ret": std.ArrayList(ActionVar) = std.ArrayList(ActionVar).init(self.ir.allocator);
-                    try self.calc_stack.append(.{ .type_9 = @"$ret" });
+                    const @"$ret": std.ArrayList(ActionVar) = std.ArrayList(ActionVar){};
+                    try self.calc_stack.append(self.allocator, .{ .type_9 = @"$ret" });
                 },
                 77 => {
                     const @"$1" = self.calc_stack.pop().?.type_10;
                     const @"$0" = self.calc_stack.pop().?.type_11;
                     const @"$ret": std.ArrayList(ActionVar) = blk: {
                         var l = @"$1";
-                        try l.append(@"$0");
+                        try l.append(self.ir.allocator, @"$0");
                         break :blk l;
                     };
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_10 = @"$ret" });
                 },
                 81 => {
                     const @"$2" = self.calc_stack.pop().?.type_10;
                     const @"$ret": std.ArrayList(ActionVar) = @"$2";
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_10 = @"$ret" });
                 },
                 84 => {
                     const @"$1" = self.calc_stack.pop().?.type_10;
                     const @"$0" = self.calc_stack.pop().?.type_18;
                     const @"$ret": std.ArrayList(ActionVar) = blk: {
-                        self.allocator.free(@"$0");
+                        self.ir.allocator.free(@"$0");
                         break :blk @"$1";
                     };
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_10 = @"$ret" });
                 },
                 85 => {
-                    const @"$ret": std.ArrayList(ActionVar) = std.ArrayList(ActionVar).init(self.ir.allocator);
-                    try self.calc_stack.append(.{ .type_10 = @"$ret" });
+                    const @"$ret": std.ArrayList(ActionVar) = std.ArrayList(ActionVar){};
+                    try self.calc_stack.append(self.allocator, .{ .type_10 = @"$ret" });
                 },
                 89 => {
                     const @"$ret": ActionVar =
@@ -2780,7 +2783,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                                 .escape = false,
                             };
                         };
-                    try self.calc_stack.append(.{ .type_11 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_11 = @"$ret" });
                 },
                 92 => {
                     const @"$ret": ActionVar =
@@ -2798,7 +2801,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                                 .escape = true, // because it is mutable
                             };
                         };
-                    try self.calc_stack.append(.{ .type_11 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_11 = @"$ret" });
                 },
                 97 => {
                     const @"$2" = self.calc_stack.pop().?.type_14;
@@ -2816,73 +2819,73 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         },
                         .string = std.mem.trimRight(u8, self.chars[start .. start + length], " \t\n\r"),
                     };
-                    try self.calc_stack.append(.{ .type_12 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_12 = @"$ret" });
                 },
                 100 => {
                     const @"$ret": PrefixOp = .AND;
-                    try self.calc_stack.append(.{ .type_13 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_13 = @"$ret" });
                 },
                 102 => {
                     const @"$ret": PrefixOp = .NOT;
-                    try self.calc_stack.append(.{ .type_13 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_13 = @"$ret" });
                 },
                 103 => {
                     const @"$ret": PrefixOp = .NONE;
-                    try self.calc_stack.append(.{ .type_13 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_13 = @"$ret" });
                 },
                 106 => {
                     const @"$ret": PostfixOp = .STAR;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_14 = @"$ret" });
                 },
                 108 => {
                     const @"$ret": PostfixOp = .PLUS;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_14 = @"$ret" });
                 },
                 110 => {
                     const @"$ret": PostfixOp = .QUESTION;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_14 = @"$ret" });
                 },
                 111 => {
                     const @"$ret": PostfixOp = .NONE;
-                    try self.calc_stack.append(.{ .type_14 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_14 = @"$ret" });
                 },
                 116 => {
                     const @"$1" = self.calc_stack.pop().?.type_7;
                     const @"$ret": Primary = .{ .SEQ = @"$1" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_15 = @"$ret" });
                 },
                 119 => {
                     const @"$1" = self.calc_stack.pop().?.type_16;
                     const @"$0": []const u8 = @"$1";
                     const @"$ret": Primary = .{ .IDENTIFIER = @"$0" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_15 = @"$ret" });
                 },
                 121 => {
                     const @"$0" = self.calc_stack.pop().?.type_18;
                     const @"$ret": Primary = .{ .LITERAL = @"$0" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_15 = @"$ret" });
                 },
                 124 => {
                     const @"$2" = self.calc_stack.pop().?.type_35;
                     const @"$0": Class = .{ .content = @"$2" };
                     const @"$ret": Primary = .{ .CLASS = @"$0" };
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_15 = @"$ret" });
                 },
                 126 => {
                     const @"$ret": Primary = .DOT;
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_15 = @"$ret" });
                 },
                 128 => {
                     const @"$ret": Primary = .EPSILON;
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_15 = @"$ret" });
                 },
                 130 => {
                     const @"$ret": Primary = .CUT;
-                    try self.calc_stack.append(.{ .type_15 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_15 = @"$ret" });
                 },
                 134 => {
                     const @"$ret": []const u8 = self.chars[start .. start + length];
-                    try self.calc_stack.append(.{ .type_16 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_16 = @"$ret" });
                 },
                 137 => {},
                 139 => {},
@@ -2890,21 +2893,21 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     const @"$1" = self.calc_stack.pop().?.type_34;
                     var @"$*1" = @"$1";
                     const @"$ret": []const u8 = blk: {
-                        const slice = try @"$*1".toOwnedSlice();
+                        const slice = try @"$*1".toOwnedSlice(self.ir.allocator);
                         std.mem.reverse(u8, slice);
                         break :blk slice;
                     };
-                    try self.calc_stack.append(.{ .type_18 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_18 = @"$ret" });
                 },
                 150 => {
                     const @"$1" = self.calc_stack.pop().?.type_33;
                     var @"$*1" = @"$1";
                     const @"$ret": []const u8 = blk: {
-                        const slice = try @"$*1".toOwnedSlice();
+                        const slice = try @"$*1".toOwnedSlice(self.ir.allocator);
                         std.mem.reverse(u8, slice);
                         break :blk slice;
                     };
-                    try self.calc_stack.append(.{ .type_18 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_18 = @"$ret" });
                 },
                 154 => {
                     const @"$2" = self.calc_stack.pop().?.type_20;
@@ -2914,7 +2917,7 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         .to = @"$2",
                         .backing = self.chars[start .. start + length],
                     };
-                    try self.calc_stack.append(.{ .type_19 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_19 = @"$ret" });
                 },
                 156 => {
                     const @"$0" = self.calc_stack.pop().?.type_20;
@@ -2923,16 +2926,16 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                         .to = 0,
                         .backing = self.chars[start .. start + length],
                     };
-                    try self.calc_stack.append(.{ .type_19 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_19 = @"$ret" });
                 },
                 159 => {
                     const @"$ret": u8 = '-';
-                    try self.calc_stack.append(.{ .type_20 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_20 = @"$ret" });
                 },
                 161 => {
                     const @"$1" = self.calc_stack.pop().?.type_21;
                     const @"$ret": u8 = @"$1";
-                    try self.calc_stack.append(.{ .type_20 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_20 = @"$ret" });
                 },
                 164 => {
                     const @"$ret": u8 =
@@ -2942,26 +2945,26 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                             't' => '\t',
                             else => |c| c,
                         };
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_21 = @"$ret" });
                 },
                 167 => {
                     const @"$ret": u8 = try std.fmt.parseInt(u8, self.chars[start .. start + length][2..], 16);
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_21 = @"$ret" });
                 },
                 169 => {
                     const @"$ret": u8 = try std.fmt.parseInt(u8, self.chars[start .. start + length][2..], 16);
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_21 = @"$ret" });
                 },
                 171 => {
                     const @"$ret": u8 = self.chars[start .. start + length][0];
-                    try self.calc_stack.append(.{ .type_21 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_21 = @"$ret" });
                 },
                 175 => {},
                 178 => {},
                 182 => {},
                 185 => {
                     const @"$ret": []const u8 = self.chars[start .. start + length];
-                    try self.calc_stack.append(.{ .type_24 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_24 = @"$ret" });
                 },
                 187 => {},
                 188 => {},
@@ -2976,14 +2979,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     const @"$2": []const u8 = @"$6";
                     const @"$0": []const u8 = @"$2";
                     const @"$ret": std.ArrayList([]const u8) = blk: {
-                        try @"$*1".append(@"$0");
+                        try @"$*1".append(self.allocator, @"$0");
                         break :blk @"$*1";
                     };
-                    try self.calc_stack.append(.{ .type_27 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_27 = @"$ret" });
                 },
                 201 => {
-                    const @"$ret": std.ArrayList([]const u8) = std.ArrayList([]const u8).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_27 = @"$ret" });
+                    const @"$ret": std.ArrayList([]const u8) = std.ArrayList([]const u8){};
+                    try self.calc_stack.append(self.allocator, .{ .type_27 = @"$ret" });
                 },
                 205 => {},
                 206 => {},
@@ -2993,14 +2996,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     const @"$3" = self.calc_stack.pop().?.type_6;
                     const @"$0": Sequence = @"$3";
                     const @"$ret": std.ArrayList(Sequence) = blk: {
-                        try @"$*1".append(@"$0");
+                        try @"$*1".append(self.allocator, @"$0");
                         break :blk @"$*1";
                     };
-                    try self.calc_stack.append(.{ .type_29 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_29 = @"$ret" });
                 },
                 212 => {
-                    const @"$ret": std.ArrayList(Sequence) = std.ArrayList(Sequence).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_29 = @"$ret" });
+                    const @"$ret": std.ArrayList(Sequence) = std.ArrayList(Sequence){};
+                    try self.calc_stack.append(self.allocator, .{ .type_29 = @"$ret" });
                 },
                 216 => {},
                 217 => {},
@@ -3014,14 +3017,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     const @"$3" = self.calc_stack.pop().?.type_21;
                     const @"$0": u8 = @"$3";
                     const @"$ret": std.ArrayList(u8) = blk: {
-                        try @"$*1".append(@"$0");
+                        try @"$*1".append(self.allocator, @"$0");
                         break :blk @"$*1";
                     };
-                    try self.calc_stack.append(.{ .type_33 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_33 = @"$ret" });
                 },
                 233 => {
-                    const @"$ret": std.ArrayList(u8) = std.ArrayList(u8).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_33 = @"$ret" });
+                    const @"$ret": std.ArrayList(u8) = std.ArrayList(u8){};
+                    try self.calc_stack.append(self.allocator, .{ .type_33 = @"$ret" });
                 },
                 238 => {
                     const @"$1" = self.calc_stack.pop().?.type_34;
@@ -3029,14 +3032,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     const @"$3" = self.calc_stack.pop().?.type_21;
                     const @"$0": u8 = @"$3";
                     const @"$ret": std.ArrayList(u8) = blk: {
-                        try @"$*1".append(@"$0");
+                        try @"$*1".append(self.allocator, @"$0");
                         break :blk @"$*1";
                     };
-                    try self.calc_stack.append(.{ .type_34 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_34 = @"$ret" });
                 },
                 239 => {
-                    const @"$ret": std.ArrayList(u8) = std.ArrayList(u8).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_34 = @"$ret" });
+                    const @"$ret": std.ArrayList(u8) = std.ArrayList(u8){};
+                    try self.calc_stack.append(self.allocator, .{ .type_34 = @"$ret" });
                 },
                 243 => {
                     const @"$1" = self.calc_stack.pop().?.type_35;
@@ -3044,14 +3047,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     const @"$3" = self.calc_stack.pop().?.type_19;
                     const @"$0": Range = @"$3";
                     const @"$ret": std.ArrayList(Range) = blk: {
-                        try @"$*1".append(@"$0");
+                        try @"$*1".append(self.allocator, @"$0");
                         break :blk @"$*1";
                     };
-                    try self.calc_stack.append(.{ .type_35 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_35 = @"$ret" });
                 },
                 244 => {
-                    const @"$ret": std.ArrayList(Range) = std.ArrayList(Range).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_35 = @"$ret" });
+                    const @"$ret": std.ArrayList(Range) = std.ArrayList(Range){};
+                    try self.calc_stack.append(self.allocator, .{ .type_35 = @"$ret" });
                 },
                 248 => {},
                 249 => {},
@@ -3066,14 +3069,14 @@ pub fn Zapp(comptime opts: ParseOptions) type {
                     var @"$*1" = @"$1";
                     const @"$0" = self.calc_stack.pop().?.type_12;
                     const @"$ret": std.ArrayList(Operated) = blk: {
-                        try @"$*1".append(@"$0");
+                        try @"$*1".append(self.allocator, @"$0");
                         break :blk @"$*1";
                     };
-                    try self.calc_stack.append(.{ .type_40 = @"$ret" });
+                    try self.calc_stack.append(self.allocator, .{ .type_40 = @"$ret" });
                 },
                 271 => {
-                    const @"$ret": std.ArrayList(Operated) = std.ArrayList(Operated).init(self.allocator);
-                    try self.calc_stack.append(.{ .type_40 = @"$ret" });
+                    const @"$ret": std.ArrayList(Operated) = std.ArrayList(Operated){};
+                    try self.calc_stack.append(self.allocator, .{ .type_40 = @"$ret" });
                 },
                 278 => {
                     const @"$2" = self.calc_stack.pop().?.type_2;

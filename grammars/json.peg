@@ -105,9 +105,9 @@ elements: "json.Value" = element (',' element)* {
         var acc = json.Array.init(self.allocator);
         try acc.append($1);
         // append in reverse order to preserve ordering
-        var iter = std.mem.reverseIterator($2.items);
+        var iter = std.mem.reverseIterator($*2.items);
         while(iter.next()) |v| try acc.append(v);
-        $2.deinit();
+        $*2.deinit(self.allocator);
         break :blk .{ .array = acc };
     } 
 };
@@ -128,12 +128,12 @@ members: "json.Value" = member (',' member)* { blk: {
         const k0 = $1[0];
         try acc.put(k0[1..k0.len-1], $1[1]);
         // append in reverse order to preserve ordering
-        var iter = std.mem.reverseIterator($2.items);
+        var iter = std.mem.reverseIterator($*2.items);
         while(iter.next()) |kv| {
             const k2 = kv[0];
             try acc.put(k2[1..k2.len-1], kv[1]);
         }
-        $2.deinit();
+        $*2.deinit(self.allocator);
         break :blk .{ .object = acc };
     }
 };

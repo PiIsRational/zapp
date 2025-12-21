@@ -21,10 +21,8 @@ Grammar: isize = Spacing Addition End { $2 };
 Addition: isize = Neg (PLUS Neg)* {
     blk: {
         var sum = $1;
-        for ($2.items) |val| {
-            sum += val;
-        }
-        $2.deinit();
+        for ($*2.items) |val| sum += val;
+        $*2.deinit(self.allocator);
         break: blk sum;
     }
 };
@@ -32,11 +30,11 @@ Addition: isize = Neg (PLUS Neg)* {
 Neg: isize = Mul (MINUS Mul)* {
     blk: {
         var neg = $1;
-        for (0..$2.items.len) |i| {
-            const elem = $2.items[$2.items.len - 1 - i];
+        for (0..$*2.items.len) |i| {
+            const elem = $*2.items[$*2.items.len - 1 - i];
             neg -= elem;
         }
-        $2.deinit();
+        $*2.deinit(self.allocator);
         break: blk neg;
     }
 };
@@ -44,10 +42,8 @@ Neg: isize = Mul (MINUS Mul)* {
 Mul: isize = Div (STAR Div)* {
     blk: {
         var prod = $1;
-        for ($2.items) |val| {
-            prod *= val;
-        }
-        $2.deinit();
+        for ($*2.items) |val| prod *= val;
+        $*2.deinit(self.allocator);
         break: blk prod;
     }
 };
@@ -55,11 +51,11 @@ Mul: isize = Div (STAR Div)* {
 Div: isize = UnaryNeg (SLASH UnaryNeg)* {
     blk: {
         var div = $1;
-        for (0..$2.items.len) |i| {
-            const elem = $2.items[$2.items.len - 1 - i];
+        for (0..$*2.items.len) |i| {
+            const elem = $*2.items[$*2.items.len - 1 - i];
             div = @divFloor(div, elem);
         }
-        $2.deinit();
+        $*2.deinit(self.allocator);
         break: blk div;
     }
 };

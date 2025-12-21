@@ -26,10 +26,10 @@ test "Get right list" {
     var p = try Plus.init(allocator);
     defer p.deinit();
 
-    const result = try p.parse(to_parse);
+    var result = try p.parse(to_parse);
     try expect(switch (result) {
-        .pass => |val| blk: {
-            defer val.deinit();
+        .pass => |*val| blk: {
+            defer val.deinit(allocator);
             break :blk std.mem.eql(usize, &to_compare, val.items);
         },
         else => false,

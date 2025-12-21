@@ -37,14 +37,15 @@ fn UnorderedMemo(comptime T: type, comptime size: usize) type {
         free_list: MemoIndex,
         values: stdlib.ArrayList(Cell),
 
-        pub fn init(allocator: stdlib.mem.Allocator) @This() {
-            return .{
-                .free_list = .empty,
-                .values = stdlib.ArrayList(Cell).init(allocator),
-            };
+        pub fn init() @This() {
+            return .{ .free_list = .empty, .values = .{} };
         }
 
-        pub fn new(self: *@This(), comptime default: T) !MemoIndex {
+        pub fn new(
+            self: *@This(),
+            comptime default: T,
+            gpa: stdlib.mem.Allocator,
+        ) !MemoIndex {
             const cell_default: Cell = .{ .table = [1]T{default} ** size };
             if (self.free_list.unwrap()) |value| {
                 const index = self.free_list;
@@ -53,8 +54,8 @@ fn UnorderedMemo(comptime T: type, comptime size: usize) type {
                 return index;
             }
 
-            try self.values.append(cell_default);
-            return MemoIndex.init(@intCast(self.values.items.len - 1));
+            try self.values.append(gpa, cell_default);
+            return .init(@intCast(self.values.items.len - 1));
         }
 
         pub fn free(self: *@This(), index: MemoIndex) void {
@@ -76,8 +77,8 @@ fn UnorderedMemo(comptime T: type, comptime size: usize) type {
             return &self.values.items[index.unwrap() orelse unreachable].table[rule];
         }
 
-        pub fn deinit(self: *@This()) void {
-            self.values.deinit();
+        pub fn deinit(self: *@This(), gpa: stdlib.mem.Allocator) void {
+            self.values.deinit(gpa);
         }
     };
 }
@@ -96,6 +97,7 @@ fn MemoTable(comptime config: MemoConfig) type {
         base_table: stdlib.ArrayList([Chunks]MemoIndex),
         lengths: [Chunks]LengthSubMemo,
         states: [Chunks]StateSubMemo,
+        gpa: stdlib.mem.Allocator,
 
         fn chunksFromRules() usize {
             return stdlib.math.sqrt(config.rule_count);
@@ -112,20 +114,21 @@ fn MemoTable(comptime config: MemoConfig) type {
             empty: void,
         };
 
-        pub fn init(allocator: stdlib.mem.Allocator) @This() {
+        pub fn init(gpa: stdlib.mem.Allocator) @This() {
             var states = [1]StateSubMemo{undefined} ** Chunks;
             var lengths = [1]LengthSubMemo{undefined} ** Chunks;
             for (&states, &lengths) |*state, *length| {
-                state.* = StateSubMemo.init(allocator);
-                length.* = LengthSubMemo.init(allocator);
+                state.* = .init();
+                length.* = .init();
             }
 
             return .{
                 .max_chars = 0,
                 .start = 0,
-                .base_table = stdlib.ArrayList([Chunks]MemoIndex).init(allocator),
+                .base_table = .{},
                 .states = states,
                 .lengths = lengths,
+                .gpa = gpa,
             };
         }
 
@@ -141,11 +144,11 @@ fn MemoTable(comptime config: MemoConfig) type {
         }
 
         pub fn deinit(self: *@This()) void {
-            self.base_table.deinit();
+            self.base_table.deinit(self.gpa);
 
             for (&self.states, &self.lengths) |*state, *length| {
-                state.deinit();
-                length.deinit();
+                state.deinit(self.gpa);
+                length.deinit(self.gpa);
             }
         }
 
@@ -154,12 +157,12 @@ fn MemoTable(comptime config: MemoConfig) type {
             const lookup_place = chars - self.start;
             if (chars >= self.base_table.items.len + self.start) {
                 const append_size = chars + 1 - self.base_table.items.len - self.start;
-                try self.base_table.appendNTimes([1]MemoIndex{.empty} ** Chunks, append_size);
+                try self.base_table.appendNTimes(self.gpa, [1]MemoIndex{.empty} ** Chunks, append_size);
             } else if (self.base_table.items[lookup_place][first_level_index] != .empty)
                 return;
 
-            const state_idx = try self.states[first_level_index].new(0);
-            const length_idx = try self.lengths[first_level_index].new(0);
+            const state_idx = try self.states[first_level_index].new(0, self.gpa);
+            const length_idx = try self.lengths[first_level_index].new(0, self.gpa);
             stdlib.debug.assert(state_idx != .empty and state_idx == length_idx);
 
             self.base_table.items[lookup_place][first_level_index] = length_idx;

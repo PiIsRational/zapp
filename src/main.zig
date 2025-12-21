@@ -17,6 +17,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
+const Writer = std.io.Writer;
 
 const ir = @import("peg_ir.zig");
 const PegIr = ir.PegIr;
@@ -34,6 +35,14 @@ pub const MaxInputSize = 1024 * 1024 * 1024;
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 pub fn main() !void {
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const stderr = &stderr_writer.interface;
+
     const gpa, const is_debug = switch (builtin.mode) {
         .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
         .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, true },
@@ -46,21 +55,31 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
-    try parseArgs(gpa, args);
+    try parseArgs(gpa, args, stdout, stderr);
 }
 
-fn parseArgs(allocator: Allocator, args: [][:0]u8) !void {
-    const stdout = std.io.getStdOut().writer();
+fn parseArgs(
+    allocator: Allocator,
+    args: [][:0]u8,
+    stdout: *Writer,
+    stderr: *Writer,
+) !void {
     if (args.len < 2) {
-        try Error.print("no command was specified", null, "", &.{});
-        try sendHelp(true);
+        try Error.print(stderr, "no command was specified", null, "", &.{});
+        try sendHelp(stderr);
         std.process.exit(1);
     }
 
     const command = args[1];
     if (std.mem.eql(u8, command, "gen")) {
         if (args.len < 4) {
-            try Error.print("expected: zapp gen <source> <dst>", null, "", &.{});
+            try Error.print(
+                stderr,
+                "expected: zapp gen <source> <dst>",
+                null,
+                "",
+                &.{},
+            );
             std.process.exit(1);
         }
 
@@ -70,9 +89,9 @@ fn parseArgs(allocator: Allocator, args: [][:0]u8) !void {
 
         const src = args[2];
         const dst = args[3];
-        const name = name_opt.parse(args[4..]) catch "";
-        const verbose_ir = verbose_ir_opt.parse(args[4..]) catch false;
-        const @"inline" = inline_opt.parse(args[4..]) catch true;
+        const name = name_opt.parse(args[4..], stderr) catch "";
+        const verbose_ir = verbose_ir_opt.parse(args[4..], stderr) catch false;
+        const @"inline" = inline_opt.parse(args[4..], stderr) catch true;
 
         try parserGen(
             src,
@@ -81,22 +100,21 @@ fn parseArgs(allocator: Allocator, args: [][:0]u8) !void {
             verbose_ir,
             if (name.len == 0) null else name,
             @"inline",
+            stdout,
+            stderr,
         );
     } else if (std.mem.eql(u8, command, "help")) {
-        try sendHelp(false);
+        try sendHelp(stdout);
     } else if (std.mem.eql(u8, command, "version")) {
-        try stdout.print("zapp {}\n", .{config.Version});
+        try stdout.print("zapp {f}\n", .{config.Version});
     } else {
-        try Error.print("the given command is not supported", null, "", &.{});
-        try sendHelp(true);
+        try Error.print(stderr, "the given command is not supported", null, "", &.{});
+        try sendHelp(stderr);
         std.process.exit(1);
     }
 }
 
-fn sendHelp(err: bool) !void {
-    const stderr = std.io.getStdErr().writer();
-    const stdout = std.io.getStdOut().writer();
-    const writer = if (err) stderr else stdout;
+fn sendHelp(writer: *Writer) !void {
     const HelpString =
         \\
         \\the commands supported by this zapp version are:
@@ -127,16 +145,16 @@ fn parserGen(
     verbose_pir: bool,
     parser_name: ?[]const u8,
     inlining: bool,
+    stdout: *Writer,
+    stderr: *Writer,
 ) !void {
-    const stdout = std.io.getStdOut().writer();
-
     var root_node = std.Progress.start(.{ .root_name = "zapp gen", .estimated_total_items = 5 });
     defer root_node.end();
 
     // read the full source
     var load_progress = root_node.start("read source file", 0);
     const src_file = std.fs.cwd().openFile(src_path, .{}) catch {
-        try Error.print("could not open the given source file", null, "", &.{});
+        try Error.print(stderr, "could not open the given source file", null, "", &.{});
         return;
     };
 
@@ -144,12 +162,13 @@ fn parserGen(
         allocator,
         MaxInputSize,
         null,
-        1,
+        .@"1",
         0,
     ) catch |err| {
         switch (err) {
             error.FileTooBig => {
                 try Error.print(
+                    stderr,
                     "the input file is too large (should be atmost 1GB)",
                     null,
                     "",
@@ -164,7 +183,7 @@ fn parserGen(
     load_progress.end();
     defer allocator.free(src);
 
-    std.time.sleep(std.time.ns_per_s);
+    std.Thread.sleep(std.time.ns_per_s);
 
     // parse
     var parse_progress = root_node.start("parse source file", 0);
@@ -180,6 +199,7 @@ fn parserGen(
         .parse_fail => |err| {
             try Error.parseError(
                 allocator,
+                stderr,
                 src_path,
                 src,
                 err.last_found,
@@ -188,7 +208,7 @@ fn parserGen(
             return;
         },
         .infer_fail => |err| {
-            try Error.print(err.msg, null, "", &.{});
+            try Error.print(stderr, err.msg, null, "", &.{});
             return;
         },
     }
@@ -204,9 +224,7 @@ fn parserGen(
     var passes: Passes = undefined;
     if (!try passes.optimize(&p_ir, &root_node, inlining)) return;
 
-    if (verbose_pir) {
-        try stdout.print("{s}\n", .{p_ir});
-    }
+    if (verbose_pir) try stdout.print("{f}\n", .{p_ir});
 
     // lower
     var lower_node = root_node.start("lowering", 0);
@@ -217,18 +235,21 @@ fn parserGen(
     // generate
     var codegen_progress = root_node.start("codegen", 0);
     const f = std.fs.cwd().createFile(dst_path, .{}) catch {
-        try Error.print("could not create the destination file", null, "", &.{});
+        try Error.print(stderr, "could not create the destination file", null, "", &.{});
         return;
     };
     var ngen: CodeGen = undefined;
-    try ngen.generate(lir, f.writer());
+    var f_buffer: [1024]u8 = undefined;
+    var f_writer_val = f.writer(&f_buffer);
+    const f_writer = &f_writer_val.interface;
+    try ngen.generate(lir, f_writer);
     codegen_progress.end();
 }
 
 fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type {
     return struct {
         const OptionParseError = error{BadBool};
-        pub fn parse(input: []const []const u8) OptionParseError!T {
+        pub fn parse(input: []const []const u8, stderr: *Writer) OptionParseError!T {
             for (input) |option| {
                 if (option.len <= 4 + name.len) continue;
 
@@ -241,7 +262,7 @@ fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type
                 const string = option[name.len + 3 ..];
                 return switch (T) {
                     []const u8 => parseString(string, option),
-                    bool => parseBool(string, option),
+                    bool => parseBool(string, option, stderr),
                     else => @compileError("option with unsupported type!"),
                 };
             }
@@ -253,11 +274,16 @@ fn Option(comptime T: type, comptime name: []const u8, comptime default: T) type
             return input;
         }
 
-        fn parseBool(input: []const u8, full_string: []const u8) OptionParseError!bool {
+        fn parseBool(
+            input: []const u8,
+            full_string: []const u8,
+            stderr: *Writer,
+        ) OptionParseError!bool {
             if (std.mem.eql(u8, input, "true")) return true;
             if (std.mem.eql(u8, input, "false")) return false;
 
             Error.print(
+                stderr,
                 "bad boolean",
                 null,
                 full_string,

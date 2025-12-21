@@ -39,7 +39,7 @@ ir: PegIr,
 %%
 
 Grammar = Spacing (TopLevelComment Spacing)* Name MetaData Definition+ FileEnd {
-    const slice = try $*2.toOwnedSlice();
+    const slice = try $*2.toOwnedSlice(self.allocator);
     std.mem.reverse([]const u8, slice);
     self.ir.top_level_comment = slice;
 };
@@ -69,9 +69,9 @@ HeaderContent
 Definition = Identifier TypeAnnotation EQUALS ActionSequence (PIPE ActionSequence)* SEMICOLON {
     _ = $0; // to prevent inlining
     var sequences = $5;
-    try sequences.append($4);
+    try sequences.append(self.ir.allocator, $4);
     const def_cnt = self.ir.defs.items.len;
-    try self.ir.defs.append(.{
+    try self.ir.defs.append(self.ir.allocator, .{
         .id = def_cnt,
         .identifier = $1,
         .return_type = $2,
@@ -101,22 +101,18 @@ ActionSequence: Sequence
     | Sequence { $1 }
     ;
 
-Sequence: Sequence = Operated+ {.{
-    .operateds = $1,
-    .string = $0,
-    .action = Action.empty(self.ir.allocator),
-}};
+Sequence: Sequence = Operated+ {.{.operateds = $1, .string = $0, .action = .empty() }};
 
 // START ACTION
 Action: Action = ActionParts {.{
     .implicit = false,
     .bases = blk: {
-        var bases = std.ArrayList(ir.ActionBase).init(self.ir.allocator);
-        try bases.append(.{
+        var bases : std.ArrayList(ir.ActionBase) = .{};
+        try bases.append(self.ir.allocator, .{
             .data = $0,
             .owned = false,
             .action_vars = $1,
-            .return_type = ReturnType.impl(),
+            .return_type = .impl(),
             .id = 0,
             .mut = false,
         });
@@ -129,8 +125,7 @@ Action: Action = ActionParts {.{
         }
         break :blk false;
     },
-    .rets = std.ArrayList(ActionReturn)
-        .init(self.ir.allocator),
+    .rets = .{},
 }};
 
 // does not accept epsilon
@@ -138,22 +133,22 @@ ActionParts: "std.ArrayList(ActionVar)"
         = ActionBlocks '{' ActionParts '}' ActionParts {
     blk: {
         var list = $5;
-        try list.appendSlice($1.items);
-        try list.appendSlice($3.items);
-        $1.deinit();
-        $3.deinit();
+        try list.appendSlice(self.ir.allocator, $*1.items);
+        try list.appendSlice(self.ir.allocator, $*3.items);
+        $*1.deinit(self.ir.allocator, );
+        $*3.deinit(self.ir.allocator, );
         break: blk list;
     }
 }
     | ActionBlocks  { $1 }
-    | @ { std.ArrayList(ActionVar).init(self.ir.allocator) }
+    | @ { std.ArrayList(ActionVar){} }
     ;
 
 ActionBlocks: "std.ArrayList(ActionVar)" 
-    = ActionVar ActionBlocks { blk: { var l = $2; try l.append($1); break :blk l;} }
+    = ActionVar ActionBlocks { blk: { var l = $2; try l.append(self.ir.allocator, $1); break :blk l;} }
     | !["'{}$] . ActionBlocks { $3 }
-    | Literal ActionBlocks { blk: { self.allocator.free($1); break: blk $2; } }
-    | @ { std.ArrayList(ActionVar).init(self.ir.allocator) }
+    | Literal ActionBlocks { blk: { self.ir.allocator.free($1); break: blk $2; } }
+    | @ { std.ArrayList(ActionVar){} }
     ;
 
 ActionVar: ActionVar = '$' [0-9] [0-9]*  // immutable variables
@@ -240,13 +235,13 @@ IdentCont
 
 Literal: "[]const u8" 
     = ['] (!['] Char)* ['] Spacing { blk: {
-        const slice =  try $*2.toOwnedSlice();
+        const slice =  try $*2.toOwnedSlice(self.ir.allocator);
         std.mem.reverse(u8, slice);
         break: blk slice;
     }
 }
     | ["] (!["] Char)* ["] Spacing { blk: {
-        const slice =  try $*2.toOwnedSlice();
+        const slice =  try $*2.toOwnedSlice(self.ir.allocator);
         std.mem.reverse(u8, slice);
         break: blk slice;
     }

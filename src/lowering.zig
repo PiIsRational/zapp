@@ -21,10 +21,10 @@ const pir = @import("peg_ir.zig");
 const lir = @import("low_ir.zig");
 
 pub fn lower(allocator: Allocator, p_ir: pir.PegIr) !lir.LowIr {
-    var def_names = std.ArrayList([]const u8).init(allocator);
+    var def_names: std.ArrayList([]const u8) = .{};
     for (p_ir.defs.items) |def| {
         if (def.identifier.len == 0) break;
-        try def_names.append(def.identifier);
+        try def_names.append(allocator, def.identifier);
     }
 
     var low_ir: lir.LowIr = .{
@@ -33,11 +33,11 @@ pub fn lower(allocator: Allocator, p_ir: pir.PegIr) !lir.LowIr {
         .parser_name = p_ir.name,
         .top_header = p_ir.top_header,
         .field_header = p_ir.field_header,
-        .rule_names = try def_names.toOwnedSlice(),
+        .rule_names = try def_names.toOwnedSlice(allocator),
         .top_level_comment = try allocator
             .dupe([]const u8, p_ir.top_level_comment),
-        .actions = std.ArrayList(lir.Action).init(allocator),
-        .blocks = std.ArrayList(*lir.Block).init(allocator),
+        .actions = .{},
+        .blocks = .{},
         .place_to_block = std.AutoHashMap(lir.Label, *lir.Block)
             .init(allocator),
         .is_acceptor = p_ir.is_acceptor,
@@ -47,9 +47,7 @@ pub fn lower(allocator: Allocator, p_ir: pir.PegIr) !lir.LowIr {
     try initSeqBlocks(p_ir, &low_ir);
 
     // add the definitions
-    for (p_ir.defs.items) |def| {
-        try lowerDef(def, &low_ir);
-    }
+    for (p_ir.defs.items) |def| try lowerDef(def, &low_ir);
 
     return low_ir;
 }
@@ -134,7 +132,7 @@ fn lowerDef(def: pir.Definition, low_ir: *lir.LowIr) !void {
 
     var blk = low_ir.place_to_block.get(fail_lbl).?;
     blk.meta.nonterm_fail = true;
-    try blk.insts.append(lir.Instr.initTag(
+    try blk.insts.append(low_ir.allocator, lir.Instr.initTag(
         if (def.id == 0) .EXIT_FAIL else .FAIL,
     ));
 }
@@ -207,7 +205,7 @@ fn lowerSeq(
     var instr = lir.Instr.initTag(if (label.def == 0) .EXIT_PASS else .RET);
 
     instr.data = .{ .action = low_ir.actions.items.len };
-    try curr_blk.insts.append(instr);
+    try curr_blk.insts.append(low_ir.allocator, instr);
 
     const act = try lowerAction(
         &seq.action,
@@ -215,7 +213,7 @@ fn lowerSeq(
         low_ir,
         ops,
     );
-    try low_ir.actions.append(act);
+    try low_ir.actions.append(low_ir.allocator, act);
 }
 
 fn lowerAction(
@@ -225,10 +223,10 @@ fn lowerAction(
     ops: []const pir.Operated,
 ) !lir.Action {
     const allocator = low_ir.allocator;
-    var args = std.ArrayList(lir.LabeledRet).init(allocator);
-    defer args.deinit();
-    var nonterms = std.ArrayList(lir.CallPattern).init(allocator);
-    defer nonterms.deinit();
+    var args: std.ArrayList(lir.LabeledRet) = .{};
+    defer args.deinit(allocator);
+    var nonterms: std.ArrayList(lir.CallPattern) = .{};
+    defer nonterms.deinit(allocator);
 
     var space: usize = 0;
     for (0..ops.len) |i| {
@@ -238,7 +236,7 @@ fn lowerAction(
 
         switch (op.value) {
             .ID => |id| {
-                try nonterms.append(.{
+                try nonterms.append(allocator, .{
                     .consumes = space,
                     .calls = low_ir.place_to_block.get(.{
                         .def = id,
@@ -266,7 +264,7 @@ fn lowerAction(
             }
         };
 
-        try args.append(.{
+        try args.append(allocator, .{
             .ret = ret.ret_op.return_type,
             .place = low_ir.place_to_block.get(.{
                 .def = ret.ret_op.value.ID,
@@ -333,9 +331,9 @@ fn lowerOp(
         },
         .CLASS => |c| {
             instr.tag = .MATCH;
-            var ranges = std.ArrayList(lir.Range).init(allocator);
+            var ranges: std.ArrayList(lir.Range) = .{};
             for (c.content.items) |range| {
-                try ranges.append(.{
+                try ranges.append(allocator, .{
                     .from = range.from,
                     .to = if (range.to == 0) range.from else range.to,
                 });
@@ -349,19 +347,16 @@ fn lowerOp(
                 }).?,
                 .consuming = op.prefix_op == .NONE,
             };
-            if (op.prefix_op == .NOT) {
-                try prong.invert();
-            }
-            var prong_list = std.ArrayList(lir.MatchProng).init(allocator);
-            try prong_list.append(prong);
-            instr.data = .{
-                .match = prong_list,
-            };
+            if (op.prefix_op == .NOT) try prong.invert(allocator);
+
+            var prong_list: std.ArrayList(lir.MatchProng) = .{};
+            try prong_list.append(allocator, prong);
+            instr.data = .{ .match = prong_list };
         },
         .DOT => {
             instr.tag = .MATCH;
-            var ranges = std.ArrayList(lir.Range).init(allocator);
-            try ranges.append(.{
+            var ranges: std.ArrayList(lir.Range) = .{};
+            try ranges.append(allocator, .{
                 .from = 1, // 0 is not allowed
                 .to = 255,
             });
@@ -374,14 +369,11 @@ fn lowerOp(
                 }).?,
                 .consuming = op.prefix_op == .NONE,
             };
-            if (op.prefix_op == .NOT) {
-                try prong.invert();
-            }
-            var prong_list = std.ArrayList(lir.MatchProng).init(allocator);
-            try prong_list.append(prong);
-            instr.data = .{
-                .match = prong_list,
-            };
+            if (op.prefix_op == .NOT) try prong.invert(allocator);
+
+            var prong_list: std.ArrayList(lir.MatchProng) = .{};
+            try prong_list.append(allocator, prong);
+            instr.data = .{ .match = prong_list };
         },
         .CUT => {
             // add an implicit jump to the next block
@@ -392,12 +384,12 @@ fn lowerOp(
                 .symbol = lbl.symbol + 1,
             }).? };
 
-            try block.insts.append(instr);
+            try block.insts.append(allocator, instr);
             return true;
         },
         else => unreachable,
     }
 
-    try block.insts.append(instr);
+    try block.insts.append(allocator, instr);
     return false;
 }

@@ -37,10 +37,10 @@ pub const LowIr = struct {
         const allocator = self.allocator;
 
         for (self.blocks.items) |blk| blk.deinit(allocator);
-        self.blocks.deinit();
+        self.blocks.deinit(allocator);
 
         for (self.actions.items) |*action| action.deinit(allocator);
-        self.actions.deinit();
+        self.actions.deinit(allocator);
 
         self.place_to_block.deinit();
         allocator.free(self.rule_names);
@@ -51,13 +51,13 @@ pub const LowIr = struct {
         block.id = self.blocks.items.len;
         block.base = label.def;
         try self.place_to_block.put(label, block);
-        try self.blocks.append(block);
+        try self.blocks.append(self.allocator, block);
     }
 
     /// appends a block with a single instruction
     pub fn appendInstr(self: *LowIr, instr: Instr, label: Label) !void {
         var blk = Block.init(self.allocator);
-        blk.insts.append(instr);
+        blk.insts.append(self.allocator, instr);
         try self.appendBlock(blk, label);
     }
 
@@ -115,7 +115,7 @@ pub const Block = struct {
     pub fn init(allocator: Allocator) !*Block {
         const b = try allocator.create(Block);
         b.* = .{
-            .insts = std.ArrayList(Instr).init(allocator),
+            .insts = .{},
             .fail = null,
             .id = 0,
             .base = 0,
@@ -127,9 +127,9 @@ pub const Block = struct {
 
     pub fn clone(self: Block, new_id: usize, allocator: Allocator) !*Block {
         const b = try allocator.create(Block);
-        var insts = std.ArrayList(Instr).init(allocator);
+        var insts: std.ArrayList(Instr) = .{};
         for (self.insts.items) |instr| {
-            try insts.append(instr.clone(allocator));
+            try insts.append(allocator, instr.clone(allocator));
         }
 
         b.* = .{
@@ -165,10 +165,8 @@ pub const Block = struct {
     }
 
     pub fn deinit(self: *Block, allocator: Allocator) void {
-        for (self.insts.items) |instr| {
-            instr.deinit(allocator);
-        }
-        self.insts.deinit();
+        for (self.insts.items) |*instr| instr.deinit(allocator);
+        self.insts.deinit(allocator);
         self.fail = null;
         allocator.destroy(self);
     }
@@ -292,11 +290,11 @@ pub const Instr = struct {
         };
     }
 
-    pub fn deinit(self: Instr, allocator: Allocator) void {
+    pub fn deinit(self: *Instr, allocator: Allocator) void {
         switch (self.tag) {
             .MATCH => {
-                for (self.data.match.items) |prong| prong.deinit();
-                self.data.match.deinit();
+                for (self.data.match.items) |*prong| prong.deinit(allocator);
+                self.data.match.deinit(allocator);
             },
             .STRING => allocator.free(self.data.str),
             else => {},
@@ -401,13 +399,9 @@ pub const MatchProng = struct {
     dest: *Block,
     consuming: bool,
 
-    pub fn deinit(self: MatchProng) void {
-        self.labels.deinit();
-    }
-
-    pub fn clone(self: MatchProng) !MatchProng {
+    pub fn clone(self: MatchProng, allocator: Allocator) !MatchProng {
         return .{
-            .labels = try self.labels.clone(),
+            .labels = try self.labels.clone(allocator),
             .dest = self.dest,
             .consuming = self.consuming,
         };
@@ -419,13 +413,13 @@ pub const MatchProng = struct {
         allocator: Allocator,
     ) !MatchProng {
         var new: MatchProng = .{
-            .labels = std.ArrayList(Range).init(allocator),
+            .labels = .{},
             .dest = self.dest,
             .consuming = self.consuming,
         };
 
-        try new.labels.appendSlice(self.labels.items);
-        try new.labels.appendSlice(other.labels.items);
+        try new.labels.appendSlice(allocator, self.labels.items);
+        try new.labels.appendSlice(allocator, other.labels.items);
         try new.optimize();
 
         return new;
@@ -439,20 +433,21 @@ pub const MatchProng = struct {
         return false;
     }
 
-    pub fn invert(self: *MatchProng) !void {
+    pub fn invert(self: *MatchProng, allocator: Allocator) !void {
         try self.optimize();
-        const old_labels = self.labels;
-        defer old_labels.deinit();
-        self.labels = std.ArrayList(Range).init(self.labels.allocator);
+        var old_labels = self.labels;
+        defer old_labels.deinit(allocator);
+
+        self.labels = .{};
         if (old_labels.items.len == 0) {
-            try self.labels.append(.{ .from = 0, .to = 255 });
+            try self.labels.append(allocator, .{ .from = 0, .to = 255 });
             return;
         }
 
         var left: u8 = 0;
         var right: u8 = old_labels.items[0].from;
         if (right != 0) {
-            try self.labels.append(.{ .from = 0, .to = right - 1 });
+            try self.labels.append(allocator, .{ .from = 0, .to = right - 1 });
         }
 
         left = old_labels.items[0].to;
@@ -461,11 +456,11 @@ pub const MatchProng = struct {
 
         for (old_labels.items[1..]) |range| {
             right = range.from - 1;
-            try self.labels.append(.{ .from = left, .to = right });
+            try self.labels.append(allocator, .{ .from = left, .to = right });
             left = if (range.to == 255) return else range.to + 1;
         }
 
-        try self.labels.append(.{ .from = left, .to = 255 });
+        try self.labels.append(allocator, .{ .from = left, .to = 255 });
     }
 
     pub fn optimize(self: *MatchProng) !void {
@@ -492,6 +487,10 @@ pub const MatchProng = struct {
         }
 
         self.labels.shrinkRetainingCapacity(place);
+    }
+
+    pub fn deinit(self: *MatchProng, allocator: Allocator) void {
+        self.labels.deinit(allocator);
     }
 
     pub fn format(
@@ -593,17 +592,17 @@ pub const Action = struct {
         last_offset: usize,
         bases: std.ArrayList(pir.ActionBase),
     ) !Action {
-        var args_cp = std.ArrayList(LabeledRet).init(allocator);
+        var args_cp: std.ArrayList(LabeledRet) = .{};
         for (args.items) |arg| {
-            try args_cp.append(try arg.clone(allocator));
+            try args_cp.append(allocator, try arg.clone(allocator));
         }
-        var bases_cp = std.ArrayList(pir.ActionBase).init(allocator);
+        var bases_cp: std.ArrayList(pir.ActionBase) = .{};
         for (bases.items) |b| {
-            try bases_cp.append(try b.clone(allocator));
+            try bases_cp.append(allocator, try b.clone(allocator));
         }
 
         return .{
-            .nonterms = try nonterms.clone(),
+            .nonterms = try nonterms.clone(allocator),
             .last_offset = last_offset,
             .base = base,
             .args = args_cp,
@@ -617,10 +616,10 @@ pub const Action = struct {
 
     pub fn deinit(self: *Action, allocator: Allocator) void {
         for (self.args.items) |*arg| arg.deinit(allocator);
-        self.args.deinit();
+        self.args.deinit(allocator);
         for (self.bases.items) |*b| b.deinit(allocator);
-        self.bases.deinit();
-        self.nonterms.deinit();
+        self.bases.deinit(allocator);
+        self.nonterms.deinit(allocator);
     }
 };
 

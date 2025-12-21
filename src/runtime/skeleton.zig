@@ -111,7 +111,7 @@ pub const structs =
 pub const vars =
     \\chars: [:0]const u8,
     \\allocator: Allocator,
-    \\stack: std.ArrayList(EvalFrame),
+    \\stack: std.array_list.Managed(EvalFrame),
     \\stack_alloc: ?std.heap.FixedBufferAllocator,
     \\infer_stack: std.ArrayList(InferFrame),
     \\calc_stack: std.ArrayList(InferReturnType),
@@ -144,34 +144,33 @@ pub const funcs =
     \\    if (opts.stack_limit) |limit| {
     \\        var stack_alloc = std.heap.FixedBufferAllocator
     \\            .init(try self.allocator.alloc(u8, @sizeOf(EvalFrame) * limit));
-    \\        self.stack = std.ArrayList(EvalFrame)
-    \\            .init(stack_alloc.allocator());
+    \\        self.stack = .init(stack_alloc.allocator());
     \\        try self.stack.ensureTotalCapacity(limit);
     \\        self.stack_alloc = stack_alloc;
     \\    } else {
     \\        self.stack_alloc = null;
-    \\        self.stack = std.ArrayList(EvalFrame).init(allocator);
+    \\        self.stack = .init(allocator);
     \\    }
-    \\    self.infer_stack = std.ArrayList(InferFrame).init(allocator);
+    \\    self.infer_stack = .{};
     \\    self.memo = MemoTable(.{ .rule_count = RuleCount, .chunks = opts.chunks })
     \\        .init(allocator);
-    \\    self.calc_stack = std.ArrayList(InferReturnType).init(allocator);
-    \\    self.infer_actions = std.ArrayList(InferInstr).init(allocator);
-    \\    self.infer_instrs = std.ArrayList(InferInstr).init(allocator);
+    \\    self.calc_stack = .{};
+    \\    self.infer_actions =.{};
+    \\    self.infer_instrs = .{};
     \\    self.reset("");
     \\    return self;
     \\}
     \\
     \\pub fn deinit(self: *@This()) void {
-    \\    self.infer_actions.deinit();
-    \\    self.infer_instrs.deinit();
+    \\    self.infer_actions.deinit(self.allocator);
+    \\    self.infer_instrs.deinit(self.allocator);
     \\    self.stack.deinit();
     \\    if (self.stack_alloc) |allocator| {
     \\        self.allocator.free(allocator.buffer);
     \\    }
-    \\    self.infer_stack.deinit();
+    \\    self.infer_stack.deinit(self.allocator);
     \\    self.memo.deinit();
-    \\    self.calc_stack.deinit();
+    \\    self.calc_stack.deinit(self.allocator);
     \\}
     \\
     \\fn reset(self: *@This(), chars: [:0]const u8) void {
@@ -298,7 +297,7 @@ pub const funcs =
     \\    }
     \\
     \\    if (look.consuming and good) {
-    \\        try self.infer_actions.append(.{
+    \\        try self.infer_actions.append(self.allocator, .{
     \\            .length = self.acc,
     \\            .state = self.state,
     \\            .start = self.start,
@@ -357,7 +356,7 @@ pub const inferFuncs =
     \\fn finalizeInferInstrs(self: *@This()) Allocator.Error!void {
     \\    for (self.infer_actions.items) |frame| {
     \\        if (!opts.use_memo or !frame.memo) {
-    \\            try self.infer_instrs.append(frame);
+    \\            try self.infer_instrs.append(self.allocator, frame);
     \\        } else {
     \\            try self.memoInfer(frame.state, frame.start);
     \\        }
@@ -373,7 +372,7 @@ pub const inferFuncs =
     \\}
     \\
     \\fn inferNonterminal(self: *@This(), state: State) Allocator.Error!void {
-    \\    try self.infer_stack.append(.{
+    \\    try self.infer_stack.append(self.allocator, .{
     \\        .acc = self.infer_acc,
     \\        .state = self.infer_state,
     \\    });
@@ -391,7 +390,7 @@ pub const inferFuncs =
     \\        };
     \\    };
     \\
-    \\    try self.infer_instrs.append(.{
+    \\    try self.infer_instrs.append(self.allocator, .{
     \\        .memo = false,
     \\        .start = frame.acc,
     \\        .state = state,
@@ -403,7 +402,7 @@ pub const inferFuncs =
 
 pub const parse_return =
     \\pub const ParseReturn = union(enum) {{
-    \\    pass: {s},
+    \\    pass: {f},
     \\    parse_fail: ParsingError,
     \\    infer_fail: InferError,
     \\}};

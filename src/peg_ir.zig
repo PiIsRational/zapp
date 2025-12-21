@@ -16,7 +16,9 @@
 
 const std = @import("std");
 const assert = std.debug.assert;
+const Writer = std.io.Writer;
 const Allocator = std.mem.Allocator;
+
 const su = @import("string_utils.zig");
 
 pub const PegIr = struct {
@@ -36,7 +38,7 @@ pub const PegIr = struct {
             .name = "",
             .top_header = "",
             .field_header = "",
-            .defs = std.ArrayList(Definition).init(allocator),
+            .defs = .{},
             .allocator = allocator,
             .chars = "",
             .file_name = "",
@@ -45,10 +47,10 @@ pub const PegIr = struct {
     }
 
     pub fn clone(self: PegIr) !PegIr {
-        var defs = std.ArrayList(Definition).init(self.allocator);
+        var defs: std.ArrayList(Definition) = .{};
 
         for (self.defs.items) |def| {
-            try defs.append(try def.clone(self.allocator));
+            try defs.append(self.allocator, try def.clone(self.allocator));
         }
 
         return .{
@@ -64,24 +66,19 @@ pub const PegIr = struct {
         };
     }
 
-    pub fn deinit(self: PegIr) void {
+    pub fn deinit(self: *PegIr) void {
         for (self.defs.items) |*def| {
             def.deinit(self.allocator);
         }
 
-        self.defs.deinit();
+        self.defs.deinit(self.allocator);
         self.allocator.free(self.top_level_comment);
     }
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try writer.print("acceptor: {}\n", .{self.is_acceptor});
         try writer.print(
             "NAME: {s}\nTOP START:\n{s}\nTOP END\nFIELD START:\n{s}FIELD END\n\n",
@@ -91,9 +88,8 @@ pub const PegIr = struct {
                 self.field_header,
             },
         );
-        for (self.defs.items) |def| {
-            try writer.print("{s}\n", .{def});
-        }
+
+        for (self.defs.items) |def| try writer.print("{f}\n", .{def});
     }
 };
 
@@ -174,14 +170,14 @@ pub const ReturnType = union(enum) {
         allocator: Allocator,
         types: []const ReturnType,
     ) !ReturnType {
-        var non_empty = std.ArrayList(ReturnType).init(allocator);
+        var non_empty: std.ArrayList(ReturnType) = .{};
         var all_impl = false;
 
         for (types) |t| {
             if (t.isImplicit()) {
                 all_impl = true;
             } else if (!t.isNone()) {
-                try non_empty.append(t);
+                try non_empty.append(allocator, t);
             }
         }
 
@@ -195,7 +191,7 @@ pub const ReturnType = union(enum) {
             return .{ .tuple = non_empty };
         }
 
-        defer non_empty.deinit();
+        defer non_empty.deinit(allocator);
 
         if (all_impl) return ReturnType.impl();
         return if (non_empty.items.len == 0)
@@ -231,10 +227,8 @@ pub const ReturnType = union(enum) {
                 }
             },
             .tuple => |*list| {
-                for (list.items) |*ret| {
-                    ret.deinit(allocator);
-                }
-                list.deinit();
+                for (list.items) |*ret| ret.deinit(allocator);
+                list.deinit(allocator);
             },
             .nullable,
             .list,
@@ -262,9 +256,9 @@ pub const ReturnType = union(enum) {
                 } else self;
             },
             .tuple => |list| blk: {
-                var new_list = std.ArrayList(ReturnType).init(allocator);
+                var new_list: std.ArrayList(ReturnType) = .{};
                 for (list.items) |item| {
-                    try new_list.append(try item.clone(allocator));
+                    try new_list.append(allocator, try item.clone(allocator));
                 }
                 break :blk .{ .tuple = new_list };
             },
@@ -286,12 +280,8 @@ pub const ReturnType = union(enum) {
 
     pub fn format(
         self: ReturnType,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
         if (self.isImplicit()) {
             try writer.print("impl", .{});
             return;
@@ -304,17 +294,17 @@ pub const ReturnType = union(enum) {
                 try writer.print("void", .{});
             },
             .tuple => |list| {
-                try writer.print("{s}", .{"std.meta.Tuple(&.{"});
+                try writer.writeAll("std.meta.Tuple(&.{");
                 for (list.items) |item| {
-                    try writer.print("{s},", .{item});
+                    try writer.print("{f},", .{item});
                 }
-                try writer.print("{s}", .{"})"});
+                try writer.writeAll("})");
             },
             .nullable => |t| {
-                try writer.print("?{s}", .{t});
+                try writer.print("?{f}", .{t});
             },
             .list => |t| {
-                try writer.print("std.ArrayList({s})", .{t});
+                try writer.print("std.ArrayList({f})", .{t});
             },
         }
     }
@@ -338,8 +328,8 @@ pub const Definition = struct {
         return_type: ReturnType,
         id: usize,
     ) !Definition {
-        var sequences = std.ArrayList(Sequence).init(allocator);
-        try sequences.appendSlice(seqs);
+        var sequences: std.ArrayList(Sequence) = .{};
+        try sequences.appendSlice(allocator, seqs);
 
         return .{
             .id = id,
@@ -355,9 +345,9 @@ pub const Definition = struct {
     }
 
     pub fn clone(self: Definition, allocator: Allocator) !Definition {
-        var new_seqs = std.ArrayList(Sequence).init(allocator);
+        var new_seqs: std.ArrayList(Sequence) = .{};
         for (self.sequences.items) |seq| {
-            try new_seqs.append(seq.clone());
+            try new_seqs.append(allocator, seq.clone());
         }
 
         return .{
@@ -368,11 +358,11 @@ pub const Definition = struct {
     }
 
     pub fn deinit(self: *Definition, allocator: Allocator) void {
-        for (self.sequences.items) |seq| {
+        for (self.sequences.items) |*seq| {
             seq.deinit(allocator);
         }
 
-        self.sequences.deinit();
+        self.sequences.deinit(allocator);
         self.return_type.deinit(allocator);
     }
 
@@ -382,13 +372,8 @@ pub const Definition = struct {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try writer.print("{s} (%{d}){s}{s}{s}", .{
             self.identifier, self.id,
             if (self.accepts_eps)
@@ -408,13 +393,13 @@ pub const Definition = struct {
             else
                 "",
         });
-        try writer.print(": {s}", .{self.return_type});
-        try writer.print(" =\n", .{});
+        try writer.print(": {f}", .{self.return_type});
+        try writer.writeAll(" =\n");
 
         for (0..self.sequences.items.len) |i| {
             const seq = self.sequences
                 .items[self.sequences.items.len - 1 - i];
-            try writer.print("\t| {s}\n", .{seq});
+            try writer.print("\t| {f}\n", .{seq});
         }
     }
 };
@@ -430,21 +415,17 @@ pub const Sequence = struct {
         action: Action,
         string: []const u8,
     ) !Sequence {
-        var operateds = std.ArrayList(Operated).init(allocator);
-        try operateds.appendSlice(ops);
+        var operateds: std.ArrayList(Operated) = .{};
+        try operateds.appendSlice(allocator, ops);
 
-        return .{
-            .operateds = operateds,
-            .action = action,
-            .string = string,
-        };
+        return .{ .operateds = operateds, .action = action, .string = string };
     }
 
     pub fn empty(allocator: Allocator) !Sequence {
         return try Sequence.init(
             allocator,
             &.{},
-            Action.empty(allocator),
+            .empty(),
             "",
         );
     }
@@ -455,9 +436,9 @@ pub const Sequence = struct {
     }
 
     pub fn clone(self: Sequence, allocator: Allocator) anyerror!Sequence {
-        var new_ops = std.ArrayList(Operated).init(allocator);
+        var new_ops: std.ArrayList(Operated) = .{};
         for (self.operateds.items) |op| {
-            try new_ops.append(try op.clone(allocator));
+            try new_ops.append(allocator, try op.clone(allocator));
         }
 
         return .{
@@ -471,32 +452,27 @@ pub const Sequence = struct {
         };
     }
 
-    pub fn deinit(self: Sequence, allocator: Allocator) void {
+    pub fn deinit(self: *Sequence, allocator: Allocator) void {
         for (self.operateds.items) |*op| {
             op.deinit(allocator);
         }
 
-        self.operateds.deinit();
+        self.operateds.deinit(allocator);
         self.action.deinit(allocator);
     }
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         for (0..self.operateds.items.len) |i| {
             const op = self.operateds.items[
                 self.operateds.items.len - 1 - i
             ];
-            try writer.print("{s} ", .{op});
+            try writer.print("{f} ", .{op});
         }
 
-        try writer.print(" {s}", .{self.action});
+        try writer.print(" {f}", .{self.action});
     }
 };
 
@@ -529,9 +505,7 @@ pub const ActionReturn = struct {
 
     pub fn format(
         self: @This(),
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
         try writer.print("({d}: {}) ", .{ self.var_name, self.ret_op.return_type });
     }
@@ -554,16 +528,16 @@ pub const ActionBase = struct {
             allocator.free(self.data);
         }
 
-        self.action_vars.deinit();
+        self.action_vars.deinit(allocator);
         self.return_type.deinit(allocator);
     }
 
     pub fn clone(self: ActionBase, allocator: Allocator) !ActionBase {
         const new_string = try allocator.dupe(u8, self.data);
-        var action_vars = std.ArrayList(ActionVar).init(allocator);
+        var action_vars: std.ArrayList(ActionVar) = .{};
 
         for (self.action_vars.items) |a_var| {
-            try action_vars.append(a_var.clone(self.data, new_string));
+            try action_vars.append(allocator, a_var.clone(self.data, new_string));
         }
 
         return .{
@@ -596,9 +570,7 @@ pub const ActionBase = struct {
 
     pub fn format(
         self: @This(),
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
         if (self.id == 0) {
             try writer.print("ret = ", .{});
@@ -625,14 +597,14 @@ pub const Action = struct {
         old_ops: []const Operated,
         new_ops: []const Operated,
     ) !Action {
-        var bases = std.ArrayList(ActionBase).init(allocator);
+        var bases: std.ArrayList(ActionBase) = .{};
 
         for (self.bases.items) |base| {
-            try bases.append(try base.clone(allocator));
+            try bases.append(allocator, try base.clone(allocator));
         }
-        var rets = std.ArrayList(ActionReturn).init(allocator);
+        var rets: std.ArrayList(ActionReturn) = .{};
         for (self.rets.items) |ret| {
-            try rets.append(ret.clone(old_ops, new_ops));
+            try rets.append(allocator, ret.clone(old_ops, new_ops));
         }
 
         return .{
@@ -650,8 +622,8 @@ pub const Action = struct {
         implicit: bool,
         actions: []const ActionVar,
     ) !Action {
-        var action_list = std.ArrayList(ActionVar).init(allocator);
-        try action_list.appendSlice(actions);
+        var action_list: std.ArrayList(ActionVar) = .{};
+        try action_list.appendSlice(allocator, actions);
         var use_match = false;
         for (action_list.items) |item| {
             if (!item.isMatchedString()) continue;
@@ -660,8 +632,8 @@ pub const Action = struct {
             break;
         }
 
-        var bases = std.ArrayList(ActionBase).init(allocator);
-        try bases.append(.{
+        var bases: std.ArrayList(ActionBase) = .{};
+        try bases.append(allocator, .{
             .data = data,
             .owned = owned,
             .action_vars = action_list,
@@ -673,30 +645,30 @@ pub const Action = struct {
         return .{
             .implicit = implicit,
             .use_match = use_match,
-            .rets = std.ArrayList(ActionReturn).init(allocator),
+            .rets = .{},
             .bases = bases,
         };
     }
 
     /// returns an empty action
     /// `allocator` is needed for the rets
-    pub fn empty(allocator: Allocator) Action {
+    pub fn empty() Action {
         return .{
             .use_match = false,
             .implicit = false,
-            .bases = std.ArrayList(ActionBase).init(allocator),
-            .rets = std.ArrayList(ActionReturn).init(allocator),
+            .bases = .{},
+            .rets = .{},
         };
     }
 
     /// an action that returns null
     /// `allocator` is needed for the rets
     pub fn nullAction(allocator: Allocator) !Action {
-        var bases = std.ArrayList(ActionBase).init(allocator);
-        try bases.append(.{
+        var bases: std.ArrayList(ActionBase) = .{};
+        try bases.append(allocator, .{
             .data = "null",
             .owned = false,
-            .action_vars = std.ArrayList(ActionVar).init(allocator),
+            .action_vars = .{},
             .return_type = ReturnType.impl(),
             .id = 0,
             .mut = false,
@@ -705,7 +677,7 @@ pub const Action = struct {
         return .{
             .use_match = false,
             .implicit = false,
-            .rets = std.ArrayList(ActionReturn).init(allocator),
+            .rets = .{},
             .bases = bases,
         };
     }
@@ -715,10 +687,8 @@ pub const Action = struct {
         return .{
             .use_match = false,
             .implicit = true,
-            .rets = std.ArrayList(ActionReturn)
-                .init(empty_alloc.allocator()),
-            .bases = std.ArrayList(ActionBase)
-                .init(empty_alloc.allocator()),
+            .rets = .{},
+            .bases = .{},
         };
     }
 
@@ -729,11 +699,11 @@ pub const Action = struct {
         list_num: usize,
         add_num: usize,
     ) !Action {
-        const str = "blk: {try $2.append($1); break :blk $2; }";
+        const str = "blk: {try $2.append(self.allocator, $1); break :blk $2; }";
         const vars = &.{
             ActionVar.initVar(str[10..12], list_num, true),
-            ActionVar.initVar(str[20..22], add_num, false),
-            ActionVar.initVar(str[36..38], list_num, true),
+            ActionVar.initVar(str[36..38], add_num, false),
+            ActionVar.initVar(str[52..54], list_num, true),
         };
 
         return Action.init(allocator, str, false, false, vars);
@@ -743,7 +713,7 @@ pub const Action = struct {
     /// just one arg (or nothing) depending on the amount of args
     pub fn returnBack(allocator: Allocator, args: []const usize) !Action {
         if (args.len == 0) {
-            return Action.empty(allocator);
+            return .empty();
         }
 
         if (args.len == 1) {
@@ -755,7 +725,7 @@ pub const Action = struct {
 
         const str = try std.fmt.allocPrint(
             allocator,
-            ".{{ {s} }}",
+            ".{{ {f} }}",
             .{su.times("?,", args.len)},
         );
         const BaseOffset = 3;
@@ -773,7 +743,7 @@ pub const Action = struct {
         return Action.init(allocator, str, true, false, vars);
     }
 
-    pub fn setRets(self: *Action, seq: Sequence) !void {
+    pub fn setRets(self: *Action, allocator: Allocator, seq: Sequence) !void {
         assert(!self.implicit);
 
         const ops = seq.operateds.items;
@@ -784,18 +754,17 @@ pub const Action = struct {
             // the reasoning is to contain everything
             // that could trigger an action
             switch (op.value) {
-                .ID => try self.rets.append(ActionReturn.init(i, op)),
+                .ID => try self.rets.append(allocator, ActionReturn.init(i, op)),
                 else => {},
             }
         }
     }
 
-    pub fn deinit(self: Action, allocator: Allocator) void {
-        for (self.bases.items) |*base| {
-            base.deinit(allocator);
-        }
-        self.bases.deinit();
-        self.rets.deinit();
+    pub fn deinit(self: *Action, allocator: Allocator) void {
+        for (self.bases.items) |*base| base.deinit(allocator);
+
+        self.bases.deinit(allocator);
+        self.rets.deinit(allocator);
     }
 
     pub fn isEmpty(self: Action) bool {
@@ -804,13 +773,8 @@ pub const Action = struct {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         if (self.isEmpty()) return;
 
         if (self.implicit) {
@@ -926,14 +890,9 @@ pub const Operated = struct {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
-        try writer.print("({s}{s}{s}: {s})", .{
+        try writer.print("({f}{f}{f}: {f})", .{
             self.prefix_op,
             self.value,
             self.postfix_op,
@@ -949,13 +908,8 @@ pub const PrefixOp = enum(u8) {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try writer.print("{s}", .{switch (self) {
             .NONE => "",
             .AND => "&",
@@ -972,13 +926,8 @@ pub const PostfixOp = enum(u8) {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try writer.print("{s}", .{switch (self) {
             .NONE => "",
             .QUESTION => "?",
@@ -998,10 +947,10 @@ pub const Primary = union(enum) {
     EPSILON,
     CUT,
 
-    pub fn deinit(self: Primary, allocator: Allocator) void {
-        switch (self) {
-            .CLASS => |v| v.deinit(),
-            .SEQ => |v| v.deinit(allocator),
+    pub fn deinit(self: *Primary, allocator: Allocator) void {
+        switch (self.*) {
+            .CLASS => |*v| v.deinit(allocator),
+            .SEQ => |*v| v.deinit(allocator),
             .LITERAL => |lit| allocator.free(lit),
             else => {},
         }
@@ -1027,7 +976,7 @@ pub const Primary = union(enum) {
                 .LITERAL = try allocator.dupe(u8, lit),
             },
             .CLASS => |c| .{
-                .CLASS = try c.clone(),
+                .CLASS = try c.clone(allocator),
             },
             .SEQ => |s| .{
                 .SEQ = try s.clone(allocator),
@@ -1037,13 +986,8 @@ pub const Primary = union(enum) {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         switch (self) {
             .DOT => try writer.print(".", .{}),
             .ID => |id| try writer.print("%{d}", .{id}),
@@ -1052,10 +996,10 @@ pub const Primary = union(enum) {
                 string,
             }),
             .LITERAL => |string| try su.writeString(writer, string),
-            .CLASS => |value| try writer.print("{s}", .{
+            .CLASS => |value| try writer.print("{f}", .{
                 value,
             }),
-            .SEQ => |value| try writer.print("({s})", .{
+            .SEQ => |value| try writer.print("({f})", .{
                 value,
             }),
             .CUT => try writer.print("^", .{}),
@@ -1066,36 +1010,29 @@ pub const Primary = union(enum) {
 pub const Class = struct {
     content: std.ArrayList(Range),
 
-    pub fn init(allocator: Allocator) Class {
-        return .{
-            .content = std.ArrayList(Range).init(allocator),
-        };
+    pub fn init() Class {
+        return .{ .content = .{} };
     }
 
-    pub fn deinit(self: Class) void {
-        self.content.deinit();
+    pub fn deinit(self: *Class, allocator: Allocator) void {
+        self.content.deinit(allocator);
     }
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try writer.print("[", .{});
         for (self.content.items, 0..) |_, i| {
             const range = self.content.items[self.content.items.len - 1 - i];
-            try writer.print("{s}, ", .{range});
+            try writer.print("{f}, ", .{range});
         }
         try writer.print("]", .{});
     }
 
-    pub fn clone(self: Class) !Class {
+    pub fn clone(self: Class, allocator: Allocator) !Class {
         return .{
-            .content = try self.content.clone(),
+            .content = try self.content.clone(allocator),
         };
     }
 };
@@ -1111,13 +1048,8 @@ pub const Range = struct {
 
     pub fn format(
         self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *Writer,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try su.writeChar(writer, self.from);
         if (self.isChar()) return;
 
